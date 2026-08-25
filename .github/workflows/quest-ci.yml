@@ -70,6 +70,13 @@ jobs:
       - name: Check client/server Netcode config parity
         run: python3 scripts/unity/check-netcode-config-parity.py
 
+      # Curated third-party art is allowed to ship only when its manifest remains complete,
+      # redistributable, deterministic, and traceable to an original provider page.
+      - name: Check curated texture manifest
+        run: |
+          python3 -m py_compile scripts/art/build-curated-textures.py scripts/art/validate-curated-textures.py
+          python3 scripts/art/validate-curated-textures.py
+
   unity-validation:
     name: Unity validation
     needs: repository-checks
