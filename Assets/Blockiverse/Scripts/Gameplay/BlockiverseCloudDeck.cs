@@ -219,6 +219,14 @@ namespace Blockiverse.Gameplay
             meshFilter.sharedMesh = mesh;
         }
 
+        /// <summary>Drives drift from the replicated world clock instead of local frame time, so
+        /// every peer's deck is at the same phase regardless of local frame history: a late-joiner
+        /// otherwise starts at zero drift while a host that has been running for minutes has not,
+        /// so an identical seed and weather would still put clouds in different cells and
+        /// positions on each machine. Idempotent per call — safe to call every frame from the
+        /// lighting controller, which already runs off the same clock.</summary>
+        public void SyncDrift(float worldSeconds) => driftMeters = worldSeconds * DriftMetersPerSecond;
+
         /// <summary>Coverage is the weather service's 0..1, remapped by <see cref="DeckCoverage"/>.
         /// Colours come from the sky solver so the deck and the skybox agree at dawn and dusk, when
         /// a mismatch is most visible; <paramref name="deckHorizon"/> is what the rim dissolves
@@ -285,7 +293,9 @@ namespace Blockiverse.Gameplay
             if (meshFilter == null || follow == null)
                 return;
 
-            driftMeters += DriftMetersPerSecond * Time.deltaTime;
+            // driftMeters is advanced by SyncDrift, called from the lighting controller off the
+            // replicated WorldTimeClock — not accumulated here from local Time.deltaTime, which
+            // would desync a late-joiner's drift phase from the host's (see SyncDrift).
 
             // The deck sits over the player and slides with the wind. Position carries the
             // sub-cell remainder so motion is smooth; the mesh only rebuilds when the drift

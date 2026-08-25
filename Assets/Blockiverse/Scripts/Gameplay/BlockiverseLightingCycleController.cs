@@ -311,6 +311,12 @@ namespace Blockiverse.Gameplay
 
             if (cloudDeck != null)
             {
+                // Phase the deck's drift off the replicated world clock, not local frame time —
+                // see SyncDrift. worldTimeClock can be null in isolated construction (no clock
+                // wired up); the deck simply keeps whatever phase it last had.
+                if (worldTimeClock != null)
+                    cloudDeck.SyncDrift(worldTimeClock.TotalElapsedTicks / (float)WorldConstants.TicksPerSecond);
+
                 if (useDeck)
                 {
                     Color deckColor = SkyGradientSolver.CloudColor(normalizedTime, cloudCoverage);

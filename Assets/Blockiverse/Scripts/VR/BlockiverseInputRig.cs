@@ -696,31 +696,28 @@ namespace Blockiverse.VR
 
         void UpdateCreativeBindings()
         {
-            if (cachedBreakAction != null && cachedBreakAction.WasPressedThisFrame())
-                breakPressed?.Invoke();
-
-            if (cachedBreakAction != null && cachedBreakAction.WasReleasedThisFrame())
-                breakReleased?.Invoke();
-
             if (!BlockiverseRuntimeState.AllowWorldInput)
             {
                 // Menus swallow the grip, so a held modifier would otherwise persist across the
                 // whole menu session and the trigger would still be in place mode on return.
                 placeModifierHeld = false;
+
+                if (cachedBreakAction != null && cachedBreakAction.WasPressedThisFrame())
+                    breakPressed?.Invoke();
+
+                if (cachedBreakAction != null && cachedBreakAction.WasReleasedThisFrame())
+                    breakReleased?.Invoke();
+
                 return;
             }
 
-            // The grip is a MODIFIER now, not an action. PlacePressed still fires so anything that
-            // wants the raw press keeps working, but the meaningful output is PlaceModifierActive.
+            // The grip is a MODIFIER now, not an action. Resolve it BEFORE the trigger events fire
+            // below — a listener on breakPressed reads PlaceModifierActive to decide break vs place,
+            // and a same-frame grip squeeze must be visible to that read, not lag a frame behind it.
             if (cachedPlaceAction != null)
             {
-                if (cachedPlaceAction.WasPressedThisFrame())
-                {
-                    placePressed?.Invoke();
-
-                    if (PlaceModifierToggleEnabled)
-                        placeModifierToggled = !placeModifierToggled;
-                }
+                if (cachedPlaceAction.WasPressedThisFrame() && PlaceModifierToggleEnabled)
+                    placeModifierToggled = !placeModifierToggled;
 
                 placeModifierHeld = cachedPlaceAction.IsPressed();
             }
@@ -733,6 +730,17 @@ namespace Blockiverse.VR
             // button that turns it off — the same guard sprint needs for the same reason.
             if (!PlaceModifierToggleEnabled)
                 placeModifierToggled = false;
+
+            if (cachedBreakAction != null && cachedBreakAction.WasPressedThisFrame())
+                breakPressed?.Invoke();
+
+            if (cachedBreakAction != null && cachedBreakAction.WasReleasedThisFrame())
+                breakReleased?.Invoke();
+
+            // PlacePressed still fires so anything that wants the raw grip press keeps working,
+            // after the modifier state above so its own listeners see the same-frame value too.
+            if (cachedPlaceAction != null && cachedPlaceAction.WasPressedThisFrame())
+                placePressed?.Invoke();
 
             if (cachedBlockEditingToggleAction != null && cachedBlockEditingToggleAction.WasPressedThisFrame())
                 blockEditingTogglePressed?.Invoke();

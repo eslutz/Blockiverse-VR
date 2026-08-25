@@ -90,21 +90,31 @@ namespace Blockiverse.Gameplay
         public bool HasSkyAccess(BlockPosition position) =>
             highestBlockerY[Index(position.X, position.Z)] <= position.Y;
 
-        // Applies a block change to the map; returns true when the column's highest blocker
-        // moved, i.e. the edit changed which cells below can see the sky.
+        // Applies a block change to the map; returns true when the column's sky PROFILE moved —
+        // not just the topmost blocker, but the opaque top or the canopy transmittance beneath it
+        // too. An edit below an existing higher leaf (add/remove an opaque block, or another leaf,
+        // under a canopy) leaves highestBlockerY untouched while still changing what every cell
+        // beneath it sees, so the top alone under-reports which columns need a full rebuild.
         public bool ApplyChange(BlockChange change, out int previousTop, out int newTop)
         {
             int index = Index(change.Position.X, change.Position.Z);
             previousTop = highestBlockerY[index];
+            int previousOpaqueTop = highestOpaqueY[index];
+            int previousLowestCanopy = lowestCanopyY[index];
+            float previousTransmittance = canopyTransmittance[index];
 
             // Rescans the whole column rather than nudging the top incrementally. The column is at
             // most WorldMaxY tall and edits happen at player rate, so the cost is irrelevant, and
-            // the incremental form has two values to keep consistent (top and opaque top) where a
-            // missed case is a lighting artefact nobody traces back to a block placement.
+            // the incremental form has values to keep consistent (top, opaque top, canopy profile)
+            // where a missed case is a lighting artefact nobody traces back to a block placement.
             ScanColumn(change.Position.X, change.Position.Z);
 
             newTop = highestBlockerY[index];
-            return newTop != previousTop;
+
+            return newTop != previousTop
+                || highestOpaqueY[index] != previousOpaqueTop
+                || lowestCanopyY[index] != previousLowestCanopy
+                || canopyTransmittance[index] != previousTransmittance;
         }
 
         /// <summary>How much skylight reaches a cell, 0..1. 1 is open sky.
