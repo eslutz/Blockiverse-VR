@@ -40,10 +40,25 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void FogStateProducesFogClearDoesNot()
+        public void FogStateIsFarDenserThanClearAirButClearAirIsNeverZero()
         {
-            Assert.That(EnvironmentLightingSolver.FogDensity(Weather(0.65f, 0f, 0f, fog: 0.8f)), Is.GreaterThan(0f));
-            Assert.That(EnvironmentLightingSolver.FogDensity(Weather(0.1f, 0f, 0f, fog: 0f)), Is.EqualTo(0f));
+            float fogState = EnvironmentLightingSolver.FogDensity(Weather(0.65f, 0f, 0f, fog: 0.8f));
+            float clear = EnvironmentLightingSolver.FogDensity(Weather(0.1f, 0f, 0f, fog: 0f));
+
+            // Clear air used to return EXACTLY zero here, and the caller gated on
+            // "density > 0" to decide whether to switch RenderSettings.fog on at all. So Clear,
+            // PartlyCloudy and Overcast -- the three longest-dwelling weather states -- rendered
+            // with fog fully disabled: no aerial perspective at any distance, and the only fade
+            // visible was the sky gradient behind the world edge. In the headset that reads as
+            // "something hazy far away, perfectly clear air around me".
+            Assert.That(clear, Is.EqualTo(EnvironmentLightingSolver.ClearAirDensity).Within(1e-6f),
+                "Clear weather must still carry the aerial-perspective floor.");
+            Assert.That(clear, Is.GreaterThan(0f));
+
+            // The floor must stay subtle. If it ever approached a real fog state, clear days would
+            // read as overcast murk -- the opposite failure, and harder to notice in review.
+            Assert.That(fogState, Is.GreaterThan(clear * 5.0f),
+                "An explicit fog state has to be dramatically denser than clear air, or weather stops reading.");
         }
 
         [Test]

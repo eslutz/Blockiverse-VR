@@ -343,7 +343,8 @@ namespace Blockiverse.Gameplay
                                 // these land in submesh 1 and are drawn by the cutout material.
                                 // Sharing the vertex buffer is what keeps leaves inside the chunk
                                 // mesh, and therefore inside the chunk's collider.
-                                AddFace(vertices, cutoutTriangles, uvs, colors, position, face, definition.Id, vertexColor);
+                                AddFace(vertices, cutoutTriangles, uvs, colors, position, face, definition.Id, vertexColor,
+                                    varyTileOrientation: true);
                                 cutoutFaceCount++;
                             }
                             else
@@ -553,19 +554,40 @@ namespace Blockiverse.Gameplay
             Rect uvRect = BlockVisualAtlas.GetTileRect(blockId);
             var origin = new Vector3(position.X, position.Y, position.Z);
 
-            // Corner-to-opposite-corner, so both quads stay inside the cell footprint.
-            AddFoliageQuad(vertices, triangles, uvs, colors, normals, uvRect, vertexColor,
-                origin + new Vector3(0, 0, 0),
-                origin + new Vector3(0, 1, 0),
-                origin + new Vector3(1, 1, 1),
-                origin + new Vector3(1, 0, 1));
+            // Every cross used to be the same two corner-to-corner quads at exactly 1.0 tall, so a
+            // field of grass was one silhouette stamped on a lattice: uniform height and a visible
+            // grid. Position-hashed so it is stable across remeshes and identical on every peer.
+            uint h = DeterministicHash.Hash(0, position.X, position.Y, position.Z, salt: CrossVariantSalt);
 
-            AddFoliageQuad(vertices, triangles, uvs, colors, normals, uvRect, vertexColor,
-                origin + new Vector3(1, 0, 0),
-                origin + new Vector3(1, 1, 0),
-                origin + new Vector3(0, 1, 1),
-                origin + new Vector3(0, 0, 1));
+            // Continuous yaw, not a 90-degree snap -- a snap still lines neighbours up.
+            float yaw = (h & 1023u) / 1024.0f * Mathf.PI;
+            float height = Mathf.Lerp(0.66f, 1.0f, ((h >> 10) & 255u) / 255.0f);
+            float offsetX = ((((h >> 18) & 63u) / 63.0f) - 0.5f) * 0.24f;
+            float offsetZ = ((((h >> 24) & 63u) / 63.0f) - 0.5f) * 0.24f;
+
+            var centre = origin + new Vector3(0.5f + offsetX, 0.0f, 0.5f + offsetZ);
+
+            // Three planes, not two. An X resolves as exactly two flat cards from the side, which
+            // is most obvious in VR where each eye separates them.
+            for (int plane = 0; plane < CrossPlaneCount; plane++)
+            {
+                float angle = yaw + plane * (Mathf.PI / CrossPlaneCount);
+                var half = new Vector3(Mathf.Cos(angle), 0.0f, Mathf.Sin(angle)) * CrossHalfWidth;
+                var top = new Vector3(0.0f, height, 0.0f);
+
+                AddFoliageQuad(vertices, triangles, uvs, colors, normals, uvRect, vertexColor,
+                    centre - half,
+                    centre - half + top,
+                    centre + half + top,
+                    centre + half);
+            }
         }
+
+        // Distinct from the placement salts so orientation and placement cannot correlate.
+        const int CrossVariantSalt = 7717;
+        const int CrossPlaneCount = 3;
+        // A rotated plane sweeps a circle of this radius, so it stays inside the cell at any yaw.
+        const float CrossHalfWidth = 0.5f;
 
         // A single quad just above the cell floor, for flat groundcover (moss, lichen, leaf
         // litter). Distinct name for the same reflection reason as AddCrossQuads.
@@ -637,6 +659,20 @@ namespace Blockiverse.Gameplay
 
         // Signature is changed in place rather than overloaded: ChunkRenderingEditModeTests looks
         // this method up by name via reflection, and a second overload would throw AmbiguousMatch.
+        // Corner 0..3 of an atlas tile, counter-clockwise from bottom-left.
+        static Vector2 TileCorner(Rect uvRect, int corner)
+        {
+            return corner switch
+            {
+                0 => new Vector2(uvRect.xMin, uvRect.yMin),
+                1 => new Vector2(uvRect.xMin, uvRect.yMax),
+                2 => new Vector2(uvRect.xMax, uvRect.yMax),
+                _ => new Vector2(uvRect.xMax, uvRect.yMin),
+            };
+        }
+
+        const int TileOrientationSalt = 8821;
+
         static void AddFace(
             List<Vector3> vertices,
             List<int> triangles,
@@ -645,7 +681,8 @@ namespace Blockiverse.Gameplay
             BlockPosition position,
             int faceIndex,
             BlockId blockId,
-            Color vertexColor)
+            Color vertexColor,
+            bool varyTileOrientation = false)
         {
             int vertexStart = vertices.Count;
             // Face-aware: a turf block samples grass on top, dirt on the sides, loam underneath.
@@ -659,10 +696,29 @@ namespace Blockiverse.Gameplay
                 colors.Add(vertexColor);
             }
 
-            uvs.Add(new Vector2(uvRect.xMin, uvRect.yMin));
-            uvs.Add(new Vector2(uvRect.xMin, uvRect.yMax));
-            uvs.Add(new Vector2(uvRect.xMax, uvRect.yMax));
-            uvs.Add(new Vector2(uvRect.xMax, uvRect.yMin));
+            // Permuting the corner order rotates and mirrors the SAME tile: eight appearances for
+            // zero atlas slots and zero extra samples, which is the cheapest answer to "every leaf
+            // block looks identical". Opt-in, because it is only valid for tiles with no inherent
+            // orientation -- leaves qualify, a log's rings or a turf's grass fringe do not.
+            if (varyTileOrientation)
+            {
+                uint v = DeterministicHash.Hash(0, position.X, position.Y, position.Z, salt: TileOrientationSalt);
+                v ^= (uint)faceIndex * 2654435761u;   // six sides of one block must not shuffle alike
+
+                int rotation = (int)(v & 3u);
+                bool mirror = ((v >> 2) & 1u) != 0u;
+
+                for (int i = 0; i < 4; i++)
+                {
+                    int corner = (i + rotation) & 3;
+                    uvs.Add(TileCorner(uvRect, mirror ? 3 - corner : corner));
+                }
+            }
+            else
+            {
+                for (int i = 0; i < 4; i++)
+                    uvs.Add(TileCorner(uvRect, i));
+            }
 
             triangles.Add(vertexStart + 0);
             triangles.Add(vertexStart + 1);

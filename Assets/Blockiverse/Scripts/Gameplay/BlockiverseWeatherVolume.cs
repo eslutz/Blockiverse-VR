@@ -21,19 +21,42 @@ namespace Blockiverse.Gameplay
     [DisallowMultipleComponent]
     public sealed class BlockiverseWeatherVolume : MonoBehaviour
     {
-        // The box the player carries. Wide enough that drops enter from the periphery rather than
-        // popping in ahead, shallow enough that none of it is wasted behind them.
-        public const float VolumeWidthMeters = 14.0f;
-        public const float VolumeDepthMeters = 14.0f;
-        public const float SpawnHeightMeters = 7.0f;
+        // The box the player carries. At 14x14 the edge sat 7 m away on every side, close enough
+        // to look past — precipitation visibly stopped a few paces out. 30 m puts the boundary
+        // beyond where the eye reads individual drops, and rain-weather fog now covers the rest.
+        public const float VolumeWidthMeters = 30.0f;
+        public const float VolumeDepthMeters = 30.0f;
+        public const float SpawnHeightMeters = 12.0f;
 
-        // Emission at full intensity. Rain reads as rain somewhere north of a couple of hundred
-        // particles alive at once; at 1.4 s of fall time this rate keeps roughly that many.
-        public const float MaxRainParticlesPerSecond = 220.0f;
-        public const float MaxSnowParticlesPerSecond = 90.0f;
+        // How far a particle travels before it dies, INDEPENDENT of where it spawned.
+        //
+        // Lifetime used to be SpawnHeight/speed, i.e. exactly enough to fall back to the height it
+        // started from relative to the head — so drops died about a metre BELOW eye level and
+        // precipitation visibly stopped just under you whenever you stood anywhere elevated. It
+        // has to outrun the drop to the ground, not to your feet.
+        public const float FallDistanceMeters = 40.0f;
+
+        // Emission at full intensity.
+        public const float MaxRainParticlesPerSecond = 420.0f;
+        public const float MaxSnowParticlesPerSecond = 260.0f;
 
         public const float RainFallSpeed = 9.0f;
-        public const float SnowFallSpeed = 1.1f;
+
+        // Snow speed scales with intensity: a flurry drifts, a blizzard drives. Rain does not —
+        // real rain reaches terminal velocity almost immediately regardless of how hard it falls.
+        public const float SnowFallSpeedLight = 2.0f;
+        public const float SnowFallSpeedHeavy = 3.6f;
+
+        // Size scales with intensity too. A light shower made of fat drops reads as heavy rain no
+        // matter how few of them there are, which is what "the raindrops are too heavy" was.
+        public const float RainSizeLight = 0.020f;
+        public const float RainSizeHeavy = 0.042f;
+        public const float SnowSizeLight = 0.065f;
+        public const float SnowSizeHeavy = 0.105f;
+
+        // Headroom for the worst case: blizzard snow is slow enough to stay alive ~11 s, so the
+        // live count is far higher than rain's despite a lower rate.
+        public const int MaxLiveParticles = 3000;
 
         // Seconds to cross most of the way to a new emission rate. Weather changes should arrive
         // as a front, not as a switch being thrown.
@@ -43,6 +66,7 @@ namespace Blockiverse.Gameplay
         ParticleSystemRenderer particleRenderer;
         Transform head;
         PrecipitationKind activeKind = PrecipitationKind.None;
+        float activeIntensity = -1.0f;
         float targetRate;
         float currentRate;
 
@@ -66,10 +90,14 @@ namespace Blockiverse.Gameplay
         {
             intensity = Mathf.Clamp01(intensity);
 
-            if (kind != activeKind)
+            // Re-apply on an intensity change too, not just a kind change: size and fall speed
+            // both scale with intensity now, and applying them only when the KIND changed left a
+            // blizzard rendering with flurry-sized flakes at flurry speed.
+            if (kind != activeKind || !Mathf.Approximately(intensity, activeIntensity))
             {
                 activeKind = kind;
-                ApplyKind(kind);
+                activeIntensity = intensity;
+                ApplyKind(kind, intensity);
             }
 
             targetRate = kind switch
@@ -104,17 +132,25 @@ namespace Blockiverse.Gameplay
                 particles.Stop(withChildren: true, ParticleSystemStopBehavior.StopEmitting);
         }
 
-        void ApplyKind(PrecipitationKind kind)
+        void ApplyKind(PrecipitationKind kind, float intensity)
         {
             if (particles == null)
                 return;
 
             bool isSnow = kind == PrecipitationKind.Snow;
 
+            float fallSpeed = isSnow
+                ? Mathf.Lerp(SnowFallSpeedLight, SnowFallSpeedHeavy, intensity)
+                : RainFallSpeed;
+
             ParticleSystem.MainModule main = particles.main;
-            main.startSpeed = isSnow ? SnowFallSpeed : RainFallSpeed;
-            main.startSize = isSnow ? 0.09f : 0.055f;
-            main.startLifetime = SpawnHeightMeters / (isSnow ? SnowFallSpeed : RainFallSpeed) * 1.15f;
+            main.startSpeed = fallSpeed;
+            main.startSize = isSnow
+                ? Mathf.Lerp(SnowSizeLight, SnowSizeHeavy, intensity)
+                : Mathf.Lerp(RainSizeLight, RainSizeHeavy, intensity);
+            // Distance-based, so a drop keeps falling until it is well below the player rather
+            // than dying level with them.
+            main.startLifetime = FallDistanceMeters / fallSpeed;
             main.startColor = isSnow
                 ? new Color(1.0f, 1.0f, 1.0f, 0.85f)
                 : new Color(0.62f, 0.78f, 0.95f, 0.55f);
@@ -171,14 +207,29 @@ namespace Blockiverse.Gameplay
             // every drop is welded to the XR origin and travels and rotates with the player, so
             // nothing ever falls past them.
             main.simulationSpace = ParticleSystemSimulationSpace.World;
-            main.maxParticles = 600;
+            main.maxParticles = MaxLiveParticles;
             main.gravityModifier = 0.0f;
             main.startRotation3D = false;
 
             ParticleSystem.ShapeModule shape = particles.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = new Vector3(VolumeWidthMeters, 0.1f, VolumeDepthMeters);
+            // Axis order is (width, DEPTH, thickness) and not the obvious (width, thickness, depth)
+            // because shape.rotation below rotates the box GEOMETRY as well as the emission
+            // direction. Unity builds the shape transform as translate * rotate * scale, so a
+            // +90 degrees rotation about X maps local Y onto world Z and local Z onto world -Y.
+            //
+            // Written the obvious way, the intended 14x14 ceiling came out as a 14 wide by 14 tall
+            // by 0.1 thin VERTICAL sheet standing at z=0 — a curtain passing left-to-right through
+            // the player's own head, seen edge-on as a single line of rain directly ahead. That is
+            // exactly what shipped: "the rain is coming down in a line instead of spread across
+            // the space of the player's FOV".
+            //
+            // Swapping the last two components makes the post-rotation box the horizontal ceiling
+            // that was always intended: world X = width, world Y = 0.1 (thin), world Z = depth.
+            shape.scale = new Vector3(VolumeWidthMeters, VolumeDepthMeters, 0.1f);
+            // NOT rotated by shape.rotation — position is applied in the system's local space — so
+            // this stays a ceiling SpawnHeightMeters above the head rather than sliding forward.
             shape.position = new Vector3(0.0f, SpawnHeightMeters, 0.0f);
             // Straight down. The default cone fires along local +Z, i.e. sideways, which is what
             // the burst implementation was silently doing.
@@ -203,7 +254,7 @@ namespace Blockiverse.Gameplay
                 particleRenderer.alignment = ParticleSystemRenderSpace.View;
             }
 
-            ApplyKind(activeKind);
+            ApplyKind(activeKind, Mathf.Max(activeIntensity, 0.0f));
         }
 
         static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");

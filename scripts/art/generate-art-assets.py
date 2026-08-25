@@ -497,10 +497,29 @@ def foliage_mask(pattern, seed, x, y):
     dx = x - 15.5
     h = hash_pixel(x, y, seed)
     if pattern == "leaves":
-        return (dx * dx) / 240 + ((y - 15) * (y - 15)) / 205 < 1 and h % 7 > 2
+        # Leafmoss is a CutoutCube: this tile is a BLOCK FACE, not a billboard silhouette, so it
+        # must cover its whole square. The previous form was an ellipse inscribed in the tile
+        # (dx*dx/240 + (y-15)^2/205 < 1), which made all four corners fully transparent — on a
+        # six-faced block that reads as sky showing through the corner of every face.
+        #
+        # Lacy comes from INTERIOR holes, never from an outline. Holes are punched per 2x2 cell
+        # rather than per pixel: single-pixel holes average away into a grey fringe at the first
+        # mip and stop reading as holes at distance.
+        cell = hash_pixel(x // 2, y // 2, seed + 17)
+        # Denser along the tile border so neighbouring leaf blocks read as one canopy mass
+        # instead of a visible grid of separate tiles.
+        border = x < 3 or x > TILE_PIXELS - 4 or y < 3 or y > TILE_PIXELS - 4
+        return cell % 8 > (0 if border else 1)
     if pattern in ("berries_cluster", "bush_sprout", "bush_mid", "shrub"):
-        radius = {"bush_sprout": 7, "bush_mid": 10, "shrub": 13}.get(pattern, 12)
-        return dx * dx + (y - 17) * (y - 17) < radius * radius and h % 9 > 1
+        # Base-heavy and ragged. The previous form was a literal circle centred at (15.5, 17),
+        # which read as a drawn ball rather than foliage — the same "why is it round" the leaf
+        # ellipse caused, just on a cross-quad instead of a block face.
+        top = {"bush_sprout": 17, "bush_mid": 11, "shrub": 7}.get(pattern, 8)
+        if y < top:
+            return False
+        half = min(4.0 + (y - top) * 0.62, 14.0)
+        ragged = (hash_pixel(x // 3, y // 3, seed + 5) % 5) - 1
+        return abs(dx) <= half + ragged and h % 9 > 1
     if pattern in ("sapling", "sapling_mid", "sapling_tall"):
         height = {"sapling": 16, "sapling_mid": 21, "sapling_tall": 27}[pattern]
         trunk = abs(dx) <= 1 and y >= 31 - height

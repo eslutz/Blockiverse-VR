@@ -34,7 +34,10 @@ namespace Blockiverse.Gameplay
         static readonly Color ClearFogColor = new(0.62f, 0.70f, 0.80f);
 
         // How fast the cloud deck drifts, in shader UV units per second.
-        const float CloudScrollSpeed = 0.004f;
+        // Planar units per second. At 0.004 one noise cell (~1 planar unit) took over four minutes
+        // to pass overhead, so the deck read as painted on rather than drifting. 0.02 moves a cell
+        // in ~50 s: visible motion when you watch for it, not distracting when you do not.
+        const float CloudScrollSpeed = 0.02f;
 
         [SerializeField] Material skyMaterial;
         Vector2 cloudScroll;
@@ -190,7 +193,17 @@ namespace Blockiverse.Gameplay
                 state.AmbientColor * weatherFactor, skyFlashStrength, skyFlashElapsed);
             RenderSettings.sun = sunLight;
 
-            ApplyFog(applyFog, state.AmbientColor * weatherFactor + ClearFogColor * 0.25f, fogDensity, submergedBlend);
+            // Fog colour is pulled most of the way to the sky's own horizon colour. Distant
+            // terrain should melt INTO the sky — that is what aerial perspective is — and the
+            // skybox is deliberately never fogged (it is Background queue with no MixFog), so a
+            // fog colour unrelated to the sky turns the far plane into a visible seam between
+            // fogged ground and unfogged sky rather than a fade.
+            Color skyHorizon = SkyGradientSolver.HorizonColor(
+                worldTimeClock.NormalizedTime,
+                cloudCoverage,
+                MoonPhaseIndex / (float)EnvironmentLightComputer.FullMoonLightLevel);
+            Color weatherTint = state.AmbientColor * weatherFactor + ClearFogColor * 0.25f;
+            ApplyFog(applyFog, Color.Lerp(weatherTint, skyHorizon, 0.65f), fogDensity, submergedBlend);
             ApplySky(worldTimeClock.NormalizedTime, cloudCoverage);
         }
 
@@ -287,13 +300,17 @@ namespace Blockiverse.Gameplay
         {
             if (submergedBlend <= 0.0f)
             {
-                RenderSettings.fog = applyWeatherFog;
-                if (applyWeatherFog)
-                {
-                    RenderSettings.fogMode = FogMode.ExponentialSquared;
-                    RenderSettings.fogColor = weatherFogColor;
-                    RenderSettings.fogDensity = weatherFogDensity;
-                }
+                // Unconditional. EnvironmentLightingSolver.FogDensity now floors at
+                // ClearAirDensity, so there is always some aerial perspective; gating on
+                // "density > 0" previously switched fog off completely in Clear, PartlyCloudy and
+                // Overcast — the three longest-dwelling weather states.
+                RenderSettings.fog = true;
+                // Exponential, not ExponentialSquared: the squared term is ~flat for the first
+                // tens of metres and then knees, which put a haze BAND out at the world edge with
+                // clear air near the player instead of a gradient starting at arm's length.
+                RenderSettings.fogMode = FogMode.Exponential;
+                RenderSettings.fogColor = weatherFogColor;
+                RenderSettings.fogDensity = weatherFogDensity;
 
                 return;
             }

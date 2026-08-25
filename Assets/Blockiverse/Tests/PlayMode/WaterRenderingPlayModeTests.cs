@@ -87,8 +87,19 @@ namespace Blockiverse.Tests.PlayMode
             yield return BlendTo(waterView, 0.0f);
 
             Assert.That(waterView.SubmergedBlend, Is.EqualTo(0.0f).Within(0.001f));
-            Assert.That(RenderSettings.fog, Is.False,
-                "Surfacing in clear weather must hand fog back to the weather path, which wants it off.");
+
+            // The intent here is "surfacing hands fog back to the weather path", and it used to be
+            // checked as fog == false. That only worked because clear weather disabled fog outright,
+            // which was itself the bug: no aerial perspective at all on the three most common
+            // weather states. Clear air now carries a deliberate floor, so absence-of-fog is no
+            // longer the signal. Assert the handover directly instead — the underwater density must
+            // be gone and the weather value restored.
+            Assert.That(RenderSettings.fogDensity,
+                Is.EqualTo(EnvironmentLightingSolver.ClearAirDensity).Within(0.0005f),
+                "Surfacing must restore the weather path's clear-air density, not leave underwater fog applied.");
+            Assert.That(RenderSettings.fogDensity,
+                Is.LessThan(BlockiverseWaterView.FogDensityFor(FluidFamily.Freshwater) * 0.25f),
+                "Whatever is applied after surfacing must be nowhere near underwater density.");
         }
 
         [UnityTest]
