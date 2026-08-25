@@ -12,7 +12,7 @@ The goal is to keep menus data-driven and easy to convert into game logic.
 - Every menu element should map to one explicit action ID.
 - Game simulation pauses in full-screen menus unless the screen is explicitly marked `simulationContinues = true`.
 - Inventory, crafting, and station screens should be usable without leaving the game world.
-- On Quest, routed game menus, modals, and the gameplay HUD are direct world-space surfaces, and **are being migrated to UI Toolkit**. Until that migration completes they remain uGUI world-space canvases; the target state is `UIDocument` + `Collider` with `PanelSettings.renderMode = WorldSpace`, driven by XR Interaction Toolkit's native world-space UI Toolkit path. Controller rays stay on the normal main-camera render path either way. Composition layers are retained **only** for the startup splash. See [ADR 0006](../adr/0006-quest-openxr-rendering-and-asset-policy.md) (Amendment 2026-08-13, which reversed the earlier shared-Quad menu model after on-headset failures) and [ADR 0010](../adr/0010-ui-toolkit-runtime-ui.md) (which makes UI Toolkit the runtime UI framework). Menus must not add their own `CompositionLayer`, `TexturesExtension`, `InteractableUIMirror`, hidden `CanvasCamera`, RenderTexture compositor, or custom pointer projection.
+- On Quest, routed game menus, modals, and the gameplay HUD are direct world-space surfaces, and **were migrated to UI Toolkit in #344**. Every uGUI menu panel has been deleted; screens are `UIDocument` + `Collider` with `PanelSettings.renderMode = WorldSpace`, driven by XR Interaction Toolkit's native world-space UI Toolkit path. Controller rays stay on the normal main-camera render path either way. Composition layers are retained **only** for the startup splash. See [ADR 0006](../adr/0006-quest-openxr-rendering-and-asset-policy.md) (Amendment 2026-08-13, which reversed the earlier shared-Quad menu model after on-headset failures) and [ADR 0010](../adr/0010-ui-toolkit-runtime-ui.md) (which makes UI Toolkit the runtime UI framework). Menus must not add their own `CompositionLayer`, `TexturesExtension`, `InteractableUIMirror`, hidden `CanvasCamera`, RenderTexture compositor, or custom pointer projection.
 - Quest pointer ownership follows the player's active tool hand, which is initialized from the user's dominant-hand preference when available and remains controlled by the in-game Comfort setting.
 - Menu screens should use a consistent layout model:
   - Header area
@@ -688,7 +688,7 @@ function craft(recipeId, countRequested) {
 ```
 
 Implemented as `MultiplayerSurvivalSync.TrySubmitCraft(outputItemId, availableStation, out
-requestSentToHost)`, called from `SurvivalCraftingPanel`. Note the shipped command takes **no
+requestSentToHost)`, called from `CraftingScreenController`. Note the shipped command takes **no
 count** — see the multi-craft note below.
 
 > **Multi-craft is a command-layer change, not a button.** `Craft 5` and `Craft Max` require
@@ -717,7 +717,7 @@ all — with a single slot, "pin" from any source is unambiguous and the missing
 mattering, because pinning something else is the removal. The §3 table's singular "tracked recipe
 materials" and the §6.6 HUD row's plural "requirements" are reconciled in favour of the singular.
 
-**Four entry points write the same slot:**
+**Three entry points write the same slot:**
 
 | Source | Action |
 |---|---|
@@ -739,7 +739,7 @@ toggle against; to clear from a station, pin something else or unpin from the Cr
 | Property | Value | Reason |
 |---|---|---|
 | Authority | **Client-local** | A pin changes no world state, so host authority buys nothing. This is the same carve-out player vitals already have, and it keeps pinning off the survival command channel entirely. |
-| Persistence | **Session-only** | Not written to the save. Avoids touching the v4 player save for a HUD convenience. |
+| Persistence | **Session-only** | Not written to the save. Avoids touching the v5 player save for a HUD convenience. |
 | On successful craft | **Auto-unpin** | Crafting the pinned recipe is the goal completing; leaving it pinned means the player must dismiss it manually every time. |
 | On world unload | Cleared | Session state does not survive leaving the world. |
 
