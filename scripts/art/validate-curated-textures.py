@@ -103,12 +103,12 @@ class CuratedTextureManifestTests(unittest.TestCase):
                 self.assertIn(transform.get("scale"), {"lanczos", "neighbor"})
                 self.assertEqual(EXPECTED_TILE_PIXELS, transform.get("size"))
 
-    def test_adopted_assets_are_cc0_and_fully_buildable(self):
+    def test_adopted_assets_are_cc0_direct_sources_until_compositing_is_implemented(self):
         for entry in self.pilot:
             if entry["status"] != "adopted":
                 continue
             with self.subTest(texture=entry["id"]):
-                self.assertNotEqual("custom", entry["strategy"])
+                self.assertEqual("direct", entry["strategy"])
                 self.assertIn(entry.get("pack"), self.packs)
                 self.assertEqual("cc0", self.packs[entry["pack"]]["license"])
                 self.assertTrue(entry.get("sourceFile"))
