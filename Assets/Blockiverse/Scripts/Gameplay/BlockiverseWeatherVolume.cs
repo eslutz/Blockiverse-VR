@@ -59,25 +59,59 @@ namespace Blockiverse.Gameplay
         // live count is far higher than rain's despite a lower rate.
         public const int MaxLiveParticles = 3000;
 
-        // Ground effect: rain splashes, and snow that drifts along the surface. One emitter serves
-        // both because they are the same thing structurally — a flat disc of short-lived sprites
-        // on the ground the player is standing over.
+        // SPLASHES. A SECOND, much sparser rain emitter whose drops actually collide with the
+        // world; each one that lands spawns a splash through a collision sub-emitter, so the
+        // splash is at the point a drop you can watch arrived at, on whatever surface it hit.
         //
-        // Deliberately NOT driven by per-particle collision. Collision on ~1900 live drops is far
-        // too expensive on a tile GPU even at Unity's lowest quality, and a statistical scatter
-        // over the same footprint is indistinguishable once drops are landing several times a
-        // second per square metre.
-        public const float GroundEffectRadiusMeters = 9.0f;
-        public const float MaxSplashesPerSecond = 260.0f;
-        public const float MaxGroundSnowPerSecond = 90.0f;
+        // The first attempt was a statistical scatter instead: a flat disc of sprites on a single
+        // height from one downward raycast under the head. It failed on both counts Eric named.
+        // The disc is FLAT and the world is not, so on any slope or step it hung in mid-air or
+        // sank into the ground ("across an invisible surface that can stretch out into thin air
+        // instead of tracking the actual surface below it"); and nothing connected a splash to a
+        // drop, so the eye read two unrelated systems ("having the effect not linked to the actual
+        // raindrops breaks the immersion").
+        //
+        // What made that attempt look necessary was the cost of collision, and the mistake was
+        // treating it as all-or-nothing. Colliding all ~1900 live drops is indeed far too
+        // expensive on a tile GPU; colliding a SAMPLE of them is not, because a splash does not
+        // have to belong to every drop, only to a drop. These constants keep the live colliding
+        // count near 50, i.e. ~50 raycasts a frame, while the other ~97% of the rain stays free.
+        public const float MaxSplashSamplersPerSecond = 24.0f;
+        // Narrower than the main volume: a splash is only legible within a few metres, so the
+        // sampled drops are spent close to the player rather than spread over 30 m.
+        public const float SplashSamplerWidthMeters = 16.0f;
+        // How far a sampled drop is allowed to fall before giving up. Sized to reach a few metres
+        // BELOW the player's feet — enough for the ground they are standing on and the step they
+        // are about to take, not enough to keep raycasting all the way down a ravine.
+        public const float SplashSamplerFallMeters = 20.0f;
         public const float SplashLifetimeSeconds = 0.35f;
-        public const int MaxLiveGroundParticles = 260;
-        // How far down to look for the surface the effect sits on.
-        public const float GroundProbeMeters = 40.0f;
+        // A splash is a BALLISTIC ARC that must land inside its own lifetime.
+        //
+        // The first attempt used gravityModifier 2.2 against a 0.6-1.3 m/s hop, which is an apex of
+        // 2.3 cm reached in 0.05 s and then y(0.35) = -97 cm. Depth testing hides the sunken part
+        // behind the terrain, so it did not read as particles under the floor — it read as a 2 cm
+        // twitch, with 74% of every splash's life spent as an invisible particle still costing
+        // simulation and a draw.
+        //
+        // These give an 8-14 cm arc back on the surface at t = 0.28-0.38 s. Pinned by
+        // BlockiverseWeatherVolumeEditModeTests.ASplashLandsBackOnTheSurfaceWithinItsOwnLifetime.
+        public const float SplashGravityModifier = 0.8f;
+        public const float SplashRiseSpeedMin = 1.1f;
+        public const float SplashRiseSpeedMax = 1.5f;
+        public const int MaxLiveSplashes = 120;
+        // Splashes per landing. Two reads as a splash; more reads as a puff of smoke.
+        public const int SplashesPerImpact = 2;
 
         // Sideways drive at full intensity. A blizzard that falls straight down is just heavy
         // snow; the horizontal component is most of what reads as "blizzard".
-        public const float BlizzardWindMetersPerSecond = 5.5f;
+        public const float BlizzardWindMetersPerSecond = 7.0f;
+
+        // The drift range is [DriftMinFraction, 1] x wind, so the mean is this.
+        public const float DriftMinFraction = 0.55f;
+        public const float MeanDriftFraction = (DriftMinFraction + 1.0f) * 0.5f;
+        // Cap on how far upwind the spawn ceiling is pushed. Past this the box has left the
+        // player's own weather rather than feeding it.
+        public const float MaxUpwindOffsetMeters = 24.0f;
 
         // Seconds to cross most of the way to a new emission rate. Weather changes should arrive
         // as a front, not as a switch being thrown.
@@ -85,21 +119,24 @@ namespace Blockiverse.Gameplay
 
         ParticleSystem particles;
         ParticleSystemRenderer particleRenderer;
-        ParticleSystem groundParticles;
-        ParticleSystemRenderer groundRenderer;
-        Transform groundTransform;
-        float groundY;
-        bool hasGroundY;
+        ParticleSystem samplerParticles;
+        ParticleSystemRenderer samplerRenderer;
+        ParticleSystem splashParticles;
+        ParticleSystemRenderer splashRenderer;
         Transform head;
         PrecipitationKind activeKind = PrecipitationKind.None;
         float activeIntensity = -1.0f;
         float targetRate;
-        float groundTargetRate;
+        float samplerTargetRate;
         float currentRate;
 
         public PrecipitationKind ActiveKind => activeKind;
 
         public float CurrentEmissionRate => currentRate;
+
+        /// <summary>Emission rate of the colliding sample, before the weather-front ramp. Zero for
+        /// anything but rain.</summary>
+        public float SplashSamplerRate => samplerTargetRate;
 
         public void Configure(Transform headTransform, Material particleMaterial, Sprite rainSprite, Sprite snowSprite)
         {
@@ -158,22 +195,28 @@ namespace Blockiverse.Gameplay
             else if (!shouldPlay && particles.isPlaying)
                 particles.Stop(withChildren: true, ParticleSystemStopBehavior.StopEmitting);
 
-            UpdateGroundHeight();
-
-            if (groundParticles != null)
+            if (samplerParticles != null)
             {
-                // Scaled by the SAME ramp fraction as the falling particles, so the ground effect
-                // arrives and leaves with the weather front instead of snapping on.
+                // Scaled by the SAME ramp fraction as the falling particles, so the splashes
+                // arrive and leave with the weather front instead of snapping on.
                 float rampFraction = targetRate > 0.01f ? Mathf.Clamp01(currentRate / targetRate) : 0.0f;
-                ParticleSystem.EmissionModule groundEmission = groundParticles.emission;
-                groundEmission.rateOverTime = groundTargetRate * rampFraction;
+                ParticleSystem.EmissionModule samplerEmission = samplerParticles.emission;
+                samplerEmission.rateOverTime = samplerTargetRate * rampFraction;
 
-                bool groundShouldPlay = groundTargetRate * rampFraction > 0.01f;
+                bool samplerShouldPlay = samplerTargetRate * rampFraction > 0.01f;
 
-                if (groundShouldPlay && !groundParticles.isPlaying)
-                    groundParticles.Play();
-                else if (!groundShouldPlay && groundParticles.isPlaying)
-                    groundParticles.Stop(withChildren: true, ParticleSystemStopBehavior.StopEmitting);
+                // withChildren FALSE, and NOT because stopping would discard live particles —
+                // StopEmitting leaves those alone, so that reasoning (an earlier version of this
+                // comment) was simply wrong. It is false because the splash system emits only on a
+                // collision event from this sampler: once the sampler stops, no further collisions
+                // occur and the splash system has nothing left to do, so reaching into it adds a
+                // state change that can only ever go out of step with the parent. Note the whole
+                // volume stopping (`particles.Stop(withChildren: true)` above) DOES recurse into
+                // both of these, which is what should happen when the weather clears.
+                if (samplerShouldPlay && !samplerParticles.isPlaying)
+                    samplerParticles.Play();
+                else if (!samplerShouldPlay && samplerParticles.isPlaying)
+                    samplerParticles.Stop(withChildren: false, ParticleSystemStopBehavior.StopEmitting);
             }
         }
 
@@ -213,10 +256,23 @@ namespace Blockiverse.Gameplay
             drift.enabled = isSnow;
             drift.space = ParticleSystemSimulationSpace.World;
             float wind = isSnow ? BlizzardWindMetersPerSecond * intensity : 0.0f;
-            drift.x = new ParticleSystem.MinMaxCurve(wind * 0.55f, wind);
+            drift.x = new ParticleSystem.MinMaxCurve(wind * DriftMinFraction, wind);
             drift.z = new ParticleSystem.MinMaxCurve(-wind * 0.3f, wind * 0.3f);
 
-            groundTargetRate = ApplyGroundKind(kind, intensity);
+            // THE SPAWN CEILING MOVES UPWIND, and without this the drift is not merely subtle,
+            // it removes the snow. A flake spawns 12 m above the head and takes SpawnHeight /
+            // fallSpeed to reach eye level -- 3.3 s in a blizzard -- during which the wind above
+            // carries it UpwindOffsetMeters sideways. At 7 m/s that is 18 m, and the ceiling is
+            // only 15 m in half-width: every flake that would have been beside you at eye level
+            // was seeded outside the box and never existed, and every flake that WAS seeded
+            // overhead is 18 m downwind by the time it gets down to you. The player stands in a
+            // hole in their own blizzard, which is what "I didn't see the sideways drift" looks
+            // like from the inside -- less snow, not slanted snow. Seeding upwind by exactly the
+            // distance the wind will undo puts the flakes back where they are seen falling.
+            ParticleSystem.ShapeModule shape = particles.shape;
+            shape.position = new Vector3(-UpwindOffsetMeters(wind, fallSpeed), SpawnHeightMeters, 0.0f);
+
+            samplerTargetRate = ApplySamplerKind(kind, intensity, fallSpeed);
 
             if (particleRenderer != null)
             {
@@ -311,143 +367,220 @@ namespace Blockiverse.Gameplay
                 particleRenderer.alignment = ParticleSystemRenderSpace.View;
             }
 
-            EnsureGroundParticles(particleMaterial);
+            EnsureSplashSystems(particleMaterial);
             ApplyKind(activeKind, Mathf.Max(activeIntensity, 0.0f));
         }
 
-        // A flat disc of short-lived sprites sitting on whatever surface is under the player.
-        void EnsureGroundParticles(Material particleMaterial)
+        /// <summary>
+        /// How far upwind of the head the spawn ceiling sits, for a given wind and fall speed.
+        /// </summary>
+        /// <remarks>
+        /// Public and static so the arithmetic can be pinned without a headset. The failure it
+        /// prevents is invisible to every test that only asks whether the drift module is on:
+        /// the drift can be configured perfectly and still empty the volume around the player,
+        /// because the ceiling seeds the flakes and the wind then carries them off before they
+        /// have fallen far enough to be seen.
+        /// </remarks>
+        public static float UpwindOffsetMeters(float windMetersPerSecond, float fallSpeedMetersPerSecond)
         {
-            if (groundParticles == null)
+            if (windMetersPerSecond <= 0.0f || fallSpeedMetersPerSecond <= 0.01f)
+                return 0.0f;
+
+            float secondsToEyeLevel = SpawnHeightMeters / fallSpeedMetersPerSecond;
+            return Mathf.Min(
+                windMetersPerSecond * MeanDriftFraction * secondsToEyeLevel,
+                MaxUpwindOffsetMeters);
+        }
+
+        // The sampled-collision splash pair: a sparse rain emitter that collides, and the splash
+        // system it triggers. Two GameObjects because a GameObject holds one ParticleSystem, and
+        // the splash MUST be a child of the system that spawns it — Unity refuses a sub-emitter
+        // that is not.
+        void EnsureSplashSystems(Material particleMaterial)
+        {
+            if (samplerParticles == null)
             {
-                Transform existing = transform.Find(GroundEffectObjectName);
-                GameObject host;
-
-                if (existing != null)
-                {
-                    host = existing.gameObject;
-                }
-                else
-                {
-                    host = new GameObject(GroundEffectObjectName);
-                    host.transform.SetParent(transform, worldPositionStays: false);
-                }
-
-                groundTransform = host.transform;
+                GameObject host = FindOrCreateChild(transform, SplashSamplerObjectName);
                 ParticleSystem found = host.GetComponent<ParticleSystem>();
-                groundParticles = found != null ? found : host.AddComponent<ParticleSystem>();
+                samplerParticles = found != null ? found : host.AddComponent<ParticleSystem>();
             }
 
-            ParticleSystem.MainModule main = groundParticles.main;
+            if (splashParticles == null)
+            {
+                GameObject host = FindOrCreateChild(samplerParticles.transform, SplashObjectName);
+                ParticleSystem found = host.GetComponent<ParticleSystem>();
+                splashParticles = found != null ? found : host.AddComponent<ParticleSystem>();
+            }
+
+            ConfigureSplash(particleMaterial);
+            ConfigureSampler(particleMaterial);
+        }
+
+        static GameObject FindOrCreateChild(Transform parent, string name)
+        {
+            Transform existing = parent.Find(name);
+
+            if (existing != null)
+                return existing.gameObject;
+
+            var created = new GameObject(name);
+            created.transform.SetParent(parent, worldPositionStays: false);
+            return created;
+        }
+
+        // The drop that gets checked. Identical to the rain around it in everything the eye can
+        // see, and different only in that it is rare and that it stops where it lands.
+        void ConfigureSampler(Material particleMaterial)
+        {
+            ParticleSystem.MainModule main = samplerParticles.main;
             main.playOnAwake = false;
             main.loop = true;
-            // World space for the same reason the falling particles use it: a splash belongs to the
-            // ground it landed on, not to the player who walked away from it.
             main.simulationSpace = ParticleSystemSimulationSpace.World;
-            main.maxParticles = MaxLiveGroundParticles;
+            main.maxParticles = MaxLiveSplashes;
             main.gravityModifier = 0.0f;
-            main.startLifetime = SplashLifetimeSeconds;
+            main.startRotation3D = false;
+            main.startSpeed = RainFallSpeed;
+            main.startLifetime = SplashSamplerFallMeters / RainFallSpeed;
+            main.startColor = new Color(0.62f, 0.78f, 0.95f, 0.55f);
 
-            ParticleSystem.ShapeModule shape = groundParticles.shape;
+            ParticleSystem.ShapeModule shape = samplerParticles.shape;
             shape.enabled = true;
-            shape.shapeType = ParticleSystemShapeType.Circle;
-            shape.radius = GroundEffectRadiusMeters;
-            // Lay the disc flat. Circle emits in its local XY plane, so it needs the same +90 about
-            // X that the ceiling box needs — and unlike the box its scale is uniform, so there is
-            // no axis-order trap here.
+            shape.shapeType = ParticleSystemShapeType.Box;
+            // Same axis-order trap as the main ceiling: rotation moves the box geometry too, so
+            // the depth component goes in Y and the thin one in Z. See EnsureParticles.
+            shape.scale = new Vector3(SplashSamplerWidthMeters, SplashSamplerWidthMeters, 0.1f);
+            shape.position = new Vector3(0.0f, SpawnHeightMeters, 0.0f);
             shape.rotation = new Vector3(90.0f, 0.0f, 0.0f);
 
-            ParticleSystem.EmissionModule emission = groundParticles.emission;
+            ParticleSystem.EmissionModule emission = samplerParticles.emission;
             emission.enabled = true;
             emission.rateOverTime = 0.0f;
 
-            groundRenderer = groundParticles.GetComponent<ParticleSystemRenderer>();
+            ParticleSystem.CollisionModule collision = samplerParticles.collision;
+            collision.enabled = true;
+            collision.type = ParticleSystemCollisionType.World;
+            collision.mode = ParticleSystemCollisionMode.Collision3D;
+            // HIGH, and this is the one setting that cannot be traded away. Medium and Low do not
+            // raycast per particle; they collide against a small cached set of PLANES, which is
+            // the flat-surface approximation this whole rework exists to get rid of. The budget is
+            // held by keeping the particle count low instead.
+            collision.quality = ParticleSystemCollisionQuality.High;
+            collision.collidesWith = BlockiverseProject.VoxelGroundLayerMask;
+            collision.enableDynamicColliders = false;
+            collision.sendCollisionMessages = false;
+            collision.bounce = 0.0f;
+            collision.dampen = 1.0f;
+            // The drop is consumed by landing; what continues is the splash.
+            collision.lifetimeLoss = 1.0f;
 
-            if (groundRenderer != null)
+            ParticleSystem.SubEmittersModule subEmitters = samplerParticles.subEmitters;
+            subEmitters.enabled = true;
+
+            if (subEmitters.subEmittersCount == 0)
+                subEmitters.AddSubEmitter(
+                    splashParticles,
+                    ParticleSystemSubEmitterType.Collision,
+                    ParticleSystemSubEmitterProperties.InheritNothing);
+
+            samplerRenderer = samplerParticles.GetComponent<ParticleSystemRenderer>();
+
+            if (samplerRenderer != null)
             {
                 if (particleMaterial != null)
-                    groundRenderer.sharedMaterial = particleMaterial;
+                    samplerRenderer.sharedMaterial = particleMaterial;
 
-                // Flat against the ground rather than facing the camera: a splash ring seen
-                // edge-on as a billboard reads as a floating tick mark.
-                groundRenderer.renderMode = ParticleSystemRenderMode.HorizontalBillboard;
-                groundRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                groundRenderer.receiveShadows = false;
+                samplerRenderer.renderMode = ParticleSystemRenderMode.Stretch;
+                samplerRenderer.velocityScale = 0.06f;
+                samplerRenderer.lengthScale = 2.5f;
+                samplerRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                samplerRenderer.receiveShadows = false;
+                samplerRenderer.alignment = ParticleSystemRenderSpace.View;
             }
         }
 
-        // Sets the ground effect's kind-specific look and returns its emission rate.
-        float ApplyGroundKind(PrecipitationKind kind, float intensity)
+        // What a landing looks like. Emission is driven entirely by the parent's collision event,
+        // so the rate is zero and the burst is what fires.
+        void ConfigureSplash(Material particleMaterial)
         {
-            if (groundParticles == null)
+            ParticleSystem.MainModule main = splashParticles.main;
+            main.playOnAwake = false;
+            main.loop = false;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = MaxLiveSplashes * SplashesPerImpact;
+            main.startLifetime = SplashLifetimeSeconds;
+            main.startSpeed = new ParticleSystem.MinMaxCurve(SplashRiseSpeedMin, SplashRiseSpeedMax);
+            main.startSize = 0.06f;
+            main.startColor = new Color(0.78f, 0.88f, 1.0f, 0.55f);
+            // Pops up and falls back inside its third of a second, which is what separates a
+            // splash from a puff of smoke sitting on the ground. See SplashGravityModifier.
+            main.gravityModifier = SplashGravityModifier;
+
+            ParticleSystem.EmissionModule emission = splashParticles.emission;
+            emission.enabled = true;
+            emission.rateOverTime = 0.0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0.0f, (short)SplashesPerImpact) });
+
+            ParticleSystem.ShapeModule shape = splashParticles.shape;
+            shape.enabled = true;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 55.0f;
+            shape.radius = 0.02f;
+            // Cone fires along local +Z, so the same +90 about X that aims the ceiling downward
+            // aims this one UP, out of the surface the drop hit.
+            shape.rotation = new Vector3(-90.0f, 0.0f, 0.0f);
+
+            splashRenderer = splashParticles.GetComponent<ParticleSystemRenderer>();
+
+            if (splashRenderer != null)
+            {
+                if (particleMaterial != null)
+                    splashRenderer.sharedMaterial = particleMaterial;
+
+                splashRenderer.renderMode = ParticleSystemRenderMode.Billboard;
+                splashRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                splashRenderer.receiveShadows = false;
+                ApplySprite(splashRenderer, rain);
+            }
+        }
+
+        // Sets the sampler's kind-specific look and returns its emission rate. Snow gets none:
+        // snow landing on snow has nothing to show, and the drifting ground layer that used to
+        // stand in for it was the same invented-surface artefact as the splash disc.
+        float ApplySamplerKind(PrecipitationKind kind, float intensity, float fallSpeed)
+        {
+            if (samplerParticles == null || kind != PrecipitationKind.Rain)
                 return 0.0f;
 
-            bool isSnow = kind == PrecipitationKind.Snow;
+            ParticleSystem.MainModule main = samplerParticles.main;
+            main.startSize = Mathf.Lerp(RainSizeLight, RainSizeHeavy, intensity);
+            main.startSpeed = fallSpeed;
+            main.startLifetime = SplashSamplerFallMeters / Mathf.Max(0.5f, fallSpeed);
 
-            ParticleSystem.MainModule main = groundParticles.main;
-            main.startLifetime = isSnow ? SplashLifetimeSeconds * 3.0f : SplashLifetimeSeconds;
-            main.startSize = isSnow ? 0.16f : Mathf.Lerp(0.05f, 0.11f, intensity);
-            // Splashes pop upward a little; ground snow is blown sideways by the same wind that
-            // drives the falling flakes, so the two agree instead of looking like separate systems.
-            // Both kinds emit gently upward off the surface. Ground snow gets its sideways motion
-            // from velocityOverLifetime below, NOT from the emission direction -- see the shape
-            // rotation note.
-            main.startSpeed = isSnow ? 0.35f : 0.5f;
-            main.startColor = isSnow
-                ? new Color(1.0f, 1.0f, 1.0f, 0.5f * intensity)
-                : new Color(0.78f, 0.88f, 1.0f, 0.5f);
+            ApplySprite(samplerRenderer, rain);
+            // The splash system is the ONLY emitter that had no sprite of its own, so every impact
+            // drew two untextured quads of whatever the shared particle material happened to carry.
+            // It is re-applied here rather than only at construction because Configure supplies the
+            // sprites AFTER EnsureParticles has already built the systems.
+            ApplySprite(splashRenderer, rain);
 
-            // The disc stays FLAT for both kinds. A Circle shape emits in its local XY plane, so
-            // leaving the rotation at zero stood the ring upright and fired particles out to the
-            // left and right of the player -- "a line of squares moving away from me in either
-            // direction". The +90 about X is what lays it on the ground; it is not optional for
-            // one kind and not the other.
-            ParticleSystem.ShapeModule shape = groundParticles.shape;
-            shape.rotation = new Vector3(90.0f, 0.0f, 0.0f);
-
-            // Sideways drift belongs in velocity, where it can match the wind driving the falling
-            // snow instead of being baked into the emission direction.
-            ParticleSystem.VelocityOverLifetimeModule drift = groundParticles.velocityOverLifetime;
-            drift.enabled = isSnow;
-            drift.space = ParticleSystemSimulationSpace.World;
-            float groundWind = isSnow ? BlizzardWindMetersPerSecond * intensity : 0.0f;
-            drift.x = new ParticleSystem.MinMaxCurve(groundWind * 0.5f, groundWind);
-            drift.z = new ParticleSystem.MinMaxCurve(-groundWind * 0.25f, groundWind * 0.25f);
-
-            return kind switch
-            {
-                PrecipitationKind.Rain => MaxSplashesPerSecond * intensity,
-                // Ground snow only reads once it is actually blowing, so it ramps in late.
-                PrecipitationKind.Snow => MaxGroundSnowPerSecond * Mathf.Max(0.0f, intensity - 0.35f) / 0.65f,
-                _ => 0.0f,
-            };
+            return MaxSplashSamplersPerSecond * intensity;
         }
 
-        // Keeps the disc on the surface under the player. One raycast per frame, against the same
-        // mask gravity uses, so it lands on terrain and ignores fluid and passable vegetation.
-        void UpdateGroundHeight()
+        void ApplySprite(ParticleSystemRenderer target, Sprite sprite)
         {
-            if (head == null || groundTransform == null)
+            if (target == null || sprite == null || sprite.texture == null)
                 return;
 
-            Vector3 origin = head.position;
-
-            if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, GroundProbeMeters,
-                    BlockiverseProject.VoxelGroundLayerMask, QueryTriggerInteraction.Ignore))
-            {
-                groundY = hit.point.y;
-                hasGroundY = true;
-            }
-
-            // Keep the last known height when the probe misses (mid-air, over a void) rather than
-            // snapping the whole effect to the player's feet.
-            groundTransform.position = new Vector3(
-                origin.x, hasGroundY ? groundY + GroundEffectLiftMeters : origin.y, origin.z);
+            propertyBlock ??= new MaterialPropertyBlock();
+            propertyBlock.Clear();
+            target.GetPropertyBlock(propertyBlock);
+            propertyBlock.SetTexture(BaseMapId, sprite.texture);
+            propertyBlock.SetTexture(MainTexId, sprite.texture);
+            target.SetPropertyBlock(propertyBlock);
         }
 
-        const string GroundEffectObjectName = "Weather Ground Effect";
-        // Just clear of the surface so the sprites are not z-fighting the block face they sit on.
-        const float GroundEffectLiftMeters = 0.03f;
+        const string SplashSamplerObjectName = "Weather Splash Sampler";
+        const string SplashObjectName = "Weather Splash";
 
         static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");
         static readonly int MainTexId = Shader.PropertyToID("_MainTex");

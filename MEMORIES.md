@@ -149,6 +149,45 @@ This file is the concise handoff for future agent work in the Blockiverse VR pro
   true black proves unplayable on device (0.01 is the "eyes adjusted" equivalent). Crop growth
   still reads `SampleAirLight` (axis-probe max(sky, emissive)) — deliberately NOT the LOS bake, so
   the berries-adjacent-to-quartz decision is unchanged.
+- Timestamp: 2026-08-25. **Vertex colour is light data only on the LIT path.** Sky geometry — the
+  cloud deck and the new `BlockiverseHorizonSkirt` — renders through a fourth state on the same
+  `multi_compile_local` line, `_BLOCKIVERSE_SKY`, which is unlit and reads vertex colour as a
+  literal colour. It has to exist because both surfaces work by becoming indistinguishable from the
+  sky at their outer edge, and the lit path cannot deliver an exact colour: self-emission is a
+  scalar added to all three channels, so a pale blue vertex colour renders as a slightly dimmer
+  white. Worth knowing before touching either: this means the deck's `CloudColor` never reached the
+  screen before — every weather state drew the same white cloud at a different brightness.
+- **VERTEX COLOURS ARE NOT GAMMA-CONVERTED; MATERIAL COLOURS ARE.** The project renders in linear
+  colour space (`ProjectSettings.asset` `m_ActiveColorSpace: 1`). `Material.SetColor` on a Color
+  property converts sRGB to linear; `mesh.colors` passes through raw. Nothing noticed until sky
+  geometry put an actual COLOUR in the vertex stream — the chunk mesh's vertex colours are
+  light-data scalars, which is the standing proof that no conversion happens (sky exposure 0.5
+  would arrive as 0.21 and every shadow would be far too dark). An unconverted sky rim renders ~80%
+  too bright at midday and over 12x at night, because the sRGB curve is steepest in the darks. The
+  conversion lives in the shader's `_BLOCKIVERSE_SKY` branch (`SRGBToLinear` under
+  `#ifndef UNITY_COLORSPACE_GAMMA`) and NOT in C#: mesh colours are 8-bit, and 8 bits of linear
+  cannot carry a night sky, while 8 bits of sRGB is exactly what sRGB encoding is for.
+- **The aerial colour** is one value (the sky's own horizon colour for the time and weather) driving
+  four surfaces that must agree or one of them draws a visible seam: `RenderSettings.fogColor`, the
+  skybox's `_GroundColor`, the cloud deck's rim, and the horizon skirt's rim. The skybox is never
+  fogged, so any deviation shows up somewhere. `SkyGradientSolver.GroundColor` / `NightGround` were
+  deleted rather than kept as a second opinion; `DayGround` survives only as the authored asset
+  default. Ruleset: `voxel_world_environment_effects.md` §7.4.
+- **Canopy skylight is per-CELL and floored, and it is ONE value for rendering AND gameplay.** `VoxelSkyLightMap.SkyTransmittance` walks the
+  transmitting layers strictly above the queried cell (it used to be one cached product per column,
+  which charged a cell inside a crown for the leaves below it too), and the Beer–Lambert product is
+  floored at `DiffuseCanopyFloor = 0.25` because skylight is hemispherical and a pure product goes
+  to black by four layers. Eric chose ONE number over a render/gameplay split (2026-08-25): simpler
+  to reason about and to debug than two values for one physical quantity. It therefore moves
+  farming, and that is acceptable only because the move is BOUNDED — the asymptote (3.75 on the
+  0-15 scale) sits below the least demanding crop (reeds, 5), so a player gains one layer of canopy
+  for grain and berries and two for reeds and nothing past that. **Raising the floor for visual
+  reasons past that line opens farming under a closed forest**; the bound is pinned by
+  `VoxelSkyLightCanopyEditModeTests.TheFloorsEffectOnFARMINGStaysBounded`, which reads the real
+  thresholds via `FarmingService.MinimumLightFor` rather than copying them. If farming needs
+  tightening the lever is the crop's own `minLight`, not this constant. Cells below the whole canopy
+  take a cached column product in O(1); only cells inside a crown walk. Ruleset:
+  `voxel_biome_vegetation_ruleset.md` §4a.7.
 - Remaining known gaps: baked light is still time-of-day independent (the sun/moon do the
   darkening, the bake only gates them); emitters WITHOUT a shadow map still take the per-face G
   gate, so their occlusion edge lands on a block boundary (the escalation if that reads badly on

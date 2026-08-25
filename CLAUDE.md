@@ -363,6 +363,13 @@ scripts/unity/run-tests.sh
 scripts/unity/run-tests.sh --platform EditMode \
   --filter "Blockiverse.Tests.EditMode.SomeClass.SomeTest" --results-name Single
 
+# THE FULL GATE (no args) IS THE LAST STEP, NOT THE ITERATION LOOP. It takes 15-30 minutes and
+# scales with machine load from other concurrent sessions/worktrees. Iterate with --filter (above)
+# on every write/test/verify/revert cycle; run the full gate once, at the end, before commit or PR.
+# Full workflow, including the batched mutation-testing pattern that replaces "one full gate per
+# mutation" with "one filtered run for all mutations + one final full gate":
+# docs/testing/README.md, "Iterating: Filtered Runs, Not Full Gates" and "Mutation-Verify Loop".
+
 # Builds (entry points in Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs)
 scripts/unity/build-development-apk.sh            # dev APK; runs the bootstrapper first
 # Release-signed APKs are built by .github/workflows/quest-alpha.yml only.

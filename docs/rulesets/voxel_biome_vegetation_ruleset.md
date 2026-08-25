@@ -234,6 +234,70 @@ plants read as obstructing at standing height. This distinction is what the `pat
 `no_tall_plant` structure masks refer to; before this section those masks referenced a class that
 was never defined.
 
+### 4a.7 Canopy light transmission
+
+`blocksLight` is not a boolean in the lighting map: a block that blocks light declares
+`lightTransmission`, the share of skylight it passes. Everything except `leafmoss` is `0.0` — fully
+opaque — and `leafmoss` is `0.45`.
+
+Skylight at a cell is the product of the transmissions of every transmitting layer **strictly above
+it**, floored:
+
+```ts
+product      = product of lightTransmission for each transmitting block above the cell
+transmittance = product >= 1 ? 1 : diffuseCanopyFloor + (1 - diffuseCanopyFloor) * product
+// diffuseCanopyFloor = 0.25
+```
+
+Two rules in that expression, and both were learned from device feedback rather than derived.
+
+**Only layers above the cell count.** The obvious implementation caches one product per column,
+which is right for a cell beneath the whole crown and wrong for every cell inside it — a cell level
+with the middle of a canopy was charged for the leaves below it as well. That is most of a canopy:
+every interior and underside face the mesher bakes, coming out several times darker than the model
+intended.
+
+Costing that correctly needs BOTH cases, and the obvious claim about it is false: a walk from the
+topmost blocker down to the queried cell is **not** bounded by the crown's depth, because a tall
+tree over open ground puts those 20–25 blocks apart — on a path the mesher calls once per face.
+Cells below the whole canopy (the forest floor, i.e. most calls) therefore take a cached column
+product in O(1), and only cells *inside* a crown walk, where the bound really is the crown's extent.
+
+**The product is floored, because it is a single-ray model of a hemispherical source.** A bare
+product is Beer–Lambert down one vertical line, and skylight arrives from the whole sky: light the
+straight-down path says is extinguished still gets in from the side and through gaps two cells over.
+Uncorrected, four stacked layers give 0.041 and five give 0.018 — within a few percent of the zero
+a sealed room gets, so the model puts a wood at noon and a cave in the same bucket. No per-layer
+transmission value repairs that; halving the extinction only moves which layer count goes black. The floor stands in for the side-scattered term, and it saturates,
+which is what real canopy shade does:
+
+| Layers overhead | 1 | 2 | 3 | 4 | 8+ |
+|---|---|---|---|---|---|
+| Transmittance | 0.59 | 0.40 | 0.32 | 0.28 | → 0.25 |
+
+The floor is a **canopy** term, never an ambient one: below the topmost opaque block transmittance
+is 0, so a sealed room stays dark.
+
+**One value, used for rendering and for gameplay alike.** The floored number IS `visibleLight`;
+there is no separate shading quantity. A rendering value and a gameplay value for one physical
+thing can drift apart, and two numbers are harder to reason about and to debug than one.
+
+That means the floor moves farming, and the move is accepted because it is **bounded**. On the
+0–15 scale `FarmingService` requires grain 8, berries 7, reeds 5:
+
+| Layers overhead | 0 | 1 | 2 | 3 | 4 | → |
+|---|---|---|---|---|---|---|
+| `visibleLight` | 15.00 | 8.81 | 6.03 | 4.78 | 4.21 | 3.75 |
+| Grain (8) | yes | **yes** | no | no | no | no |
+| Berries (7) | yes | **yes** | no | no | no | no |
+| Reeds (5) | yes | yes | **yes** | no | no | no |
+
+A player gains one layer of canopy for grain and berries and two for reeds, and nothing beyond
+that: the asymptote (3.75) sits **below** the least demanding crop's minimum (5), so however thick
+the canopy gets, farming under it still stops. You can plant at the fringe of a tree, not inside a
+forest. If that ever needs tightening, the lever is the crop's own `minLight`, not this constant —
+and the bound itself is pinned by `VoxelSkyLightCanopyEditModeTests.TheFloorsEffectOnFARMINGStaysBounded`.
+
 ---
 
 ## 5. Tree variant model

@@ -31,8 +31,6 @@ namespace Blockiverse.Gameplay
         // stops advancing so it cannot drift into float noise over a long session.
         const float FlashTrackingWindowSeconds = 1.0f;
 
-        static readonly Color ClearFogColor = new(0.62f, 0.70f, 0.80f);
-
         // How fast the cloud deck drifts, in shader UV units per second.
         // Planar units per second. At 0.004 one noise cell (~1 planar unit) took over four minutes
         // to pass overhead, so the deck read as painted on rather than drifting. 0.02 moves a cell
@@ -46,6 +44,7 @@ namespace Blockiverse.Gameplay
         public const float SkyVeilShare = 0.35f;
 
         BlockiverseCloudDeck cloudDeck;
+        BlockiverseHorizonSkirt horizonSkirt;
         Vector2 cloudScroll;
 
         // Sky-flash state lives HERE rather than on the bolt view, and is deliberately not pulled
@@ -199,18 +198,25 @@ namespace Blockiverse.Gameplay
                 state.AmbientColor * weatherFactor, skyFlashStrength, skyFlashElapsed);
             RenderSettings.sun = sunLight;
 
-            // Fog colour is pulled most of the way to the sky's own horizon colour. Distant
-            // terrain should melt INTO the sky — that is what aerial perspective is — and the
-            // skybox is deliberately never fogged (it is Background queue with no MixFog), so a
-            // fog colour unrelated to the sky turns the far plane into a visible seam between
-            // fogged ground and unfogged sky rather than a fade.
+            // THE AERIAL COLOUR: what anything infinitely far away looks like. Fog, the skybox's
+            // below-horizon band, the cloud deck's rim and the horizon skirt's rim are all driven
+            // from this ONE value, and that is the point of it.
+            //
+            // It used to be a blend of the ambient tint toward the horizon (0.65 of the way), on
+            // the reasoning that distant terrain should melt into the sky. Correct as far as it
+            // went — but the skybox is deliberately never fogged (Background queue, no MixFog),
+            // so every surface that has to disappear against the sky disappears against a colour
+            // slightly different from its own, and each such surface draws a seam. With three of
+            // them now (fogged terrain, the deck rim, the skirt rim) meeting an unfogged sky, any
+            // deviation at all is visible somewhere. The sky's own horizon colour is the only
+            // choice that makes all four agree, and it already carries time of day and the
+            // overcast darkening, so nothing is lost by dropping the separate tint.
             Color skyHorizon = SkyGradientSolver.HorizonColor(
                 worldTimeClock.NormalizedTime,
                 cloudCoverage,
                 MoonPhaseIndex / (float)EnvironmentLightComputer.FullMoonLightLevel);
-            Color weatherTint = state.AmbientColor * weatherFactor + ClearFogColor * 0.25f;
-            ApplyFog(applyFog, Color.Lerp(weatherTint, skyHorizon, 0.65f), fogDensity, submergedBlend);
-            ApplySky(worldTimeClock.NormalizedTime, cloudCoverage);
+            ApplyFog(applyFog, skyHorizon, fogDensity, submergedBlend);
+            ApplySky(worldTimeClock.NormalizedTime, cloudCoverage, skyHorizon);
         }
 
         // Drives the generated sky material. This exists because the stock procedural skybox
@@ -227,7 +233,14 @@ namespace Blockiverse.Gameplay
             cloudDeck = deck;
         }
 
-        void ApplySky(float normalizedTime, float cloudCoverage)
+        /// <summary>Attaches the sea-level horizon plane this controller recolours. Optional: with
+        /// no skirt the world simply ends at its own edge, which is the pre-skirt look.</summary>
+        public void ConfigureHorizonSkirt(BlockiverseHorizonSkirt skirt)
+        {
+            horizonSkirt = skirt;
+        }
+
+        void ApplySky(float normalizedTime, float cloudCoverage, Color aerial)
         {
             // ONLY ever writes a material this component minted for itself.
             //
@@ -248,7 +261,12 @@ namespace Blockiverse.Gameplay
 
             skyMaterial.SetColor(ZenithColorId, SkyGradientSolver.ZenithColor(normalizedTime, cloudCoverage, moonPhaseScale));
             skyMaterial.SetColor(HorizonColorId, SkyGradientSolver.HorizonColor(normalizedTime, cloudCoverage, moonPhaseScale));
-            skyMaterial.SetColor(GroundColorId, SkyGradientSolver.GroundColor(normalizedTime, cloudCoverage, moonPhaseScale));
+            // Below the horizon is, by definition, infinitely distant ground, so it takes the
+            // aerial colour like everything else at that distance. It used to have its own opinion
+            // (a flat mid grey) which is what the world's edge stood against as a visible cliff in
+            // a visible void; the horizon skirt now covers most of that band and matches its far
+            // rim to this, so the two have to be the same colour or the skirt's rim is a line.
+            skyMaterial.SetColor(GroundColorId, aerial);
             skyMaterial.SetColor(SunColorId, SkyGradientSolver.SunDiskColor(normalizedTime, moonPhaseScale));
             skyMaterial.SetColor(CloudColorId, SkyGradientSolver.CloudColor(normalizedTime, cloudCoverage));
 
@@ -261,13 +279,29 @@ namespace Blockiverse.Gameplay
             if (cloudDeck != null)
             {
                 Color deckColor = SkyGradientSolver.CloudColor(normalizedTime, cloudCoverage);
+
                 // Underside darker than the top, which is most of what gives a flat-bottomed deck
                 // its volume from below — the angle a player on the ground always sees it from.
-                cloudDeck.SetSky(
-                    cloudCoverage,
-                    deckColor,
-                    Color.Lerp(deckColor, SkyGradientSolver.HorizonColor(normalizedTime, cloudCoverage, moonPhaseScale), 0.55f));
+                //
+                // These are LITERAL colours now. Through the lit path they were not: vertex colour
+                // there is baked light data, so the deck rendered as its white texel at a
+                // brightness derived from these, and every weather state drew the same white cloud
+                // slightly dimmer or brighter. The sky shader variant is unlit and takes the
+                // vertex colour as written, so the storm grey in CloudColor finally arrives — and
+                // the top/underside split has to carry its own contrast rather than borrowing the
+                // sun's, hence the darkening here.
+                Color underside = Color.Lerp(
+                    new Color(deckColor.r * 0.70f, deckColor.g * 0.70f, deckColor.b * 0.72f, 1.0f),
+                    aerial,
+                    0.25f);
+
+                // The fourth colour is what the deck's rim dissolves into, and it is the aerial
+                // colour rather than another cloud tone for the same reason the skirt's is.
+                cloudDeck.SetSky(cloudCoverage, deckColor, underside, aerial);
             }
+
+            if (horizonSkirt != null)
+                horizonSkirt.SetSky(aerial);
 
             // The disk follows the shared light so it lines up with the shadows it casts, but it
             // is hidden below the horizon by the colour solver rather than by rotation.

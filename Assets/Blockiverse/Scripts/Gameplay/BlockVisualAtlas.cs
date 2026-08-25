@@ -32,11 +32,13 @@ namespace Blockiverse.Gameplay
         // Same stripping constraint as the water keyword above: it is a third state on the SAME
         // multi_compile_local line, never a separate .shader asset.
         public const string CutoutShaderKeyword = "_BLOCKIVERSE_CUTOUT";
+        public const string SkyShaderKeyword = "_BLOCKIVERSE_SKY";
 
         public const string BlockMaterialName = "Blockiverse Authored Block Atlas Material";
         public const string FluidMaterialName = "Blockiverse Authored Fluid Atlas Material";
         public const string FluidDepthPrimeMaterialName = "Blockiverse Authored Fluid Depth Prime Material";
         public const string CutoutMaterialName = "Blockiverse Authored Cutout Atlas Material";
+        public const string SkyMaterialName = "Blockiverse Authored Sky Atlas Material";
 
         // LightMode tag of the water depth-prime pass. Only the prime material runs it; terrain and
         // the water shading material both switch it off, so neither pays for a pass it never wants.
@@ -52,6 +54,7 @@ namespace Blockiverse.Gameplay
         // URP's AlphaTest band: after all opaque geometry (2000) and before transparent (3000), so
         // opaque depth still rejects hidden foliage before the alpha test costs anything.
         public const int CutoutRenderQueue = (int)RenderQueue.AlphaTest;
+        public const int SkyRenderQueue = (int)RenderQueue.Geometry + 50;
 
         // Half coverage. Deliberately not near 0: a low threshold keeps almost-transparent
         // fringe pixels alive, which on a point-filtered atlas reads as a halo around every blade.
@@ -198,12 +201,22 @@ namespace Blockiverse.Gameplay
 
         // Face-aware overload. `faceIndex` is a ChunkMeshBuilder face index; -1 means "no
         // particular face", which is what cross quads and decals pass.
-        // A zero-area UV rect over the atlas's whitest fully-opaque texel, for geometry that wants
-        // a flat colour rather than a block texture — the cloud deck tints it by vertex colour.
+        // A zero-area UV rect over a near-white fully-opaque texel, carried by sky geometry (the
+        // cloud deck and the horizon skirt) so their meshes have valid UVs.
         //
-        // Measured from the generated atlas: texel (302, 345) of 576x480 is rgb (248, 255, 255).
-        // Recompute if the atlas layout changes; a texel that landed on a transparent or coloured
-        // pixel would tint every quad that samples it.
+        // NO LONGER LOAD-BEARING, and the reason is worth keeping. The deck used to be tinted by
+        // this texel, on the assumption that one measured pixel is white in the atlas. Measured
+        // across all four generated texture sets at texel (302, 345) of 576x480:
+        //
+        //   enhanced (248,255,255)  ai (248,255,255)  ai_simplified (248,255,255)
+        //   original (194,204,209)  <-- 20% dark and blue
+        //
+        // So selecting the `original` texture set tinted the entire sky, and would have put a
+        // visible line all the way round the horizon skirt, whose rim has to land on EXACTLY the
+        // aerial colour to disappear. The sky shader variant now samples no texture at all, which
+        // makes the atlas irrelevant to the sky rather than making this one texel a shared
+        // dependency of four independently generated art sets. Pinned by
+        // BlockiverseHorizonSkirtEditModeTests.TheSkyVariantNeverSamplesTheAtlas.
         public static readonly Rect WhiteTexelUv = new(
             (302.0f + 0.5f) / AtlasWidthPixels,
             1.0f - ((345.0f + 0.5f) / AtlasHeightPixels),
@@ -367,6 +380,49 @@ namespace Blockiverse.Gameplay
             SetFloatIfPresent(material, "_Cutoff", DefaultAlphaCutoff);
 
             material.name = CutoutMaterialName;
+            return material;
+        }
+
+        // Sky geometry: the cloud deck overhead and the horizon skirt at sea level. A third
+        // runtime clone of the same authored atlas material, for the same reasons as the other two
+        // — no new .mat asset, no Shader.Find, and texture-set switching keeps working.
+        //
+        // What makes it its own material rather than the block one with a different mesh is the
+        // keyword. Both surfaces have to be able to take an EXACT colour, because both exist to
+        // stop being distinguishable from the sky at their outer edge, and the lit path cannot
+        // deliver one: vertex colour there is baked light data, and self emission is a scalar, so
+        // a pale blue vertex colour renders as a dimmer white rather than as pale blue.
+        public static Material CreateSkyMaterial(Material sourceMaterial, Texture2D selectedAtlas, string textureSetId)
+        {
+            Material material = CreateMaterial(sourceMaterial, selectedAtlas, textureSetId);
+
+            // Plain opaque geometry, but drawn AFTER terrain.
+            //
+            // The skirt is a large and frequently occluded surface — standing on the island looking
+            // out, the terrain in front hides most of it — and at terrain's own queue the opaque
+            // front-to-back sort decides the order from bounds, which for the skirt is centred on
+            // the world rather than on the player. One queue later lets terrain depth reject those
+            // pixels before they are shaded, which on a tile GPU is the difference that matters.
+            // The deck neither gains nor loses (nothing occludes the sky) and shares the material.
+            //
+            // Still inside the documented ordering: terrain 2000 < sky 2050 < cutout 2450 < water.
+            ApplySurfaceState(
+                material,
+                renderType: "Opaque",
+                queue: SkyRenderQueue,
+                srcBlend: BlendMode.One,
+                dstBlend: BlendMode.Zero,
+                zWrite: 1.0f,
+                // The deck's cells are closed boxes and the skirt is a single-sided plane meant to
+                // be seen from above, so back-face culling is free on both.
+                cull: CullMode.Back);
+            material.EnableKeyword(SkyShaderKeyword);
+            material.DisableKeyword(WaterShaderKeyword);
+            material.DisableKeyword(CutoutShaderKeyword);
+            material.SetShaderPassEnabled(WaterDepthPrimePassName, false);
+            material.SetShaderPassEnabled(ForwardPassName, true);
+
+            material.name = SkyMaterialName;
             return material;
         }
 

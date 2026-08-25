@@ -120,10 +120,10 @@ Shader "Blockiverse/Voxel Lit"
             // shader_feature variant would be stripped from the Android player and water would
             // render as opaque terrain on device while looking correct in the editor.
             //
-            // Water and cutout are three states on ONE line, not two independent keywords: they
-            // are mutually exclusive (no material is both), so this compiles 3 variants where two
-            // separate multi_compile_local lines would compile 4.
-            #pragma multi_compile_local _ _BLOCKIVERSE_WATER _BLOCKIVERSE_CUTOUT
+            // Water, cutout and sky are four states on ONE line, not independent keywords: they
+            // are mutually exclusive (no material is more than one), so this compiles 4 variants
+            // where separate multi_compile_local lines would compile 8.
+            #pragma multi_compile_local _ _BLOCKIVERSE_WATER _BLOCKIVERSE_CUTOUT _BLOCKIVERSE_SKY
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -282,6 +282,62 @@ Shader "Blockiverse/Voxel Lit"
                 // Without this the fragment stage's unity_StereoEyeIndex stays 0, so the right eye
                 // would sample the LEFT eye's light clusters.
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+
+                #if defined(_BLOCKIVERSE_SKY)
+                    // SKY GEOMETRY -- the cloud deck and the horizon skirt -- is unlit, takes its
+                    // colour STRAIGHT FROM THE VERTEX, and never samples the atlas at all.
+                    //
+                    // Vertex colour, because both surfaces work by becoming indistinguishable from
+                    // the sky at their outer edge and that means matching an exact colour. The lit
+                    // path below cannot deliver one: vertex colour there is (sky exposure, emitter
+                    // reach, self emission), self emission is a SCALAR added equally to all three
+                    // channels, and what lands on screen is the TEXTURE's colour at some
+                    // brightness. A pale blue vertex colour renders as a slightly dimmer white.
+                    // (Which is also why the deck's storm grey never reached the screen before
+                    // this: every weather state drew the same white cloud, dimmer or brighter.)
+                    //
+                    // NO TEXTURE FETCH, and that is a correctness fix rather than an optimisation.
+                    // The deck used to multiply by one hand-picked "white" texel of the atlas --
+                    // and that texel is white in three of the four texture sets and (194, 204, 209)
+                    // in `original`, so selecting that set tinted the whole sky 20% dark and
+                    // blue. For the skirt the same tint would have been worse than cosmetic: its
+                    // rim has to land on exactly the aerial colour to disappear, and a rim
+                    // multiplied by 0.76 is a visible line all the way round the world. Sampling
+                    // nothing makes the atlas irrelevant to the sky, which is what it should
+                    // always have been.
+                    //
+                    // MixFog closes the last gap: fog resolves to the aerial colour and both rims
+                    // are authored to that same colour, so a far rim lands on it from both
+                    // directions at once whatever the current fog density is.
+                    //
+                    // Skipping the sample also skips a texture fetch and the entire lighting solve
+                    // on the largest fill in the frame, which on a tile GPU is not nothing.
+                    //
+                    // sRGB -> LINEAR HERE, and this conversion is load-bearing. The project renders
+                    // in linear colour space, where the two routes a colour takes into a shader
+                    // disagree: Material.SetColor converts, mesh.colors does not. (That vertex
+                    // colours pass through raw is not an assumption -- the lit path below packs sky
+                    // exposure and emitter reach into them as unencoded 0..1 SCALARS and multiplies
+                    // them linearly, which would be systematically wrong if Unity converted.)
+                    //
+                    // So an unconverted rim renders far brighter than the sky it must vanish into:
+                    // at midday about 80% too bright in red, and at midnight over 12x, because the
+                    // sRGB curve is steepest in the darks -- a lit grey sea and grey clouds under a
+                    // black sky. It also defeats the deck's weather contrast, since storm grey
+                    // (0.28) is meant to be linear 0.065 and would draw as a mid grey instead.
+                    //
+                    // Converted in the SHADER rather than in C# on purpose: mesh colours are an
+                    // 8-bit stream, and 8 bits of LINEAR quantises the darks badly (a night aerial
+                    // colour of 0.0057 linear rounds to 1/255, a 30% error), while 8 bits of sRGB
+                    // is exactly what sRGB encoding exists to carry.
+                    half3 skyColor = input.color.rgb;
+
+                    #ifndef UNITY_COLORSPACE_GAMMA
+                        skyColor = SRGBToLinear(skyColor);
+                    #endif
+
+                    return half4(MixFog(skyColor, input.fogCoord), 1.0h);
+                #endif
 
                 half4 sampled = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
 

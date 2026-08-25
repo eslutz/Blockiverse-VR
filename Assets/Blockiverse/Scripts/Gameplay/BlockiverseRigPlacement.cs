@@ -36,6 +36,17 @@ namespace Blockiverse.Gameplay
         /// at a fixed world heading behind them (Eric, 2026-08-24). Subtracting the head-local yaw
         /// is what makes "face the menu" mean the player's eyes rather than the rig's axis.
         ///
+        /// POSITION HAS THE SAME PROBLEM, and fixing only the yaw left the other half of it
+        /// visible: the rig origin is the tracking origin, not the player, so the head sits
+        /// wherever they have physically walked to inside their room. Placing the RIG on the spawn
+        /// block therefore places the head that same room-offset away from it, while the menu is
+        /// pinned relative to spawn — so the player arrives standing beside the menu, aimed at the
+        /// heading it is on rather than at the menu itself. "I'm off to the left a little bit and
+        /// looking to the left past the menu" (Eric, 2026-08-25) is exactly a lateral room offset:
+        /// the yaw was right, which is why it reads as being in the wrong PLACE rather than the
+        /// wrong direction. Offsetting the rig by the head's flattened local position puts the
+        /// player's eyes on the spawn block, which is what every caller already believed it did.
+        ///
         /// COMFORT: this is a forced re-orientation, which is only acceptable because of how it is
         /// done. It is instantaneous — rotation sickness comes from vection, sustained visual
         /// rotation with no matching inner-ear signal, and a single-frame yaw change produces no
@@ -51,11 +62,42 @@ namespace Blockiverse.Gameplay
             if (!BlockiversePlayerRigAnchor.TryGetRigTransform(out Transform rig))
                 return;
 
-            Vector3 position = new(spawnPosition.X + 0.5f, spawnPosition.Y, spawnPosition.Z + 0.5f);
+            Vector3 headTarget = new(spawnPosition.X + 0.5f, spawnPosition.Y, spawnPosition.Z + 0.5f);
             float targetRigYaw = ResolveRigYawForViewHeading(rig, headingDegrees);
+            Vector3 position = ResolveRigPositionForHead(rig, headTarget, targetRigYaw);
 
             if (!BlockiverseComfortTransition.TryMoveRigWithComfort(rig, position, targetRigYaw))
                 rig.SetPositionAndRotation(position, Quaternion.Euler(0.0f, targetRigYaw, 0.0f));
+        }
+
+        /// <summary>
+        /// Where the rig has to stand so the player's HEAD ends up over
+        /// <paramref name="headTarget"/> once <paramref name="rigYawDegrees"/> is applied.
+        /// </summary>
+        /// <remarks>
+        /// Public for the same reason <see cref="ResolveRigYawForViewHeading"/> is: on desktop the
+        /// camera sits at the rig origin, so the offset is zero and the uncorrected code is
+        /// indistinguishable from the corrected one. The yaw is an input rather than the rig's
+        /// current one because the head's offset is expressed in RIG-LOCAL space — turning the rig
+        /// swings it around the origin, so an offset measured before the turn and applied after it
+        /// would be wrong by exactly the angle of the turn.
+        ///
+        /// Only X and Z are compensated. Y is the floor the rig stands on; the head's height above
+        /// it is the player's own height, and subtracting that would bury the rig.
+        /// </remarks>
+        public static Vector3 ResolveRigPositionForHead(Transform rig, Vector3 headTarget, float rigYawDegrees)
+        {
+            if (rig == null)
+                return headTarget;
+
+            Camera head = Camera.main;
+            if (head == null)
+                return headTarget;
+
+            Vector3 localHead = rig.InverseTransformPoint(head.transform.position);
+            Vector3 offset = Quaternion.Euler(0.0f, rigYawDegrees, 0.0f) * new Vector3(localHead.x, 0.0f, localHead.z);
+
+            return new Vector3(headTarget.x - offset.x, headTarget.y, headTarget.z - offset.z);
         }
 
         /// <summary>

@@ -82,6 +82,15 @@ namespace Blockiverse.Survival
 
         static readonly Dictionary<BlockId, CropGrowthProfile> ProfilesByStage = BuildProfiles();
 
+        /// <summary>The minimum visibleLight a crop stage needs to advance, or 0 if it is not a crop.
+        ///
+        /// Public so the canopy lighting model can be pinned against the REAL thresholds instead of
+        /// a copy of them. The diffuse canopy floor feeds the same light value crops read, so its
+        /// effect on farming is bounded by exactly these numbers — a test that hardcoded them would
+        /// silently stop guarding that the day someone retuned a crop.</summary>
+        public static int MinimumLightFor(BlockId cropStage) =>
+            ProfilesByStage.TryGetValue(cropStage, out CropGrowthProfile profile) ? profile.MinLight : 0;
+
         static Dictionary<BlockId, CropGrowthProfile> BuildProfiles()
         {
             var map = new Dictionary<BlockId, CropGrowthProfile>();

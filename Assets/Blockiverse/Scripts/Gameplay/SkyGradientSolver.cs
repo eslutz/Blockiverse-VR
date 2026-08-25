@@ -13,13 +13,16 @@ namespace Blockiverse.Gameplay
     {
         public static readonly Color DayZenith = new(0.16f, 0.36f, 0.68f, 1.0f);
         public static readonly Color DayHorizon = new(0.66f, 0.78f, 0.92f, 1.0f);
+        // The AUTHORED default for the sky asset's below-horizon band only. At runtime that band
+        // is driven to the aerial colour instead (see BlockiverseLightingCycleController.ApplySky):
+        // below the horizon is infinitely distant ground, and a second independent opinion about
+        // what infinitely distant looks like is exactly what drew a seam at the world's edge.
         public static readonly Color DayGround = new(0.30f, 0.30f, 0.31f, 1.0f);
 
         // Deep blue-black rather than pure black: a black sky reads as a rendering failure, and
         // the ruleset asks for "dark blue-black".
         public static readonly Color NightZenith = new(0.015f, 0.022f, 0.052f, 1.0f);
         public static readonly Color NightHorizon = new(0.045f, 0.058f, 0.098f, 1.0f);
-        public static readonly Color NightGround = new(0.012f, 0.013f, 0.016f, 1.0f);
 
         // Dawn and dusk. Warm at the horizon, still dark above.
         public static readonly Color TwilightZenith = new(0.10f, 0.13f, 0.30f, 1.0f);
@@ -77,12 +80,6 @@ namespace Blockiverse.Gameplay
             Color baseColor = Color.Lerp(night, DayHorizon, DayAmount(normalizedTime));
             baseColor = Color.Lerp(baseColor, TwilightHorizon, TwilightAmount(normalizedTime));
             return Overcast(baseColor, cloudCoverage);
-        }
-
-        public static Color GroundColor(float normalizedTime, float cloudCoverage, float moonPhaseScale)
-        {
-            Color night = ScaleRgb(NightGround, MoonlitNightScale(moonPhaseScale));
-            return Overcast(Color.Lerp(night, DayGround, DayAmount(normalizedTime)), cloudCoverage);
         }
 
         // The disk's colour follows whichever body is up, and it is hidden outright once the real

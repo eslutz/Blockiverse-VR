@@ -158,19 +158,23 @@ namespace Blockiverse.Gameplay
             // Borrows the chunk material rather than minting a shader. GraphicsSettings'
             // always-included list carries the voxel shader alone, so anything reached through
             // Shader.Find is stripped from the Android player and renders magenta on device while
-            // looking correct in the editor. It also means the deck is fogged like everything
-            // else, which is what fades its finite edge into the sky.
-            Material deckMaterial = chunkMaterial != null
-                ? BlockVisualAtlas.CreateMaterial(chunkMaterial, ResolveSelectedBlockAtlas(textureSetId), textureSetId)
+            // looking correct in the editor. The sky variant of that one shader is UNLIT and reads
+            // vertex colour as a colour, which is what lets the deck and the skirt fade their far
+            // edges into the sky; it is also still fogged like everything else.
+            // Destroyed and re-minted, never accumulated. ConfigureForWorld runs on world load,
+            // texture-set switch, multiplayer join and every return to the title mini-world, so a
+            // clone that is only ever created leaks one material per world entered.
+            // VoxelWorldRenderer already does this correctly for its four clones; this did not.
+            DestroyGenerated(skyMaterial);
+            skyMaterial = chunkMaterial != null
+                ? BlockVisualAtlas.CreateSkyMaterial(chunkMaterial, ResolveSelectedBlockAtlas(textureSetId), textureSetId)
                 : null;
+            Material deckMaterial = skyMaterial;
 
-            // A ZERO-AREA rect over the atlas's whitest opaque texel, measured at (302, 345) of
-            // 576x480, rgb (248, 255, 255). All four corners sample that one texel, so every quad
-            // is flat white and the sky-driven vertex colour supplies the entire tint.
-            //
-            // Sampling snow_block's tile instead put a block texture on the sky, which read as
-            // masonry rather than cloud. A degenerate rect avoids that without spending one of the
-            // atlas's free slots on a cloud tile.
+            // Valid UVs for the sky meshes, and nothing more: the sky shader variant samples no
+            // texture at all. It used to tint itself by this one "white" texel, which is white in
+            // three of the four texture sets and (194, 204, 209) in `original` — see the comment
+            // on WhiteTexelUv for why that had to go.
             Rect cloudTile = BlockVisualAtlas.WhiteTexelUv;
 
             // Follows the head so the deck stays overhead wherever the player walks, the same
@@ -181,10 +185,83 @@ namespace Blockiverse.Gameplay
 
             cloudDeck.Configure(followTransform, deckMaterial, cloudTile, world.Seed);
             lighting.ConfigureCloudDeck(cloudDeck);
+
+            ConfigureHorizonSkirt(world, deckMaterial, cloudTile, lighting);
+        }
+
+        // The sea-level plane that hides the world's own edge. Same material, same white texel and
+        // the same render-only contract as the deck — it is the deck's mirror image, one lid over
+        // the void above and one below.
+        void ConfigureHorizonSkirt(
+            VoxelWorld world,
+            Material skirtMaterial,
+            Rect tile,
+            BlockiverseLightingCycleController lighting)
+        {
+            // Only worlds that HAVE a sea level get a sea. Builder canvases are 64 blocks tall
+            // (WorldSaveGeneration.BuilderWorldHeight) against a sea level of 64, so a plane at sea
+            // level would float above the entire world rather than meeting anything — and a void
+            // builder is deliberately a void, which a floor to the horizon would quietly undo.
+            if (!BlockiverseHorizonSkirt.SuitsWorld(world.Bounds))
+            {
+                if (horizonSkirt != null)
+                    horizonSkirt.gameObject.SetActive(false);
+
+                lighting.ConfigureHorizonSkirt(null);
+                return;
+            }
+
+            if (horizonSkirt == null)
+            {
+                Transform existing = transform.Find(HorizonSkirtObjectName);
+                GameObject host;
+
+                if (existing != null)
+                {
+                    host = existing.gameObject;
+                }
+                else
+                {
+                    host = new GameObject(HorizonSkirtObjectName);
+                    host.transform.SetParent(transform, worldPositionStays: false);
+                }
+
+                horizonSkirt = host.GetComponent<BlockiverseHorizonSkirt>();
+                if (horizonSkirt == null)
+                    horizonSkirt = host.AddComponent<BlockiverseHorizonSkirt>();
+            }
+
+            // World-space and static: unlike the deck it does NOT follow the head, because it is
+            // pinned to the world's actual bounds rather than to a radius around the player.
+            horizonSkirt.gameObject.SetActive(true);
+            horizonSkirt.transform.localPosition = Vector3.zero;
+            horizonSkirt.transform.localRotation = Quaternion.identity;
+            horizonSkirt.Configure(world.Bounds, skirtMaterial, tile);
+            lighting.ConfigureHorizonSkirt(horizonSkirt);
         }
 
         const string CloudDeckObjectName = "Blockiverse Cloud Deck";
+        const string HorizonSkirtObjectName = "Blockiverse Horizon Skirt";
         BlockiverseCloudDeck cloudDeck;
+        BlockiverseHorizonSkirt horizonSkirt;
+        Material skyMaterial;
+
+        void OnDestroy()
+        {
+            DestroyGenerated(skyMaterial);
+            skyMaterial = null;
+        }
+
+        static void DestroyGenerated(UnityEngine.Object target)
+        {
+            if (target == null)
+                return;
+
+            if (Application.isPlaying)
+                Destroy(target);
+            else
+                DestroyImmediate(target);
+        }
 
         public void ConfigureAuthority(MultiplayerChunkAuthoritySync sync)
         {
