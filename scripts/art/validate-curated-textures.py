@@ -3,11 +3,13 @@
 
 This is intentionally stdlib-only so it can run in GitHub repository checks
 without Unity or the raw texture staging directory. It guards the provenance and
-state machine; build-curated-textures.py separately verifies adopted source files.
+state machine; build-curated-textures.py separately verifies staged source files
+and pinned adopted-pack hashes.
 """
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from pathlib import Path
 from urllib.parse import urlparse
@@ -34,6 +36,7 @@ EXPECTED_PILOT_IDS = {
 ALLOWED_STATUSES = {"researching", "candidate", "adopted", "rejected"}
 ALLOWED_STRATEGIES = {"direct", "composite", "custom"}
 ALLOWED_SOURCE_HOSTS = {"opengameart.org", "www.opengameart.org", "kenney.nl", "www.kenney.nl"}
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def load_manifest() -> dict:
@@ -43,6 +46,12 @@ def load_manifest() -> dict:
 
 def host_of(url: str) -> str:
     return (urlparse(url).hostname or "").lower()
+
+
+def assert_original_https_url(test: unittest.TestCase, url: str, label: str) -> None:
+    parsed = urlparse(url)
+    test.assertEqual("https", parsed.scheme, f"{label}: must use HTTPS")
+    test.assertIn(host_of(url), ALLOWED_SOURCE_HOSTS, f"{label}: must use an approved original provider host")
 
 
 class CuratedTextureManifestTests(unittest.TestCase):
@@ -69,7 +78,7 @@ class CuratedTextureManifestTests(unittest.TestCase):
                 self.assertIn(entry["strategy"], ALLOWED_STRATEGIES)
                 self.assertTrue(entry.get("notes"), "decision rationale is required")
 
-    def test_every_pack_has_a_shipping_safe_license_and_original_source_page(self):
+    def test_every_pack_has_a_shipping_safe_license_and_original_urls(self):
         for pack_id, pack in self.packs.items():
             with self.subTest(pack=pack_id):
                 license_id = pack.get("license")
@@ -78,19 +87,18 @@ class CuratedTextureManifestTests(unittest.TestCase):
                 self.assertTrue(terms["commercialUse"])
                 self.assertTrue(terms["modification"])
                 self.assertTrue(terms["redistribution"])
-                self.assertEqual("https", urlparse(pack["sourcePage"]).scheme)
-                self.assertIn(host_of(pack["sourcePage"]), ALLOWED_SOURCE_HOSTS)
+                assert_original_https_url(self, pack.get("sourcePage", ""), f"{pack_id} sourcePage")
+                assert_original_https_url(self, pack.get("downloadUrl", ""), f"{pack_id} downloadUrl")
                 self.assertTrue(pack.get("stagingPath"))
 
-    def test_candidates_with_concrete_source_files_point_to_original_provider_pages(self):
+    def test_concrete_source_files_point_to_original_provider_pages(self):
         for entry in self.pilot:
             if not entry.get("sourceFile"):
                 continue
             with self.subTest(texture=entry["id"]):
                 self.assertIn(entry.get("pack"), self.packs)
                 self.assertTrue(entry.get("sourcePage"))
-                self.assertEqual("https", urlparse(entry["sourcePage"]).scheme)
-                self.assertIn(host_of(entry["sourcePage"]), ALLOWED_SOURCE_HOSTS)
+                assert_original_https_url(self, entry["sourcePage"], f"{entry['id']} sourcePage")
 
     def test_direct_candidates_declare_a_deterministic_32px_transform(self):
         for entry in self.pilot:
@@ -103,14 +111,16 @@ class CuratedTextureManifestTests(unittest.TestCase):
                 self.assertIn(transform.get("scale"), {"lanczos", "neighbor"})
                 self.assertEqual(EXPECTED_TILE_PIXELS, transform.get("size"))
 
-    def test_adopted_assets_are_cc0_direct_sources_until_compositing_is_implemented(self):
+    def test_adopted_assets_are_cc0_direct_sources_with_pinned_pack_hashes(self):
         for entry in self.pilot:
             if entry["status"] != "adopted":
                 continue
             with self.subTest(texture=entry["id"]):
                 self.assertEqual("direct", entry["strategy"])
                 self.assertIn(entry.get("pack"), self.packs)
-                self.assertEqual("cc0", self.packs[entry["pack"]]["license"])
+                pack = self.packs[entry["pack"]]
+                self.assertEqual("cc0", pack["license"])
+                self.assertRegex((pack.get("sha256") or "").lower(), SHA256_RE)
                 self.assertTrue(entry.get("sourceFile"))
                 self.assertIsNotNone(entry.get("transform"))
 
