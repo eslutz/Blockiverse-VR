@@ -262,6 +262,17 @@ every local build reports the same version and the file stops churning. Set
 genuinely requires specific package metadata; the script forwards them only
 when they are set.
 
+One-time transition: a headset still carrying a build from before this policy has a
+timestamped `versionCode` far higher than the committed one, so Android refuses the
+install as `INSTALL_FAILED_VERSION_DOWNGRADE`. Pass `--downgrade` once:
+
+```sh
+hzdb app install -r -g --downgrade Builds/Android/BlockiverseVR-development.apk
+```
+
+After that every local build shares the committed code and a plain `-r` replace works,
+because Android rejects only a LOWER code, never an equal one.
+
 This also means two locally built APKs can join each other. `Application.version`
 is the join gate — `BlockiverseNetworkSession` refuses a peer whose version
 differs — so the previous timestamped stamp left two dev builds made minutes
