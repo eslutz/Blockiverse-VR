@@ -40,6 +40,24 @@ This file is the concise handoff for future agent work in the Blockiverse VR pro
 
 - Timestamp: 2026-08-23. Branch `spike/unity-localization` (stacked on `feature/ui-toolkit-migration`): **the compiled localization system is replaced by `com.unity.localization` 1.5.12** ([ADR 0011](docs/adr/0011-unity-localization-adoption.md); ADR 0004 superseded). One `UI` String Table Collection, keys verbatim; `BlockiverseLocalization` is now a shim (overrides → table → humanize fallback) that dies with the uGUI panels; new UI Toolkit screens bind in UXML natively and use `UiText` for dynamic text (named Smart args; identifiers pre-stringified invariant). **The single most re-derivable fact: sync resolution requires `InitializationOperation.WaitForCompletion()` AND an explicit locale — the no-argument path never resolves outside Play mode**, pinned by `LocalizationSpikeEditModeTests`. The frozen snapshot (`Tests/EditMode/Fixtures/localization-en-snapshot.json`) is both the round-trip source and the reverse-lookup winner map — do NOT rebuild winners from table enumeration; two collision winners ('Settings', 'Return to Title') flip under alphabetical order, and `LocalizationShimEditModeTests` pins them. The 133 prefab `localizationKey` values are frozen by a characterization test; a deliberate bootstrapper regen updates the fixture in the same commit. Enforcement rules (keys resolve / Smart parses / comments non-default / UXML bound-or-allowlisted) were each shown failing before being trusted — and the comment rule earned it: the migrator's first pass left all 241 comments at the `Comment` class default "Comment Text" and the rule's first version accepted it. Player builds now need `AddressableAssetSettings.BuildPlayerContent()` — wiring it into `BlockiverseBuildSmoke` is the open Phase 7 step; **device validation of the content build and IL2CPP stripping is deferred by Eric — first Quest build must check logcat for Addressables errors.** Survey errata: `DisplayName(RepairFailureReason)` was reported dead but `SurvivalCraftingPanel:265` calls it.
 
+- Timestamp: 2026-08-23. Branch `claude/artifact-implementation-plan-4ef35b`: **voxel foliage — walk-through vegetation, cutout leaves, and the art to show it** (7 commits, EditMode 1300/1300). Also fixed three ruleset-vs-code deviations found by re-auditing `docs/rulesets/` against current code. Before this, the mesher emitted exactly one shape (unit cubes), no shader declared `clip()`, and **collision WAS the render mesh** — so a block could not be drawn without also being walked into, and every "non-solid" plant was still a solid 1 m box.
+
+  **Block model, four properties that were one flag** (`BlockDefinition`, engine-free): `IsSolid` (the general flag the others default to), `RenderShape` {Cube, CutoutCube, Cross, Decal}, `IsPassable`, and — split late, under review — **`OccludesFaces` (mesher only) vs `BlocksLight` (skylight + emitter LOS only)**. Leaves are the one block where those differ and the reason they exist: a canopy must hide **no** faces (its alpha gaps reveal its own interior) while still **blocking** light (forest floors stay shaded, torches do not shine through trees). Collapsing them back re-creates the bug. Ruleset §4a is canonical for the model.
+
+  **Traps this cost, all now guarded by tests:** (1) splitting the flag broke an invariant the mesher relied on — previously face-culling and light-passability both read `IsSolid`, so a face was never emitted *toward* a light-blocking cell; afterwards interior canopy faces sampled inside another leaf, hit `SampleSkyExposure`'s cave-darkness early-out and baked **pure black (432 of 648 vertices measured)**. The mesher now walks outward to the first light-transmitting cell and dims by distance. (2) Both cells on a leaf/leaf boundary emitted the shared plane, giving two **coincident** depth-writing quads with *different* baked light on a two-sided material — z-fighting that resolves differently per eye, i.e. depth instability rather than visible flicker. Emit once, positive-axis faces only, so it is traversal-order independent. Fluids solved the same problem by merging the plane away; leaves must not, because the interior is the point. (3) Moving plants to the passable layer made them unhittable by the interaction ray — `VoxelInteractionRaycastLayerMask` is a **separate** constant from `VrUiRaycastLayerMask` on purpose: the interaction ray must reach vegetation, the teleport arc must pass through it, and the bootstrapper bakes **both** into the rig prefab.
+
+  **Passability is a physics LAYER (`BlockiversePassable`, index 15), not a flag** — scene queries ignore `Collider.excludeLayers`, so contact filtering alone still lets gravity read grass as ground (same reasoning as fluid layer 13). `ConfigureFluidLayerCollisionMatrix` was generalised to a SET of pass-through layers, and that had to land **before** adding the second layer or its verifier throws "Refusing to ship a broken matrix" for every row.
+
+  **Art (Eric-generated, validated here):** atlas 8×10 → **12×10** (576×480, 97 of 120 slots; `maxTextureSize` had to rise 512 → 1024 because 576 > 512); exactly 28 tiles carry alpha and exactly two alpha values exist (0/255), so cutout edges are hard at the 0.5 threshold. `alphaIsTransparency` must be **1** on all four atlases or mip generation averages plant-green with the pure-black transparent texels and every blade grows a dark fringe; `mipMapsPreserveCoverage` fixes alpha, not RGB. **`generate-art-assets.py` only regenerates the `enhanced` set** — the other three come from `prepare-block-texture-sets.py`, which is referenced by no workflow and no doc.
+
+  **Compat:** saves unaffected (that hash covers canonical ids only), but the **LAN join hash changed**, so older peers are refused at the handshake — intended, pre-release.
+
+  **Landed since (2026-08-24):** PR 1 (13 vegetation blocks + `meadow_tuft`), PR 2 (7 canonical tree species with lean/wind/oasis mechanics, and **save schema v5** for per-block state), and PR 3 (groundcover pass at the §8 spec densities). Block state ships **replicated** across all three client apply paths — a host-only bit desynced leaf decay permanently, because the world sim runs on every peer (see [[lockstep-world-sim-not-host-authoritative]]). §12's structure-mask layer is still build-or-descope.
+
+  **Open:** no device capture exists, and this adds real GPU cost exactly where nobody has measured (alpha test disables early-Z; canopy faces still grow ~2× after dedup). Groundcover density is at spec with `MaxGroundCoverPerChunk` as the only backstop, unmeasured on device. `Blockiverse.Survival/RecipePinState.cs` also landed for the single-slot recipe pin (§6.10a), deliberately engine-free so the UI Toolkit migration could not delete it.
+
+- Timestamp: 2026-08-23. **Tooling: headless `run-tests.sh` binds the MCP For Unity bridge port 48736**, exactly like a GUI editor. Whoever binds first wins and the loser's bridge **silently never starts** — no error names the conflict, so "the bridge is broken" and "another run has the port" are indistinguishable from the client. Diagnose with `lsof -nP -iTCP:48736 -sTCP:LISTEN` then attribute the PID by `-projectPath`. Do **not** reroute via the `McpBridge_Port` EditorPref: it is per-user and silently moves the port for every worktree. Same cause explains a stale `.git/index.lock` during another session's run — expected contention, not a crashed git process; prove staleness by `lsof` plus age, never by inferring a crash you did not observe.
+
 ## Current Unity Project Shape
 
 - Timestamp: 2026-08-13. Unity editor: `6000.5.8f1`. Target: Meta Quest 3 and Quest 3S. Local scripts and the Quest CI/alpha workflows were updated from the old `6000.3.16f1` pins on 2026-08-13.
@@ -131,6 +149,56 @@ This file is the concise handoff for future agent work in the Blockiverse VR pro
   true black proves unplayable on device (0.01 is the "eyes adjusted" equivalent). Crop growth
   still reads `SampleAirLight` (axis-probe max(sky, emissive)) — deliberately NOT the LOS bake, so
   the berries-adjacent-to-quartz decision is unchanged.
+- Timestamp: 2026-08-25. **Vertex colour is light data only on the LIT path.** Sky geometry — the
+  cloud deck and the new `BlockiverseHorizonSkirt` — renders through a fourth state on the same
+  `multi_compile_local` line, `_BLOCKIVERSE_SKY`, which is unlit and reads vertex colour as a
+  literal colour. It has to exist because both surfaces work by becoming indistinguishable from the
+  sky at their outer edge, and the lit path cannot deliver an exact colour: self-emission is a
+  scalar added to all three channels, so a pale blue vertex colour renders as a slightly dimmer
+  white. Worth knowing before touching either: this means the deck's `CloudColor` never reached the
+  screen before — every weather state drew the same white cloud at a different brightness.
+- **VERTEX COLOURS ARE NOT GAMMA-CONVERTED; MATERIAL COLOURS ARE.** The project renders in linear
+  colour space (`ProjectSettings.asset` `m_ActiveColorSpace: 1`). `Material.SetColor` on a Color
+  property converts sRGB to linear; `mesh.colors` passes through raw. Nothing noticed until sky
+  geometry put an actual COLOUR in the vertex stream — the chunk mesh's vertex colours are
+  light-data scalars, which is the standing proof that no conversion happens (sky exposure 0.5
+  would arrive as 0.21 and every shadow would be far too dark). An unconverted sky rim renders ~80%
+  too bright at midday and over 12x at night, because the sRGB curve is steepest in the darks. The
+  conversion lives in the shader's `_BLOCKIVERSE_SKY` branch (`SRGBToLinear` under
+  `#ifndef UNITY_COLORSPACE_GAMMA`) and NOT in C#: mesh colours are 8-bit, and 8 bits of linear
+  cannot carry a night sky, while 8 bits of sRGB is exactly what sRGB encoding is for.
+- **The aerial colour** is one value (the sky's own horizon colour for the time and weather) driving
+  four surfaces that must agree or one of them draws a visible seam: `RenderSettings.fogColor`, the
+  skybox's `_GroundColor`, the cloud deck's rim, and the horizon skirt's rim. The skybox is never
+  fogged, so any deviation shows up somewhere. `SkyGradientSolver.GroundColor` / `NightGround` were
+  deleted rather than kept as a second opinion; `DayGround` survives only as the authored asset
+  default. Ruleset: `voxel_world_environment_effects.md` §7.4.
+- **The geometry deck is used for Clear/PartlyCloudy/Overcast only** (`BlockiverseLightingCycleController.WeatherUsesCloudDeck`),
+  everything else (all precipitation states plus Fog) is skybox veil alone at full `skyVeilShare`
+  (1.0 instead of the deck-sharing 0.35). Device feedback (Eric, 2026-08-25): at the near-total
+  coverage those states request, the deck's circular rim reads on screen as two edges meeting at a
+  point — a ring viewed near its own elevation compresses under ordinary perspective, which no
+  width of world-space fade band fixes because the compression happens in the PROJECTION of an
+  already-dissolved boundary, not in how gradual the boundary itself is. The three states that keep
+  the deck got a mitigation for the same effect at lower severity: the rim's COLOUR fade (not its
+  occupancy, which stays linear in `RimFade`) is `Mathf.SmoothStep`-eased in
+  `BlockiverseCloudDeck.ApplyVertexColors`. A full fix needs the fade computed per camera per frame,
+  which the flat unlit baked-per-vertex contract does not support.
+- **Canopy skylight is per-CELL and floored, and it is ONE value for rendering AND gameplay.** `VoxelSkyLightMap.SkyTransmittance` walks the
+  transmitting layers strictly above the queried cell (it used to be one cached product per column,
+  which charged a cell inside a crown for the leaves below it too), and the Beer–Lambert product is
+  floored at `DiffuseCanopyFloor = 0.25` because skylight is hemispherical and a pure product goes
+  to black by four layers. Eric chose ONE number over a render/gameplay split (2026-08-25): simpler
+  to reason about and to debug than two values for one physical quantity. It therefore moves
+  farming, and that is acceptable only because the move is BOUNDED — the asymptote (3.75 on the
+  0-15 scale) sits below the least demanding crop (reeds, 5), so a player gains one layer of canopy
+  for grain and berries and two for reeds and nothing past that. **Raising the floor for visual
+  reasons past that line opens farming under a closed forest**; the bound is pinned by
+  `VoxelSkyLightCanopyEditModeTests.TheFloorsEffectOnFARMINGStaysBounded`, which reads the real
+  thresholds via `FarmingService.MinimumLightFor` rather than copying them. If farming needs
+  tightening the lever is the crop's own `minLight`, not this constant. Cells below the whole canopy
+  take a cached column product in O(1); only cells inside a crown walk. Ruleset:
+  `voxel_biome_vegetation_ruleset.md` §4a.7.
 - Remaining known gaps: baked light is still time-of-day independent (the sun/moon do the
   darkening, the bake only gates them); emitters WITHOUT a shadow map still take the per-face G
   gate, so their occlusion edge lands on a block boundary (the escalation if that reads badly on

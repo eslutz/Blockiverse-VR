@@ -31,6 +31,11 @@ namespace Blockiverse.Survival
         public static readonly ItemId ShingleGravel        = new("shingle_gravel");
         public static readonly ItemId Snowpack             = new("snowpack");
         public static readonly ItemId Frostglass           = new("frostglass");
+        // Frost Fern's 5% drop (vegetation ruleset §4). No pre-existing equivalent, unlike
+        // resin_blob -> resin_knot, so this is a genuine addition rather than a rename.
+        public static readonly ItemId FrostShard           = new("frost_shard");
+        public static readonly ItemId CharredLog           = new("charred_log");
+        public static readonly ItemId SnowBlock            = new("snow_block");
         public static readonly ItemId Graystone            = new("graystone");
         public static readonly ItemId DarkSlate            = new("dark_slate");
         public static readonly ItemId WarmGranite          = new("warm_granite");

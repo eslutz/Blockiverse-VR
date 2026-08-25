@@ -80,6 +80,8 @@ namespace Blockiverse.UI
             public const string OperationFailed = "ui.status.creative.operation_failed";
 
             public const string WeatherValueKeyPrefix = "ui.value.weather_state.";
+            // Suffix for a rain state that is falling as snow where the player is standing.
+            public const string WeatherFallingAsSnow = "ui.value.weather_state.falling_as_snow";
         }
 
         readonly WorldEditService editService = new();
@@ -329,9 +331,12 @@ namespace Blockiverse.UI
             }
 
             if (weatherLabel != null && worldManager != null)
+            {
+                WeatherState weather = worldManager.GetWeatherSyncState().State;
                 weatherLabel.text = UiText.Format(
                     Keys.Weather,
-                    WeatherDisplayName(worldManager.GetWeatherSyncState().State));
+                    WeatherDisplayName(weather, FallingAsSnowHere(weather)));
+            }
         }
 
         // ── Region selection ──────────────────────────────────────────────────
@@ -721,12 +726,47 @@ namespace Blockiverse.UI
         // BlockiverseLocalization, so the two tiny transforms are reproduced here; they match
         // NormalizeKey/HumanizeIdentifier byte-for-byte for this closed enum set (single-case
         // names, no digits, no consecutive capitals).
-        static string WeatherDisplayName(WeatherState state)
+        static string WeatherDisplayName(WeatherState state, bool fallingAsSnow = false)
         {
             string enumName = state.ToString();
             string key = Keys.WeatherValueKeyPrefix + ToSnakeCase(enumName);
             string resolved = UiText.Get(key);
-            return string.Equals(resolved, key, StringComparison.Ordinal) ? SplitWords(enumName) : resolved;
+            string name = string.Equals(resolved, key, StringComparison.Ordinal) ? SplitWords(enumName) : resolved;
+
+            if (!fallingAsSnow)
+                return name;
+
+            // A rain state below freezing falls -- and is heard -- as snow. Reading
+            // "Thunderstorm" while snowflakes drift past is what made a correct conversion look
+            // like a broken one from inside the headset.
+            string suffixKey = Keys.WeatherFallingAsSnow;
+            string suffix = UiText.Get(suffixKey);
+            if (string.Equals(suffix, suffixKey, StringComparison.Ordinal))
+                suffix = "falling as snow";
+
+            return $"{name} ({suffix})";
+        }
+
+        // Whether the active weather is converting to snow at the player's own position. The
+        // conversion is local -- a storm can be rain at the shoreline and snow on the ridge above
+        // it -- so this asks about the head cell rather than a world-wide default.
+        //
+        // Delegates to the world manager because Blockiverse.UI does not reference
+        // Blockiverse.WorldGen, where PrecipitationKind lives.
+        bool FallingAsSnowHere(WeatherState state)
+        {
+            if (worldManager == null)
+                return false;
+
+            // Only rain states convert; "Blizzard (falling as snow)" would be nonsense.
+            if (state != WeatherState.LightRain && state != WeatherState.HeavyRain &&
+                state != WeatherState.Thunderstorm)
+            {
+                return false;
+            }
+
+            Camera head = Camera.main;
+            return head != null && worldManager.IsPrecipitationSnowAt(head.transform.position);
         }
 
         static string ToSnakeCase(string enumName)

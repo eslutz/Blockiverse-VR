@@ -12,7 +12,7 @@ namespace Blockiverse.Gameplay
 {
     public static class BlockVisualAtlas
     {
-        public const int Columns = 10;
+        public const int Columns = 12;
         public const int Rows = 10;
         public const int TilePixels = 32;
         public const int TilePaddingPixels = 8;
@@ -29,9 +29,16 @@ namespace Blockiverse.Gameplay
         // Android player and water would render magenta on device while looking right in editor.
         public const string WaterShaderKeyword = "_BLOCKIVERSE_WATER";
 
+        // Same stripping constraint as the water keyword above: it is a third state on the SAME
+        // multi_compile_local line, never a separate .shader asset.
+        public const string CutoutShaderKeyword = "_BLOCKIVERSE_CUTOUT";
+        public const string SkyShaderKeyword = "_BLOCKIVERSE_SKY";
+
         public const string BlockMaterialName = "Blockiverse Authored Block Atlas Material";
         public const string FluidMaterialName = "Blockiverse Authored Fluid Atlas Material";
         public const string FluidDepthPrimeMaterialName = "Blockiverse Authored Fluid Depth Prime Material";
+        public const string CutoutMaterialName = "Blockiverse Authored Cutout Atlas Material";
+        public const string SkyMaterialName = "Blockiverse Authored Sky Atlas Material";
 
         // LightMode tag of the water depth-prime pass. Only the prime material runs it; terrain and
         // the water shading material both switch it off, so neither pays for a pass it never wants.
@@ -43,6 +50,15 @@ namespace Blockiverse.Gameplay
         // anywhere claims the pixel. Render queue is the primary sort key, so this ordering does
         // not depend on the pipeline's internal shader-tag order.
         public const int FluidDepthPrimeRenderQueue = (int)RenderQueue.Transparent - 1;
+
+        // URP's AlphaTest band: after all opaque geometry (2000) and before transparent (3000), so
+        // opaque depth still rejects hidden foliage before the alpha test costs anything.
+        public const int CutoutRenderQueue = (int)RenderQueue.AlphaTest;
+        public const int SkyRenderQueue = (int)RenderQueue.Geometry + 50;
+
+        // Half coverage. Deliberately not near 0: a low threshold keeps almost-transparent
+        // fringe pixels alive, which on a point-filtered atlas reads as a halo around every blade.
+        public const float DefaultAlphaCutoff = 0.5f;
 
         const float UvInsetPixels = 0.5f;
 
@@ -126,15 +142,120 @@ namespace Blockiverse.Gameplay
             { BlockRegistry.Emberflow.Value,           75 },
             { BlockRegistry.Bedroll.Value,             76 },
             { BlockRegistry.MirrorPane.Value,          77 },
+            // Vegetation additions. Indices mirror the BLOCKS list in generate-art-assets.py; the
+            // two lists are hand-maintained mirrors of each other, so they drift silently.
+            { BlockRegistry.DrygrassTuft.Value,        78 },
+            { BlockRegistry.MeadowTuft.Value,          79 },
+            { BlockRegistry.WildflowerCluster.Value,   80 },
+            { BlockRegistry.DuneSage.Value,            81 },
+            { BlockRegistry.SaltReed.Value,            82 },
+            { BlockRegistry.FrostFern.Value,           83 },
+            { BlockRegistry.WindrootShrub.Value,       84 },
+            { BlockRegistry.HangingReed.Value,         85 },
+            { BlockRegistry.MossCarpet.Value,          86 },
+            { BlockRegistry.SnowLichen.Value,          87 },
+            { BlockRegistry.FallenLeaves.Value,        88 },
+            { BlockRegistry.CharredLog.Value,          89 },
+            { BlockRegistry.SnowBlock.Value,           90 },
             // Flowing cells render with their family's source tile.
             { BlockRegistry.FreshwaterFlow.Value,      73 },
             { BlockRegistry.BrineFlow.Value,           74 },
             { BlockRegistry.EmberflowFlow.Value,       75 },
         };
 
-        public static Rect GetTileRect(BlockId blockId)
+        // Per-face tile overrides (vegetation ruleset §4a.5). Without these a turf block samples
+        // the same tile on all six faces and reads as uniformly green from every angle, which is a
+        // primary reason the world looks flat and over-clean — the classic voxel look is a grass
+        // top over dirt sides.
+        //
+        // Only the two axes that differ are stored. `Side` replaces the four vertical faces;
+        // `Bottom` replaces the downward face. A block absent from this map, or a face with no
+        // override, falls back to the block's single tile, so every other block is unaffected.
+        readonly struct BlockFaceTiles
+        {
+            public BlockFaceTiles(int side, int bottom)
+            {
+                Side = side;
+                Bottom = bottom;
+            }
+
+            public readonly int Side;
+            public readonly int Bottom;
+        }
+
+        // Indices mirror the BLOCKS list in generate-art-assets.py, same hand-maintained pairing as
+        // TileIndexByBlockId above.
+        static readonly Dictionary<int, BlockFaceTiles> FaceTilesByBlockId = new()
+        {
+            // Turf: grass on top (the block's own tile), dirt-with-fringe on the sides, plain loam
+            // underneath — reusing loose_loam's tile rather than authoring a fourth.
+            { BlockRegistry.MeadowTurf.Value,   new BlockFaceTiles(side: 91, bottom: 1) },
+            { BlockRegistry.DryTurf.Value,      new BlockFaceTiles(side: 92, bottom: 1) },
+            { BlockRegistry.SnowcapTurf.Value,  new BlockFaceTiles(side: 93, bottom: 1) },
+            { BlockRegistry.Rootsoil.Value,     new BlockFaceTiles(side: 94, bottom: 1) },
+
+            // Logs: bark around the sides, end grain on both cut ends. Bottom and top share it.
+            { BlockRegistry.BranchwoodLog.Value,    new BlockFaceTiles(side: -1, bottom: 95) },
+            { BlockRegistry.SmoothBranchwood.Value, new BlockFaceTiles(side: -1, bottom: 96) },
+        };
+
+        // Face-aware overload. `faceIndex` is a ChunkMeshBuilder face index; -1 means "no
+        // particular face", which is what cross quads and decals pass.
+        // A zero-area UV rect over a near-white fully-opaque texel, carried by sky geometry (the
+        // cloud deck and the horizon skirt) so their meshes have valid UVs.
+        //
+        // NO LONGER LOAD-BEARING, and the reason is worth keeping. The deck used to be tinted by
+        // this texel, on the assumption that one measured pixel is white in the atlas. Measured
+        // across all four generated texture sets at texel (302, 345) of 576x480:
+        //
+        //   enhanced (248,255,255)  ai (248,255,255)  ai_simplified (248,255,255)
+        //   original (194,204,209)  <-- 20% dark and blue
+        //
+        // So selecting the `original` texture set tinted the entire sky, and would have put a
+        // visible line all the way round the horizon skirt, whose rim has to land on EXACTLY the
+        // aerial colour to disappear. The sky shader variant now samples no texture at all, which
+        // makes the atlas irrelevant to the sky rather than making this one texel a shared
+        // dependency of four independently generated art sets. Pinned by
+        // BlockiverseHorizonSkirtEditModeTests.TheSkyVariantNeverSamplesTheAtlas.
+        public static readonly Rect WhiteTexelUv = new(
+            (302.0f + 0.5f) / AtlasWidthPixels,
+            1.0f - ((345.0f + 0.5f) / AtlasHeightPixels),
+            0.0f,
+            0.0f);
+
+        public static Rect GetTileRect(BlockId blockId, int faceIndex)
+        {
+            return BuildTileRect(ResolveTileIndex(blockId, faceIndex));
+        }
+
+        static int ResolveTileIndex(BlockId blockId, int faceIndex)
         {
             int tileIndex = GetTileIndex(blockId);
+
+            if (faceIndex < 0 || !FaceTilesByBlockId.TryGetValue(blockId.Value, out BlockFaceTiles faces))
+                return tileIndex;
+
+            // Logs want end grain on BOTH caps, so top uses the bottom override too. Turf leaves
+            // Side at -1 for neither cap, so its top keeps the block's own grass tile.
+            bool isTop = faceIndex == ChunkMeshBuilder.TopFaceIndex;
+            bool isBottom = faceIndex == ChunkMeshBuilder.BottomFaceIndex;
+
+            if (isBottom || (isTop && faces.Side < 0))
+                return faces.Bottom >= 0 ? faces.Bottom : tileIndex;
+
+            if (isTop)
+                return tileIndex;
+
+            return faces.Side >= 0 ? faces.Side : tileIndex;
+        }
+
+        public static Rect GetTileRect(BlockId blockId)
+        {
+            return BuildTileRect(GetTileIndex(blockId));
+        }
+
+        static Rect BuildTileRect(int tileIndex)
+        {
             int column = tileIndex % Columns;
             int row = tileIndex / Columns;
             float minX = column * TileStridePixels + TilePaddingPixels + UvInsetPixels;
@@ -226,6 +347,82 @@ namespace Blockiverse.Gameplay
             material.SetShaderPassEnabled(ForwardPassName, true);
 
             material.name = FluidMaterialName;
+            return material;
+        }
+
+        // Alpha-cutout foliage: leaf canopies and cross-quad plants. Another runtime clone of the
+        // authored atlas material, so no new .mat asset ships and texture-set switching keeps
+        // working unchanged.
+        public static Material CreateCutoutMaterial(Material sourceMaterial, Texture2D selectedAtlas, string textureSetId)
+        {
+            Material material = CreateMaterial(sourceMaterial, selectedAtlas, textureSetId);
+
+            // Opaque blending with ZWrite on — this is alpha TEST, not alpha blend. The queue sits
+            // in URP's AlphaTest band, after all opaque geometry, so the opaque depth buffer can
+            // still reject hidden foliage before it is shaded. That ordering matters more here
+            // than usual: clip() disables early-Z for the draw on a tile GPU, so anything not
+            // rejected by prior depth gets fully shaded.
+            ApplySurfaceState(
+                material,
+                renderType: "TransparentCutout",
+                queue: CutoutRenderQueue,
+                srcBlend: BlendMode.One,
+                dstBlend: BlendMode.Zero,
+                zWrite: 1.0f,
+                // Two-sided for two reasons: a cross quad is viewed from both sides by definition,
+                // and on a cutout cube the gaps expose the inside of the far shell, which is what
+                // gives a canopy depth without adding a single triangle.
+                cull: CullMode.Off);
+            material.EnableKeyword(CutoutShaderKeyword);
+            material.DisableKeyword(WaterShaderKeyword);
+            material.SetShaderPassEnabled(WaterDepthPrimePassName, false);
+            material.SetShaderPassEnabled(ForwardPassName, true);
+            SetFloatIfPresent(material, "_Cutoff", DefaultAlphaCutoff);
+
+            material.name = CutoutMaterialName;
+            return material;
+        }
+
+        // Sky geometry: the cloud deck overhead and the horizon skirt at sea level. A third
+        // runtime clone of the same authored atlas material, for the same reasons as the other two
+        // — no new .mat asset, no Shader.Find, and texture-set switching keeps working.
+        //
+        // What makes it its own material rather than the block one with a different mesh is the
+        // keyword. Both surfaces have to be able to take an EXACT colour, because both exist to
+        // stop being distinguishable from the sky at their outer edge, and the lit path cannot
+        // deliver one: vertex colour there is baked light data, and self emission is a scalar, so
+        // a pale blue vertex colour renders as a dimmer white rather than as pale blue.
+        public static Material CreateSkyMaterial(Material sourceMaterial, Texture2D selectedAtlas, string textureSetId)
+        {
+            Material material = CreateMaterial(sourceMaterial, selectedAtlas, textureSetId);
+
+            // Plain opaque geometry, but drawn AFTER terrain.
+            //
+            // The skirt is a large and frequently occluded surface — standing on the island looking
+            // out, the terrain in front hides most of it — and at terrain's own queue the opaque
+            // front-to-back sort decides the order from bounds, which for the skirt is centred on
+            // the world rather than on the player. One queue later lets terrain depth reject those
+            // pixels before they are shaded, which on a tile GPU is the difference that matters.
+            // The deck neither gains nor loses (nothing occludes the sky) and shares the material.
+            //
+            // Still inside the documented ordering: terrain 2000 < sky 2050 < cutout 2450 < water.
+            ApplySurfaceState(
+                material,
+                renderType: "Opaque",
+                queue: SkyRenderQueue,
+                srcBlend: BlendMode.One,
+                dstBlend: BlendMode.Zero,
+                zWrite: 1.0f,
+                // The deck's cells are closed boxes and the skirt is a single-sided plane meant to
+                // be seen from above, so back-face culling is free on both.
+                cull: CullMode.Back);
+            material.EnableKeyword(SkyShaderKeyword);
+            material.DisableKeyword(WaterShaderKeyword);
+            material.DisableKeyword(CutoutShaderKeyword);
+            material.SetShaderPassEnabled(WaterDepthPrimePassName, false);
+            material.SetShaderPassEnabled(ForwardPassName, true);
+
+            material.name = SkyMaterialName;
             return material;
         }
 

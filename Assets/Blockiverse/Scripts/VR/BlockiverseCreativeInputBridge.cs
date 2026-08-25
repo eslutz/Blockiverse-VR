@@ -110,10 +110,33 @@ namespace Blockiverse.VR
             if (interactionController == null)
                 return;
 
-            if (TryGetTarget(out BlockPosition target, out Vector3 normal))
-                interactionController.UpdatePreview(target, normal);
+            // The highlight is now the answer to "what will the trigger do", so it appears only
+            // while the grip is selecting place/use. Breaking shows the bare ray, which is less
+            // visual noise for the more common action.
+            // Resolved UNCONDITIONALLY, before any modifier check. TickMining below needs the
+            // target whichever verb the trigger is currently on, and short-circuiting this behind
+            // PlaceModifierActive left it unassigned while breaking — which the compiler caught,
+            // but which would also have stopped mining from tracking its target.
+            bool hasTarget = TryGetTarget(out BlockPosition target, out Vector3 normal);
+
+            if (PlaceModifierActive && hasTarget)
+            {
+                if (UseTargetsTheBlockItself)
+                {
+                    // A tool that acts ON the block — stripping a log with a Feller, tilling soil.
+                    // Highlighting the empty cell NEXT to it would point at the wrong place
+                    // entirely, which is the trap in reusing a placement preview for every "use".
+                    interactionController.UpdatePreviewAtTarget(target);
+                }
+                else
+                {
+                    interactionController.UpdatePreview(target, normal);
+                }
+            }
             else
+            {
                 interactionController.HidePreview();
+            }
 
             TickMining(target);
         }
@@ -219,7 +242,10 @@ namespace Blockiverse.VR
         {
             breakAction ??= TryBreakTarget;
             breakReleasedAction ??= OnBreakReleased;
-            placeAction ??= TryPlaceTarget;
+            // The grip no longer places on press — it selects what the trigger does. It still
+            // cancels an in-flight mine, because pressing it means the player changed their mind
+            // about what they were doing to that block.
+            placeAction ??= OnPlaceModifierPressed;
             blockEditingToggleAction ??= ToggleBlockEditing;
         }
 
@@ -402,8 +428,19 @@ namespace Blockiverse.VR
             capturedLineVisualDefault = true;
         }
 
+        // True when the grip is selecting "place/use" rather than "break".
+        bool PlaceModifierActive => inputRig != null && inputRig.PlaceModifierActive;
+
         void TryBreakTarget()
         {
+            // One trigger, two verbs. The grip picks which, so the player never has to remember
+            // which button does what — only whether they are holding the modifier.
+            if (PlaceModifierActive)
+            {
+                TryPlaceTarget();
+                return;
+            }
+
             if (!TryGetTarget(out BlockPosition target, out _))
                 return;
 
@@ -430,6 +467,31 @@ namespace Blockiverse.VR
             else
             {
                 interactionController.TryBreakBlock(target);
+            }
+        }
+
+        // The grip press. It no longer places — the trigger does that now — but pressing it means
+        // the player has changed what they intend to do to the block they were working on, so an
+        // in-flight mine is abandoned rather than completing under them after they switched.
+        void OnPlaceModifierPressed()
+        {
+            if (mining)
+                CancelMining();
+        }
+
+        // Whether "use" acts on the aimed block instead of the cell beside it. Creative placement
+        // is always adjacent; a survival tool with no block to place acts on the target.
+        bool UseTargetsTheBlockItself
+        {
+            get
+            {
+                if (!SurvivalInteractionActive || survivalSync == null)
+                    return false;
+
+                // Asked of the sync rather than resolved here: Blockiverse.VR references
+                // Survival.Health but not Survival, so ItemRegistry is not visible from this
+                // assembly. Widening the asmdef to reach one lookup would be the wrong trade.
+                return !survivalSync.EquippedItemPlacesBlock;
             }
         }
 

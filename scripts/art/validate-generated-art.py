@@ -100,17 +100,36 @@ class GeneratedArtAssetTests(unittest.TestCase):
         self.assertEqual((len(icon[0]), len(icon)), (64, 64))
         self.assertEqual((len(vfx[0]), len(vfx)), (32, 32))
 
-        self.assertEqual(self.generator.ATLAS_COLUMNS, 10)
-        self.assertEqual(self.generator.ATLAS_ROWS, 10)
+        # Pinned because they are policy: 32px tiles and 8px padding are the mip/bleed contract,
+        # and changing either is a deliberate art decision, not a consequence of adding blocks.
         self.assertEqual(self.generator.TILE_PIXELS, 32)
         self.assertEqual(self.generator.ATLAS_TILE_PADDING_PIXELS, 8)
-        self.assertEqual(self.generator.atlas_width(), 480)
-        self.assertEqual(self.generator.atlas_height(), 480)
+
+        # DERIVED, not pinned. An earlier version hardcoded 10 columns, 480px and a 512 max size,
+        # which went red the moment the atlas legitimately grew — and a check that fails on correct
+        # changes gets ignored rather than fixed, which is how this file ended up referenced by
+        # nothing. Assert the relationships instead; they catch a real mistake (a tile index past
+        # the end of the atlas) without objecting to a bigger atlas.
+        stride = self.generator.ATLAS_TILE_STRIDE_PIXELS
+        self.assertEqual(self.generator.atlas_width(), self.generator.ATLAS_COLUMNS * stride)
+        self.assertEqual(self.generator.atlas_height(), self.generator.ATLAS_ROWS * stride)
+
+        # The one that actually catches bugs: every block must have a slot inside the atlas.
         self.assertLess(
             max(block[1] for block in self.generator.BLOCKS),
             self.generator.ATLAS_COLUMNS * self.generator.ATLAS_ROWS,
         )
-        self.assertEqual(self.generator.atlas_max_texture_size(), 512)
+
+        # Tile indices must be unique, or two blocks silently share one tile.
+        indices = [block[1] for block in self.generator.BLOCKS]
+        self.assertEqual(len(indices), len(set(indices)), "Two blocks share an atlas tile index.")
+
+        # The importer cap must still cover the atlas, or Unity downsamples it on import and every
+        # tile bleeds into its neighbours on device while looking correct in the editor.
+        self.assertGreaterEqual(
+            self.generator.atlas_max_texture_size(),
+            max(self.generator.atlas_width(), self.generator.atlas_height()),
+        )
 
     def test_generated_block_atlases_use_crisp_sampling_importers(self):
         for texture_set in self.generator.BLOCK_TEXTURE_SET_IDS:
@@ -131,6 +150,8 @@ class GeneratedArtAssetTests(unittest.TestCase):
                 self.assertIn("  mipmaps:\n", meta)
                 self.assertIn("    enableMipMap: 1\n", meta)
                 self.assertIn("    mipMapsPreserveCoverage: 1\n", meta)
+                # Guards the RGB half of cutout filtering; preserveCoverage only fixes alpha.
+                self.assertIn("  alphaIsTransparency: 1\n", meta)
                 self.assertIn("  filterMode: 0\n", meta)
                 self.assertIn("  aniso: 1\n", meta)
                 self.assertIn("    textureCompression: 0\n", meta)
@@ -144,6 +165,24 @@ class GeneratedArtAssetTests(unittest.TestCase):
         self.assertEqual(patterns["paletin_thread"], "ore_threads")
         self.assertEqual(patterns["berrybush"], "berries_cluster")
         self.assertEqual(patterns["grain_stalk"], "grain_heads")
+
+    def test_grass_blades_are_clustered_with_varied_height(self):
+        size = self.generator.TILE_PIXELS
+
+        def mask(pattern, seed):
+            return [[self.generator.foliage_mask(pattern, seed, x, y) for x in range(size)] for y in range(size)]
+
+        def opaque_tops(tile):
+            return {
+                min(y for y in range(size) if tile[y][x])
+                for x in range(size)
+                if any(tile[y][x] for y in range(size))
+            }
+
+        for pattern, seed in (("meadow_grass", 541), ("drygrass", 523)):
+            with self.subTest(pattern=pattern):
+                # At least 8 distinct blade-tip heights means the blades are not one uniform row.
+                self.assertGreaterEqual(len(opaque_tops(mask(pattern, seed))), 8)
 
     def test_generated_item_icon_importers_are_single_sprites(self):
         for name, *_ in self.generator.ITEMS:

@@ -37,11 +37,26 @@ namespace Blockiverse.Gameplay
 
         // Unity fog density for the current weather (0 = no fog). Combines explicit fog states with a
         // lighter haze from heavy precipitation.
+        // Aerial perspective is never zero. Clear, PartlyCloudy and Overcast all report
+        // FogDensity 0 and PrecipitationIntensity 0, so without a floor this returned 0 and the
+        // caller switched RenderSettings.fog OFF entirely — which is why clear weather had no
+        // haze at any distance and the only fade visible was the sky gradient behind the world
+        // edge, reading as "something far off in the distance" with clear air up close.
+        // 0.006 read as visible haze at arm's length. This is tuned so a clear day is
+        // effectively transparent up close — ~1% at 10 m, which the eye cannot separate from
+        // nothing — while still accumulating enough over a couple of hundred metres to keep the
+        // far terrain from sitting flat against the sky.
+        public const float ClearAirDensity = 0.0012f;
+
         public static float FogDensity(EnvironmentState environment)
         {
-            float fromFog = environment.FogDensity * 0.04f;
-            float fromPrecip = environment.PrecipitationIntensity * 0.012f;
-            return Mathf.Max(fromFog, fromPrecip);
+            // Multipliers are tuned for FogMode.Exponential (opacity = 1 - exp(-rho*d)), which is
+            // FIRST order in distance so it reads from a few metres out. The previous values were
+            // tuned against ExponentialSquared, whose (rho*d)^2 term is ~flat near the viewer and
+            // then knees hard — a band far away rather than a gradient.
+            float fromFog = environment.FogDensity * 0.075f;
+            float fromPrecip = environment.PrecipitationIntensity * 0.025f;
+            return Mathf.Max(ClearAirDensity, Mathf.Max(fromFog, fromPrecip));
         }
     }
 }

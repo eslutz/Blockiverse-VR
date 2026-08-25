@@ -168,9 +168,9 @@ namespace Blockiverse.Gameplay
             if (!world.Bounds.Contains(position))
                 return false;
 
-            // Fluids are replaceable, not solid. Requiring Air here is what stopped the player
-            // building into a lake at all -- see BlockPlacement.
-            if (!BlockPlacement.IsReplaceable(world.GetBlock(position)))
+            // Fluids and passable vegetation are replaceable, not solid. Requiring Air here is what
+            // stopped the player building into a lake at all -- see BlockPlacement.
+            if (!BlockPlacement.IsReplaceable(world.GetBlock(position), registry))
                 return false;
 
             if (playerOccupancyPredicate != null && playerOccupancyPredicate(position))
@@ -338,6 +338,20 @@ namespace Blockiverse.Gameplay
 
             BlockPosition placement = ComputePlacementPosition(targetPosition, faceNormal);
             placementPreview.ShowAt(placement, CanPlaceBlock(placement));
+        }
+
+        /// <summary>Highlights the TARGET block rather than the cell a block would go into.
+        ///
+        /// For a survival tool that acts on the block it is aimed at — stripping a branchwood log
+        /// with a Feller, tilling soil — the placement cell is the empty space NEXT to the target,
+        /// so the ordinary preview would point at the wrong cell entirely. The highlight has to
+        /// answer "what will this do", and for a tool the answer is "that block".</summary>
+        public void UpdatePreviewAtTarget(BlockPosition targetPosition)
+        {
+            if (placementPreview == null)
+                return;
+
+            placementPreview.ShowAt(targetPosition, true);
         }
 
         public void HidePreview()

@@ -47,6 +47,35 @@ namespace Blockiverse.Tests.Networking.EditMode
         }
 
         [Test]
+        public void BlockHashCoversRenderShape()
+        {
+            // Render shape selects the geometry each peer builds from the same delta: one peer
+            // emitting a cube where the other emits a cross quad is the same class of divergence
+            // as disagreeing on Category.
+            BlockRegistry cube = BuildRegistry(stoneId: 10, dirtId: 11);
+            BlockRegistry cross = BuildRegistry(stoneId: 10, dirtId: 11, stoneShape: BlockRenderShape.Cross);
+
+            Assert.That(
+                BlockiverseRegistryCompatibility.ComputeBlockHash(cube),
+                Is.Not.EqualTo(BlockiverseRegistryCompatibility.ComputeBlockHash(cross)),
+                "A peer building different geometry for the same block must be refused.");
+        }
+
+        [Test]
+        public void BlockHashCoversPassability()
+        {
+            // Passability is a physics divergence: one peer walks through the block, the other
+            // collides with it, from an identical world delta.
+            BlockRegistry solidBlock = BuildRegistry(stoneId: 10, dirtId: 11);
+            BlockRegistry passable = BuildRegistry(stoneId: 10, dirtId: 11, stonePassable: true);
+
+            Assert.That(
+                BlockiverseRegistryCompatibility.ComputeBlockHash(solidBlock),
+                Is.Not.EqualTo(BlockiverseRegistryCompatibility.ComputeBlockHash(passable)),
+                "A peer that can walk through a block the other cannot must be refused.");
+        }
+
+        [Test]
         public void BlockHashIgnoresRegistrationOrder()
         {
             // Order is not part of the contract — the same ids assigned the same integers
@@ -92,11 +121,14 @@ namespace Blockiverse.Tests.Networking.EditMode
             bool stoneSolid = true,
             bool reverseRegistrationOrder = false,
             BlockCategory stoneCategory = BlockCategory.Terrain,
-            string stoneName = "Test Stone")
+            string stoneName = "Test Stone",
+            BlockRenderShape stoneShape = BlockRenderShape.Cube,
+            bool stonePassable = false)
         {
             var registry = new BlockRegistry();
             var stone = new BlockDefinition(
-                new BlockId(stoneId), "test_stone", stoneName, stoneCategory, stoneSolid, isRenderable: true);
+                new BlockId(stoneId), "test_stone", stoneName, stoneCategory, stoneSolid, isRenderable: true,
+                renderShape: stoneShape, isPassable: stonePassable);
             var dirt = new BlockDefinition(
                 new BlockId(dirtId), "test_dirt", "Test Dirt", BlockCategory.Terrain, isSolid: true, isRenderable: true);
 

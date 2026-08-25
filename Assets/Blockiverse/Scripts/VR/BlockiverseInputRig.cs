@@ -123,6 +123,8 @@ namespace Blockiverse.VR
         bool creativeFlightLocomotionActive;
         bool sprintToggled;
         bool sprintHeld;
+        bool placeModifierToggled;
+        bool placeModifierHeld;
         bool crouchToggled;
         bool crouchHeld;
         XRRayInteractor leftInteractionRay;
@@ -139,6 +141,15 @@ namespace Blockiverse.VR
         // Live held-state of the break input (hold-to-mine polls this as a release safety net).
         public bool IsBreakHeld => cachedBreakAction != null && cachedBreakAction.IsPressed();
         public UnityEvent PlacePressed => placePressed;
+
+        /// <summary>Whether the trigger should PLACE rather than BREAK this frame.
+        ///
+        /// The grip no longer places directly — it selects what the trigger does, so one button
+        /// covers both verbs and the placement highlight only appears when placing is actually
+        /// what will happen. Hold or toggle per the comfort setting, resolved through the same
+        /// helper as sprint and crouch.</summary>
+        public bool PlaceModifierActive =>
+            ResolveModifierActive(PlaceModifierToggleEnabled, placeModifierHeld, placeModifierToggled);
         public UnityEvent BlockEditingTogglePressed => blockEditingTogglePressed;
         public bool SprintActive => ResolveModifierActive(SprintToggleEnabled, sprintHeld, sprintToggled);
         public bool CrouchActive => ResolveModifierActive(CrouchToggleEnabled, crouchHeld, crouchToggled);
@@ -157,6 +168,8 @@ namespace Blockiverse.VR
         public bool CrouchHeldRaw => crouchHeld;
 
         bool SprintToggleEnabled => comfortSettings != null && comfortSettings.SprintToggleEnabled;
+        bool PlaceModifierToggleEnabled =>
+            comfortSettings != null && comfortSettings.PlaceModifierToggleEnabled;
         bool CrouchToggleEnabled => comfortSettings != null && comfortSettings.CrouchToggleEnabled;
 
         // Sprint and crouch are locomotion modifiers, not world-editing actions, so they follow
@@ -683,15 +696,49 @@ namespace Blockiverse.VR
 
         void UpdateCreativeBindings()
         {
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+            {
+                // Menus swallow the grip, so a held modifier would otherwise persist across the
+                // whole menu session and the trigger would still be in place mode on return.
+                placeModifierHeld = false;
+
+                if (cachedBreakAction != null && cachedBreakAction.WasPressedThisFrame())
+                    breakPressed?.Invoke();
+
+                if (cachedBreakAction != null && cachedBreakAction.WasReleasedThisFrame())
+                    breakReleased?.Invoke();
+
+                return;
+            }
+
+            // The grip is a MODIFIER now, not an action. Resolve it BEFORE the trigger events fire
+            // below — a listener on breakPressed reads PlaceModifierActive to decide break vs place,
+            // and a same-frame grip squeeze must be visible to that read, not lag a frame behind it.
+            if (cachedPlaceAction != null)
+            {
+                if (cachedPlaceAction.WasPressedThisFrame() && PlaceModifierToggleEnabled)
+                    placeModifierToggled = !placeModifierToggled;
+
+                placeModifierHeld = cachedPlaceAction.IsPressed();
+            }
+            else
+            {
+                placeModifierHeld = false;
+            }
+
+            // Leaving toggle mode must not strand the player latched into place mode with no
+            // button that turns it off — the same guard sprint needs for the same reason.
+            if (!PlaceModifierToggleEnabled)
+                placeModifierToggled = false;
+
             if (cachedBreakAction != null && cachedBreakAction.WasPressedThisFrame())
                 breakPressed?.Invoke();
 
             if (cachedBreakAction != null && cachedBreakAction.WasReleasedThisFrame())
                 breakReleased?.Invoke();
 
-            if (!BlockiverseRuntimeState.AllowWorldInput)
-                return;
-
+            // PlacePressed still fires so anything that wants the raw grip press keeps working,
+            // after the modifier state above so its own listeners see the same-frame value too.
             if (cachedPlaceAction != null && cachedPlaceAction.WasPressedThisFrame())
                 placePressed?.Invoke();
 
@@ -1098,7 +1145,7 @@ namespace Blockiverse.VR
                     BlockiverseRayDefaults.ConfigureInteractionRay(
                         interactionRay,
                         rayOrigin,
-                        GetVrUiRaycastLayerMask());
+                        GetVoxelInteractionRaycastLayerMask());
                     ConfigureRayLineVisual(interactionRay);
                     interactionRay.uiPressInput = CreateButtonActionReader(
                         interactionRay.uiPressInput,
@@ -1249,6 +1296,21 @@ namespace Blockiverse.VR
         static LayerMask GetVrUiRaycastLayerMask()
         {
             return GetVoxelTargetingLayerMask();
+        }
+
+        // The INTERACTION ray only. Terrain + fluid + passable vegetation, so a plant can be aimed
+        // at and harvested even though it lives on the passable layer and no longer contributes to
+        // the chunk collider.
+        //
+        // Deliberately NOT folded into GetVrUiRaycastLayerMask: that helper also feeds the teleport
+        // ray, and a teleport arc must pass THROUGH grass to land on the ground beneath it
+        // (vegetation ruleset §4a.4). The two rays want different answers, which is the entire
+        // reason this is a second method.
+        static LayerMask GetVoxelInteractionRaycastLayerMask()
+        {
+            int passableLayer = LayerMask.NameToLayer(BlockiverseProject.PassableLayerName);
+            int passableMask = passableLayer >= 0 ? 1 << passableLayer : BlockiverseProject.PassableLayerMask;
+            return (LayerMask)(GetVoxelTargetingLayerMask().value | passableMask);
         }
 
         public static void ConfigureCharacterController(CharacterController controller)

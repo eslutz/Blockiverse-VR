@@ -15,6 +15,209 @@ namespace Blockiverse.Tests.EditMode
 {
     public sealed class ChunkRenderingEditModeTests
     {
+        // The two tests below pin the CONSUMERS of the occlusion split, not the flags. Asserting
+        // only that leafmoss has OccludesFaces:false / BlocksLight:true is not enough: swap which
+        // property the mesher and the sky map read and those flag assertions stay green, because
+        // every block except leafmoss has OccludesFaces == BlocksLight == IsSolid, making the swap
+        // a no-op everywhere else. These fail on that swap.
+
+        [Test]
+        public void CutoutLeavesEmitTheirInteriorFacesInsteadOfAHollowShell()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 1);
+
+            // 2x2x2 solid block of leaves: 8 cells, 48 total faces. A shell would cull the 24
+            // interior ones and emit 24; non-occluding leaves emit all 48.
+            for (int x = 0; x < 2; x++)
+            for (int y = 0; y < 2; y++)
+            for (int z = 0; z < 2; z++)
+                world.SetBlock(new BlockPosition(1 + x, 1 + y, 1 + z), BlockRegistry.Leafmoss, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            // 24 exterior faces (each side of the 2x2x2 is four quads) + 12 interior boundaries
+            // (3 axes x 4 pairs), each emitted ONCE. A hollow shell would be 24; emitting every
+            // interior boundary from both sides would be 48.
+            Assert.That(mesh.CutoutTriangleCount, Is.EqualTo(36 * 2),
+                "Leaves must emit interior faces — a canopy read through its alpha gaps is a hollow " +
+                "shell otherwise (24). Emitting each shared plane twice (48) z-fights instead.");
+            Assert.That(mesh.TriangleCount, Is.EqualTo(0),
+                "Leaf geometry belongs to the cutout submesh, never the opaque one.");
+        }
+
+        [Test]
+        public void CanopyInteriorEmitsEachSharedPlaneOnlyOnce()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 1);
+
+            for (int x = 0; x < 3; x++)
+            for (int y = 0; y < 3; y++)
+            for (int z = 0; z < 3; z++)
+                world.SetBlock(new BlockPosition(2 + x, 2 + y, 2 + z), BlockRegistry.Leafmoss, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            // Two coincident coplanar quads at equal depth, both writing depth, both two-sided, and
+            // carrying different baked light (each walks outward the opposite way) do not merely
+            // waste fill — they z-fight and flicker per eye. This is the same defect the fluid
+            // same-family merge above ShouldRenderFace exists to prevent in lakes.
+            var centroids = new HashSet<Vector3>();
+            var duplicates = new List<Vector3>();
+
+            for (int i = 0; i + 5 < mesh.CutoutTriangles.Count; i += 6)
+            {
+                Vector3 centroid = Vector3.zero;
+                // A quad is two triangles over four unique vertices; indices 0,1,2 cover three of
+                // them and index 5 the fourth.
+                foreach (int corner in new[] { i, i + 1, i + 2, i + 5 })
+                    centroid += mesh.Vertices[mesh.CutoutTriangles[corner]];
+
+                centroid /= 4.0f;
+                if (!centroids.Add(centroid))
+                    duplicates.Add(centroid);
+            }
+
+            Assert.That(duplicates, Is.Empty,
+                $"{duplicates.Count} cutout quads are coincident with another; each shared plane " +
+                "between two leaf cells must be emitted exactly once or they z-fight.");
+        }
+
+        [Test]
+        public void CutoutLeavesStillShadeTheGroundBeneathThem()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 1);
+            var canopy = new BlockPosition(4, 10, 4);
+            world.SetBlock(canopy, BlockRegistry.Leafmoss, trackChange: false);
+
+            var skyLight = new VoxelSkyLightMap(world, registry);
+
+            // Directly beneath the canopy is shaded; an adjacent open column is not. Reading
+            // OccludesFaces here (false for leaves) would let full sky through and both would match.
+            Assert.That(
+                VoxelLightSampler.SampleSkyExposure(world, registry, new BlockPosition(4, 9, 4), skyLight: skyLight),
+                Is.LessThan(1.0f),
+                "A canopy must shade the ground beneath it (Pinewild §13.2), even though it hides no faces.");
+            Assert.That(
+                VoxelLightSampler.SampleSkyExposure(world, registry, new BlockPosition(6, 9, 6), skyLight: skyLight),
+                Is.EqualTo(1.0f),
+                "An open column beside the tree must still see full sky, or the fixture proves nothing.");
+        }
+
+        [Test]
+        public void InteriorLeafFacesAreDimmedRatherThanBlack()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(16, 16, 16), chunkSize: 16, seed: 1);
+
+            for (int x = 0; x < 3; x++)
+            for (int y = 0; y < 3; y++)
+            for (int z = 0; z < 3; z++)
+                world.SetBlock(new BlockPosition(2 + x, 2 + y, 2 + z), BlockRegistry.Leafmoss, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            // Leaves stopped occluding faces but still block light, so an interior face looks into
+            // another leaf cell. Sampling light there returns cave darkness and paints the whole
+            // canopy interior pure black — the mesher must walk out to a lit cell instead.
+            //
+            // Count vertices baked to ZERO sky, not the brightest vertex. The canopy's EXTERIOR
+            // faces sample air and always bake full sky, so a max-brightness assertion reads 1.0
+            // whether or not every interior face is black — it cannot fail. (Established by
+            // mutation: removing the outward light walk left that version of this test green.)
+            int blackVertices = 0;
+            foreach (Color c in mesh.Colors)
+            {
+                if (c.r <= 0.0f)
+                    blackVertices++;
+            }
+
+            Assert.That(mesh.Colors, Is.Not.Empty);
+            Assert.That(blackVertices, Is.EqualTo(0),
+                $"{blackVertices} of {mesh.Colors.Count} canopy vertices baked to zero sky light: interior " +
+                "faces are sampling inside a light-blocking leaf cell instead of walking out to one " +
+                "that transmits light.");
+        }
+
+        [Test]
+        public void ThickCanopyInteriorIsStillDimmedRatherThanBlack()
+        {
+            BlockRegistry registry = BlockRegistry.CreateDefault();
+            var world = new VoxelWorld(new WorldBounds(24, 24, 24), chunkSize: 24, seed: 1);
+
+            // Deliberately THICKER than the mesher's outward light-search budget. The 3x3x3 fixture
+            // used by the sibling test sits inside that budget, so it cannot reach this case — and
+            // real canopies do: PlaceCanopyRound uses radius 3 (seven cells across) and adjacent
+            // trees overlap into thicker masses still. Measuring against the convenient fixture
+            // rather than what the world generates is exactly how this stayed hidden.
+            const int size = 11;
+            for (int x = 0; x < size; x++)
+            for (int y = 0; y < size; y++)
+            for (int z = 0; z < size; z++)
+                world.SetBlock(new BlockPosition(6 + x, 6 + y, 6 + z), BlockRegistry.Leafmoss, trackChange: false);
+
+            ChunkMeshData mesh = ChunkMeshBuilder.Build(world, registry, new ChunkCoordinate(0, 0, 0));
+
+            int blackVertices = 0;
+            foreach (Color c in mesh.Colors)
+            {
+                if (c.r <= 0.0f)
+                    blackVertices++;
+            }
+
+            Assert.That(mesh.Colors, Is.Not.Empty);
+            Assert.That(blackVertices, Is.EqualTo(0),
+                $"{blackVertices} of {mesh.Colors.Count} vertices baked to zero sky light. A face buried " +
+                "deeper than the outward light search can reach must fall back to the depth falloff, " +
+                "not multiply it by a cave-dark sample and collapse to black.");
+        }
+
+        [Test]
+        public void TurfSamplesGrassOnTopDirtOnTheSidesAndLoamUnderneath()
+        {
+            // The reason the world reads uniformly green: without per-face tiles a turf block
+            // samples one tile on all six faces, so a hillside is the same colour from every angle.
+            Rect top = BlockVisualAtlas.GetTileRect(BlockRegistry.MeadowTurf, ChunkMeshBuilder.TopFaceIndex);
+            Rect bottom = BlockVisualAtlas.GetTileRect(BlockRegistry.MeadowTurf, ChunkMeshBuilder.BottomFaceIndex);
+            Rect side = BlockVisualAtlas.GetTileRect(BlockRegistry.MeadowTurf, 0);
+
+            Assert.That(top, Is.EqualTo(BlockVisualAtlas.GetTileRect(BlockRegistry.MeadowTurf)),
+                "Top keeps the block's own grass tile.");
+            Assert.That(side, Is.Not.EqualTo(top), "Sides must use the dirt-with-fringe tile.");
+            Assert.That(bottom, Is.Not.EqualTo(top), "The underside must not be grass.");
+            Assert.That(bottom, Is.EqualTo(BlockVisualAtlas.GetTileRect(BlockRegistry.LooseLoam)),
+                "The underside reuses loose_loam rather than authoring a fourth tile.");
+        }
+
+        [Test]
+        public void LogsShowEndGrainOnBothCapsAndBarkAroundTheSides()
+        {
+            Rect top = BlockVisualAtlas.GetTileRect(BlockRegistry.BranchwoodLog, ChunkMeshBuilder.TopFaceIndex);
+            Rect bottom = BlockVisualAtlas.GetTileRect(BlockRegistry.BranchwoodLog, ChunkMeshBuilder.BottomFaceIndex);
+            Rect side = BlockVisualAtlas.GetTileRect(BlockRegistry.BranchwoodLog, 0);
+
+            // Both cut ends are end grain — unlike turf, whose top is its own tile.
+            Assert.That(top, Is.EqualTo(bottom), "Both log caps show end grain.");
+            Assert.That(side, Is.Not.EqualTo(top), "The sides are bark, not end grain.");
+            Assert.That(side, Is.EqualTo(BlockVisualAtlas.GetTileRect(BlockRegistry.BranchwoodLog)),
+                "Bark is the block's own tile.");
+        }
+
+        [Test]
+        public void BlocksWithoutFaceOverridesSampleOneTileOnEveryFace()
+        {
+            // The fallback that keeps all ~90 other blocks unaffected.
+            Rect plain = BlockVisualAtlas.GetTileRect(BlockRegistry.Graystone);
+
+            for (int face = 0; face < 6; face++)
+            {
+                Assert.That(BlockVisualAtlas.GetTileRect(BlockRegistry.Graystone, face), Is.EqualTo(plain),
+                    $"Graystone declares no face overrides, so face {face} must fall back to its single tile.");
+            }
+        }
+
         [Test]
         public void MeshBuilderEmitsOnlyExteriorFacesForSingleSolidBlock()
         {

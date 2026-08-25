@@ -32,11 +32,11 @@ The save uses a single canonical integer schema version plus informational metad
 
 | Version Field | Example | Meaning |
 |---|---|---|
-| `schemaVersion` | `4` | The single canonical on-disk save schema version. Must match the engine's `CurrentSchemaVersion` exactly. |
+| `schemaVersion` | `5` | The single canonical on-disk save schema version. Must match the engine's `CurrentSchemaVersion` exactly. |
 | `engineVersion` | `0.1.0` | Game executable or engine build version (informational only). |
 | `contentPackVersion` | `pack-id@1.0.0` | Optional external content pack version (informational only). |
 
-The engine defines one supported schema version, `CurrentSchemaVersion` (currently `4`). The manifest stores a single integer `schemaVersion`.
+The engine defines one supported schema version, `CurrentSchemaVersion` (currently `5`). The manifest stores a single integer `schemaVersion`.
 
 ### 2.1 Single-schema load policy
 
@@ -149,7 +149,7 @@ ore#1               // punctuation-heavy unstable ID
 
 ```ts
 type SaveManifest = {
-  schemaVersion: number;            // single canonical integer; must equal CurrentSchemaVersion (4)
+  schemaVersion: number;            // single canonical integer; must equal CurrentSchemaVersion (5)
   engineVersion: string;            // informational only
 
   blockRegistryHash: string;        // content hash of the block registry at save time
@@ -193,7 +193,7 @@ Example:
 
 ```json
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "engineVersion": "0.1.0",
   "blockRegistryHash": "sha256:9f1c0a3e7b2d4c6f8a1b5d7e9c0f2a4b6d8e0c1f3a5b7d9e1c3f5a7b9d0e2c4f",
   "itemRegistryHash": "sha256:1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
@@ -468,6 +468,32 @@ Palette indices bit-packed by minimum required bits per section
 Nibble arrays for light
 Binary region file with chunk index
 ```
+
+**Implemented shape (schema v5).** The engine does not store whole sections. Regions store only
+blocks that differ from terrain regenerated from the seed, so a section carries a delta list rather
+than a full `blockData` array:
+
+```ts
+type VxlwSectionData = {
+  SectionY: number;
+  BlockPalette: string[];        // canonical block IDs
+  ChangePositions: number[];     // local index within the 16³ section
+  PaletteIndices: number[];      // index-aligned with ChangePositions
+  BlockStates: number[];         // v5. index-aligned; EMPTY when the section is all-default
+};
+```
+
+`BlockStates` is the on-disk form of §5.1's block state. It is a plain `int` per changed block
+rather than the structured object §27 shows, and it is **empty** — not a run of zeros — for any
+section with nothing to record, which is nearly all of them. A section whose `BlockStates` is
+shorter than `ChangePositions`, empty, or absent reads the remainder as default; that is normal
+output, not corruption.
+
+The empty form is a fixed ~17 bytes per section, not zero: Unity's `JsonUtility` serialises a null
+array as `[]` rather than dropping the key. The saving is the per-delta zero, which is what scales
+— a fully-edited section would otherwise carry roughly 8 KB of zeros.
+
+Light is not persisted at all: `skyLight`/`blockLight` are rebuilt on load.
 
 ---
 

@@ -15,8 +15,6 @@
     "com.meta.xr.sdk.interaction.ovr": "205.0.0",
     "com.meta.xr.sdk.platform": "205.0.0",
     "com.unity.addressables": "3.1.0",
-    "com.unity.ai.assistant": "2.13.0-pre.2",
-    "com.unity.ai.inference": "2.6.1",
     "com.unity.inputsystem": "1.20.0",
     "com.unity.localization": "1.5.12",
     "com.unity.multiplayer.center": "1.0.1",

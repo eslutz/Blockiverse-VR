@@ -78,17 +78,28 @@ The Survival ruleset already defines these vegetation-related blocks and resourc
 
 These are canonical additions to the block registry. They use existing item drops where possible, so they do not require a large new item catalog.
 
+> **Sapling id.** Saplings are **not** a registry addition. They already ship under the canonical
+> ids `sapling`, `sapling_s1`, and `sapling_s2`, with the growth pipeline, item, Creative entry,
+> save export, and atlas tiles all in place. This section previously listed a
+> `branchwood_sapling` addition; the shipped id is canonical, per the standing precedent that
+> where this ruleset names a resource the project already tracks under a different id, the
+> existing id wins (`flint_shard` → `flinty_shingle`, `resin_blob` → `resin_knot`,
+> `stone_pebble` → `surface_pebbles`).
+>
+> **New item required.** `frost_shard`, the 5% Frost Fern drop, has no entry in the item registry
+> and must be added alongside these blocks.
+
 | Name | ID | Description | Hardness | Tool / Tier | Drops |
 |---|---|---|---:|---|---|
-| Branchwood Sapling | `branchwood_sapling` | Young tree that can grow into biome-specific Branchwood variants. | 0.1 | Hand / 0 | `branchwood_sapling ×1` |
 | Drygrass Tuft | `drygrass_tuft` | Dry fiber plant common in warm biomes. | 0.1 | Sickle / 0 | `reed_fiber ×1`, 15% `drygrass_seed ×1` |
+| Meadow Tuft | `meadow_tuft` | Temperate grass tuft; the ordinary ground layer of meadows and open woodland. | 0.1 | Sickle / 0 | `reed_fiber ×1`, 15% `meadow_seed ×1` |
 | Moss Carpet | `moss_carpet` | Thin groundcover in damp shaded areas. | 0.1 | Sickle / 0 | 60% `leafmoss ×1` |
 | Wildflower Cluster | `wildflower_cluster` | Decorative meadow plant that supports pollinator ambience. | 0.1 | Sickle / 0 | 20% `meadow_seed ×1` |
-| Dune Sage | `dune_sage` | Sparse desert shrub with dry fibers and occasional resin. | 0.2 | Sickle / 0 | `reed_fiber ×1`, 10% `resin_blob ×1` |
+| Dune Sage | `dune_sage` | Sparse desert shrub with dry fibers and occasional resin. | 0.2 | Sickle / 0 | `reed_fiber ×1`, 10% `resin_knot ×1` |
 | Salt Reed | `salt_reed` | Brine-tolerant reed that grows near salty water. | 0.1 | Sickle / 0 | `reed_fiber ×1–2`, 8% `brightsalt ×1` |
 | Snow Lichen | `snow_lichen` | Hardy cold-ground plant. | 0.1 | Sickle / 0 | 40% `leafmoss ×1` |
 | Frost Fern | `frost_fern` | Cold biome plant that survives under light snow. | 0.1 | Sickle / 0 | `reed_fiber ×1`, 5% `frost_shard ×1` |
-| Windroot Shrub | `windroot_shrub` | Tough highland shrub that indicates windy exposed slopes. | 0.2 | Sickle / 0 | `reed_fiber ×1`, 15% `resin_blob ×1` |
+| Windroot Shrub | `windroot_shrub` | Tough highland shrub that indicates windy exposed slopes. | 0.2 | Sickle / 0 | `reed_fiber ×1`, 15% `resin_knot ×1` |
 | Hanging Reed | `hanging_reed` | Damp overhang vegetation placed under Leafmoss or cave mouths. | 0.1 | Sickle / 0 | `reed_fiber ×1–2` |
 | Fallen Leaves | `fallen_leaves` | Thin decorative ground layer that decays into soil richness. | 0.1 | Sickle / 0 | 50% `leafmoss ×1` |
 
@@ -97,6 +108,195 @@ Stack size rule:
 ```txt
 All small vegetation blocks stack to 99 unless they have metadata. Metadata variants stack only with identical metadata.
 ```
+
+---
+
+## 4a. Vegetation render and collision model
+
+Vegetation is the first content in this project that is not a solid opaque cube. This section is
+the canonical definition of how a block is drawn, whether it obstructs movement, and how tall it
+counts as. It applies to every block in §4 and to the existing wild plants.
+
+### 4a.1 Independent properties
+
+Historically one flag (`isSolid`) stood in for all of these. It does not mean any of them on its
+own — it is the general "substantial block" flag the others default to, and it never implies
+physics. Each axis below is read only by the system that means it:
+
+| Property | Values | Governs |
+|---|---|---|
+| `renderShape` | `cube`, `cutout_cube`, `cross`, `decal` | The geometry emitted for the block |
+| `collision` | `solid`, `passable` | Whether an entity is stopped by the block |
+| `heightClass` | `short`, `tall` | Path/mask rules and snow burial |
+| `occludesFaces` | `true`, `false` | Whether the block hides a neighbour's face (mesher only) |
+| `blocksLight` | `true`, `false` | Whether the block stops skylight and emitter line-of-sight (lighting only) |
+
+**Face occlusion and light occlusion are separate axes, and both default to the engine's `isSolid`
+field — which is what `isSolid` has always actually meant.** Neither may be used to infer collision.
+
+They are separate because **leaves are the one block that needs different answers**, and a single
+flag cannot give them: a canopy must hide **no** faces, so its alpha gaps reveal its own interior
+and it reads as volume rather than a hollow shell, while still **blocking** light, so forest floors
+stay shaded (§13.2) and a torch does not shine through a tree. Collapsing them back into one
+property reintroduces exactly that conflict.
+
+One consequence the mesher must handle: because a non-occluding block can still block light, a face
+may now be emitted looking *into* a light-blocking cell. Sampling light there returns cave darkness,
+so the mesher walks outward to the first cell that transmits light and dims by the distance
+travelled — interior leaves read darker than the canopy surface, never black.
+
+### 4a.2 Render shapes
+
+| Shape | Geometry | Used for |
+|---|---|---|
+| `cube` | Six full faces, opaque | Terrain, logs, built blocks |
+| `cutout_cube` | Six faces sampling an alpha-cut texture | Leafmoss canopies |
+| `cross` | Two intersecting vertical quads, alpha-cut | Grasses, flowers, shrubs, reeds, saplings |
+| `decal` | One quad laid just above the ground surface, opaque | Flat groundcover |
+
+`cross` uses two **fixed** intersecting planes, never a camera-facing billboard. A single
+billboard reads as a flat card in stereo — the same objection already recorded for the lightning
+bolt in `voxel_world_environment_effects.md` §"any single tall billboard reads as a flat card in
+stereo". Two fixed planes have no such failure mode and cost the same two quads.
+
+`decal` exists so flat groundcover (`moss_carpet`, `snow_lichen`, `fallen_leaves`) does not pay
+alpha-test cost. These read as ground texture rather than as blades, so a single opaque quad is
+both cheaper and more accurate. Alpha test disables early-Z on tile GPUs and is the dominant cost
+of dense foliage, so it is spent only where silhouette actually matters.
+
+### 4a.3 Assignments
+
+| Block | `renderShape` | `collision` | `heightClass` | `occludesFaces` | `blocksLight` |
+|---|---|---|---|---|---|
+| `branchwood_log` | `cube` | solid | tall | yes | yes |
+| `leafmoss` | `cutout_cube` | solid | tall | **no** | **yes** |
+| `sapling` | `cross` | passable | short | no | no |
+| `drygrass_tuft` | `cross` | passable | short | no | no |
+| `meadow_tuft` | `cross` | passable | short | no | no |
+| `wildflower_cluster` | `cross` | passable | short | no | no |
+| `dune_sage` | `cross` | passable | short | no | no |
+| `frost_fern` | `cross` | passable | short | no | no |
+| `windroot_shrub` | `cross` | passable | short | no | no |
+| `salt_reed` | `cross` | passable | tall | no | no |
+| `hanging_reed` | `cross` | passable | tall | no | no |
+| `reedgrass` | `cross` | passable | tall | no | no |
+| `grain_stalk` | `cross` | passable | tall | no | no |
+| `berrybush` | `cross` | passable | short | no | no |
+| `thornbrush` | `cross` | passable | short | no | no |
+| `moss_carpet` | `decal` | passable | short | no | no |
+| `snow_lichen` | `decal` | passable | short | no | no |
+| `fallen_leaves` | `decal` | passable | short | no | no |
+
+**Leafmoss stays occluding and solid.** This is deliberate and load-bearing:
+
+- Canopies must keep blocking skylight, or forest floors stop being shaded and Pinewild loses the
+  dense, shaded identity §13.2 gives it. Crop growth and cave detection also read skylight.
+- A player must not fall through a canopy.
+- Making leaves non-occluding renders every interior leaf-to-leaf face, roughly quadrupling canopy
+  face count — and with alpha cutout that is all real overdraw. If volumetric canopy depth is
+  wanted later, it is a separate change gated on a device capture.
+
+With `cutout_cube` and two-sided rendering, gaps in the canopy shell reveal the inside of the far
+shell, which reads as depth at no extra geometry cost.
+
+### 4a.4 Passability
+
+`passable` blocks are rendered but never obstruct movement. Required behavior:
+
+- They must not stop walking, and must not register as ground for gravity or fall damage. Contact
+  filtering alone is insufficient — scene queries used for grounding ignore per-collider exclusion
+  lists, so passable vegetation must be separated by physics layer, not by contact rules.
+- **Teleport arcs pass through passable vegetation and land on the ground beneath.** This is the
+  opposite of the deliberate fluid behavior, where the arc stops at the surface.
+- They remain directly targetable for mining and harvesting. A ray must hit the plant itself, not
+  skip past it to the ground.
+- They are replaceable by block placement, exactly as air and fluids are — building into a grass
+  cell replaces the grass.
+
+`thornbrush` is passable **and** hazardous: its contact damage is specified for an entity standing
+in the plant's own cell, which is only reachable once the plant is passable.
+
+The passable property is defined generally rather than as a vegetation-only concept, so
+non-vegetation passables (open doorways, decorative props) can reuse it without redefinition.
+
+### 4a.5 Per-face texturing
+
+A block may declare distinct `top`, `side`, and `bottom` tiles rather than sampling one tile on
+all six faces. Terrain blocks with a surface layer must do so — a turf block reads as uniformly
+coloured on every face otherwise, which is a primary cause of the world reading as flat and
+over-clean. Faces not declared fall back to the block's single tile, so existing blocks are
+unaffected.
+
+### 4a.6 Height class
+
+`short` plants are ankle-to-knee height and never obstruct a sightline or a walking path. `tall`
+plants read as obstructing at standing height. This distinction is what the `path` and
+`no_tall_plant` structure masks refer to; before this section those masks referenced a class that
+was never defined.
+
+### 4a.7 Canopy light transmission
+
+`blocksLight` is not a boolean in the lighting map: a block that blocks light declares
+`lightTransmission`, the share of skylight it passes. Everything except `leafmoss` is `0.0` — fully
+opaque — and `leafmoss` is `0.45`.
+
+Skylight at a cell is the product of the transmissions of every transmitting layer **strictly above
+it**, floored:
+
+```ts
+product      = product of lightTransmission for each transmitting block above the cell
+transmittance = product >= 1 ? 1 : diffuseCanopyFloor + (1 - diffuseCanopyFloor) * product
+// diffuseCanopyFloor = 0.25
+```
+
+Two rules in that expression, and both were learned from device feedback rather than derived.
+
+**Only layers above the cell count.** The obvious implementation caches one product per column,
+which is right for a cell beneath the whole crown and wrong for every cell inside it — a cell level
+with the middle of a canopy was charged for the leaves below it as well. That is most of a canopy:
+every interior and underside face the mesher bakes, coming out several times darker than the model
+intended.
+
+Costing that correctly needs BOTH cases, and the obvious claim about it is false: a walk from the
+topmost blocker down to the queried cell is **not** bounded by the crown's depth, because a tall
+tree over open ground puts those 20–25 blocks apart — on a path the mesher calls once per face.
+Cells below the whole canopy (the forest floor, i.e. most calls) therefore take a cached column
+product in O(1), and only cells *inside* a crown walk, where the bound really is the crown's extent.
+
+**The product is floored, because it is a single-ray model of a hemispherical source.** A bare
+product is Beer–Lambert down one vertical line, and skylight arrives from the whole sky: light the
+straight-down path says is extinguished still gets in from the side and through gaps two cells over.
+Uncorrected, four stacked layers give 0.041 and five give 0.018 — within a few percent of the zero
+a sealed room gets, so the model puts a wood at noon and a cave in the same bucket. No per-layer
+transmission value repairs that; halving the extinction only moves which layer count goes black. The floor stands in for the side-scattered term, and it saturates,
+which is what real canopy shade does:
+
+| Layers overhead | 1 | 2 | 3 | 4 | 8+ |
+|---|---|---|---|---|---|
+| Transmittance | 0.59 | 0.40 | 0.32 | 0.28 | → 0.25 |
+
+The floor is a **canopy** term, never an ambient one: below the topmost opaque block transmittance
+is 0, so a sealed room stays dark.
+
+**One value, used for rendering and for gameplay alike.** The floored number IS `visibleLight`;
+there is no separate shading quantity. A rendering value and a gameplay value for one physical
+thing can drift apart, and two numbers are harder to reason about and to debug than one.
+
+That means the floor moves farming, and the move is accepted because it is **bounded**. On the
+0–15 scale `FarmingService` requires grain 8, berries 7, reeds 5:
+
+| Layers overhead | 0 | 1 | 2 | 3 | 4 | → |
+|---|---|---|---|---|---|---|
+| `visibleLight` | 15.00 | 8.81 | 6.03 | 4.78 | 4.21 | 3.75 |
+| Grain (8) | yes | **yes** | no | no | no | no |
+| Berries (7) | yes | **yes** | no | no | no | no |
+| Reeds (5) | yes | yes | **yes** | no | no | no |
+
+A player gains one layer of canopy for grain and berries and two for reeds, and nothing beyond
+that: the asymptote (3.75) sits **below** the least demanding crop's minimum (5), so however thick
+the canopy gets, farming under it still stops. You can plant at the fringe of a tree, not inside a
+forest. If that ever needs tightening, the lever is the crop's own `minLight`, not this constant —
+and the bound itself is pinned by `VoxelSkyLightCanopyEditModeTests.TheFloorsEffectOnFARMINGStaysBounded`.
 
 ---
 
@@ -143,6 +343,53 @@ Recommended first playable setting:
 ```ts
 normalizeHarvestedTreeMetadata = true;
 ```
+
+### 5.1 Implementation status — which bits actually exist
+
+The schema above is the target. The engine stores block state as a single `int` per block
+(`Blockiverse.Voxel.BlockState`), sparse: only blocks that differ from `BlockState.Default` cost
+anything, and everything else answers `Default` without an entry. Save schema **v5** carries it as
+an optional `BlockStates` array per 16-block section, index-aligned with `ChangePositions` and left
+empty when a section has nothing to record. (Unity's `JsonUtility` writes a null array as `[]`, so
+the field is always present; what the empty form avoids is one zero per delta, which is the cost
+that scales with how much a world has been edited.)
+
+Only bits with a live consumer are declared. A named-but-unread bit reads as supported and
+silently does nothing — this project has already shipped one such declaration and had to remove
+it, so the rule is now explicit.
+
+| Field above | Bit | Status |
+|---|---|---|
+| `LeafmossState.persistent` | `BlockState.Persistent` | **Live.** Set by the mutation gate on any player-placed block whose definition declares `DecaysWithoutSupport` (today: leafmoss only). Exempts it from leaf decay, so a hand-built hedge does not rot. |
+| `BranchwoodLogState.treeVariant` / `LeafmossState.leafVariant` | — | **Not declared.** Needs per-species leaf and log tiles; all seven species currently share one leaf tile and one log tile. The 12×10 atlas has the free slots for it. |
+| `BranchwoodLogState.axis` | — | **Not declared.** Needs horizontal log placement, which no tool produces yet. |
+| `BranchwoodLogState.stripped` / `natural` | — | **Not declared.** `smooth_branchwood` is a distinct block rather than a log state, and nothing reads `natural`. |
+| `LeafmossState.decayDistance` | — | **Not declared.** Decay searches for a nearby log per sweep instead of caching a distance; the cached form is an optimisation with no observable difference. |
+
+Two invariants hold regardless of which bits are declared:
+
+- **State never outlives its block.** Changing the block at a position clears its state, so a
+  replacement can never inherit behaviour nobody set on it.
+- **State only exists where a delta does.** Regions store state on the block delta, so state at a
+  position with no delta would save cleanly and vanish on reload. The mutation gate records state
+  only when the block actually changed, which makes that true by construction rather than by
+  argument.
+
+**Block state is replicated to every peer**, and must stay that way. The world simulation runs on
+all peers in lockstep from identical inputs — environment mutations are never broadcast — so any
+sim input that is not derivable from (seed, clock, world) has to travel or the peers diverge.
+
+That was learned the hard way: the first version of this feature left the bit host-only, on the
+stated grounds that decay is host-authoritative. **It is not.** `CreativeWorldManager.OnWorldTick`
+ticks the whole world sim on every peer with no authority gate, so the host skipped a player-placed
+leaf while the client deleted it, permanently and with nothing to repair it — the host made no
+change, so it emitted no delta. Every one of the three client apply paths (chunk delta, late-join
+snapshot, mutation-result correction) now carries state.
+
+Gating decay to the host instead would NOT have worked: the host's own decay removals are not
+broadcast either, so clients would have kept leaves the host destroyed. Replication is the fix that
+matches the architecture; changing decay to be authoritative would mean changing the lockstep design
+itself.
 
 ---
 
@@ -428,6 +675,7 @@ Biome resin modifiers:
 | Reedgrass | `reedgrass` | `river_silt`, `claybed`, `tended_soil` | Wetland, river edges | 4–10 | 3–9 | Requires freshwater within 3 blocks |
 | Thornbrush | `thornbrush` | `rootsoil`, `dry_turf`, `loose_loam` | Pinewild, Drybrush, overgrown structures | 2–8 | 1–5 | Avoids spawn starter zone paths |
 | Drygrass Tuft | `drygrass_tuft` | `dry_turf`, `pale_sand`, `loose_loam` | Drybrush, Dunes edge, Highlands dry slopes | 4–12 | 2–7 | Common fiber source in dry regions |
+| Meadow Tuft | `meadow_tuft` | `meadow_turf`, `rootsoil`, `loose_loam` | Meadow, Pinewild clearings, Wetland banks, Highlands lower slopes | 10–24 | 4–14 | The default temperate ground layer. Highest density of any plant — it should read as continuous grass a player walks through, not as scattered decoration. Suppressed under Snowpack depth ≥ 1 |
 | Moss Carpet | `moss_carpet` | `rootsoil`, `graystone`, `white_limestone` | Pinewild, Wetland, cave mouths | 6–16 | 2–12 | Requires moisture or shade |
 | Wildflower Cluster | `wildflower_cluster` | `meadow_turf`, `loose_loam` | Meadow | 3–10 | 2–8 | Decorative; light ≥ 11 |
 | Dune Sage | `dune_sage` | `pale_sand`, `dry_turf` | Dunes, Drybrush | 2–7 | 1–3 | Sparse; cannot be adjacent to another Dune Sage |
@@ -495,7 +743,7 @@ Meadow vegetation should be open and readable, with scattered Crownbranch trees 
 |---|---|
 | Tree coverage target | 8–18% canopy cover |
 | Main resources | Berrybush, Grain Stalk, Branchwood, Wildflower Cluster |
-| Groundcover | Wildflowers, Fallen Leaves near trees, occasional Moss Carpet near water |
+| Groundcover | Meadow Tuft as the continuous base layer, with Wildflowers scattered through it, Fallen Leaves near trees, and occasional Moss Carpet near water |
 | Spawn suitability | High |
 
 Special rule:
@@ -674,7 +922,7 @@ else:
 
 ```ts
 Leafmoss decay or tree leaf harvesting:
-    5% chance to drop `branchwood_sapling`;
+    5% chance to drop `sapling`;
 
 Sickle used on Leafmoss:
     sapling drop chance increases to 8%;
@@ -749,7 +997,7 @@ Decay check:
 if random() < 0.35:
     remove leafmoss;
     if random() < 0.05:
-        drop `branchwood_sapling ×1`;
+        drop `sapling ×1`;
     if random() < 0.15:
         place `fallen_leaves` on solid block below if air;
 ```
@@ -759,6 +1007,27 @@ Player-placed Leafmoss should default to:
 ```ts
 persistent = true;
 ```
+
+### 16.1 Implementation status
+
+**`persistent` is live** (see §5.1). Every player placement of a block that declares
+`DecaysWithoutSupport` is marked at the mutation gate, which is the only path a player edit takes —
+worldgen writes to the world directly, so "grown" and "built" are distinguished by mechanism rather
+than by a flag someone has to remember to set.
+
+Three details of the pseudocode above differ from what shipped, and each is a deliberate
+simplification rather than an oversight:
+
+| Spec | Shipped | Why |
+|---|---|---|
+| `state.natural=true` on the log | Any `branchwood_log` or `smooth_branchwood` counts | `natural` has no consumer and nothing sets it; requiring it would make the search always fail. |
+| Probabilistic decay (`random() < 0.35`) per check | Unsupported leaves are removed on the sweep that finds them | The roll spreads one removal over several sweeps without changing the outcome, and a wall-clock roll in a host-authoritative sweep is a determinism liability for no visible gain. |
+| Sapling and `fallen_leaves` drops on decay | Not implemented | Decay currently removes the block only. |
+
+The decay sweep runs on **every peer**, not just the host — `CreativeWorldManager.OnWorldTick` is
+ungated, unlike the container-loot path in the same file. That is why `BlockState.Persistent` must
+be replicated (see §5.1); a host-only bit would make the two peers reach different decisions about
+the same leaf.
 
 ---
 

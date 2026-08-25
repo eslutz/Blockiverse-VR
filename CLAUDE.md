@@ -60,23 +60,92 @@ Current project handoff state lives in [MEMORIES.md](MEMORIES.md).
 ### Tooling Policy
 
 - Prefer reproducible command-line tooling over GUI-only actions when command output is useful validation evidence.
+
+#### Unity Agent Skills
+
+"Unity Skills" used to mean two unrelated things here, which cost time. The unofficial one
+(`com.besty.unity-skills`, an Editor package on `http://localhost:8090`) was **dropped on 2026-08-24** in favour of
+Unity's official library; it was never installed on this machine and nothing in the project used it. If you meet a
+reference to it in older notes or commits, that is what it was.
+
+1. **Unity Agent Skills** — Unity's official agent-skill library, `https://github.com/Unity-Technologies/skills`. Markdown instructions an agent reads; nothing runs in the Editor. **Installed globally for Claude Code on 2026-08-24** (21 skills in `~/.claude/skills/`, alongside unrelated Azure ones). Install/refresh with `npx skills@latest add Unity-Technologies/skills -g -s '*' -a claude-code -y` and `npx skills@latest update -g -y`. Nothing is committed and no Unity package is touched. Relevant here: `validate-urp-render-graph-renderer-feature`, `urp-postprocessing`, `unity-cli`, `unity-package-management`, `ui-uitk`/`ui-ugui`, `optimize-audio`, `optimize-text-mesh-pro`, `shader-graph-create-custom-node`, `setup-multiplayer-services`. Ignore the monetization ones (`implement-in-app-purchases`, `levelplay-unity-integration`) — this project ships neither. **`setup-vivox-voice-chat` is contraindicated**: the guardrails above mandate Meta Quest party chat and forbid in-app voice unless the rulesets change. `physics-3d-collision` exists upstream but fails to install (malformed YAML in its `SKILL.md`), so the repo's 22 yield 21.
+
+#### Unity Is Deprecating The In-Editor MCP Server
+
+Announced by Unity 2026-08 (marketing link, not the reference docs): **the MCP server in the AI Assistant package is being replaced by the Unity CLI and its `unity mcp` mode.** Support continues "at least until the end of 2026"; no formal sunset date has been published, and `https://docs.unity.com/en-us/unity-cli/unity-cli-reference` does not yet mention the deprecation at all — so treat the timeline as an announcement, not a documented commitment.
+
+What this does and does not mean for Blockiverse, because it is easy to over-read:
+
+- **`com.unity.ai.assistant` was removed from `Packages/manifest.json` on 2026-08-24** (Eric's call). It was a direct entry at depth 0 that nothing depended on and no project code referenced — the only mentions of it were comments explaining define churn. Its MCP server was never one of this project's editor bridges, so removing it changed no workflow.
+- The bridges actually in use — the Meta XR SDK editor MCPBridge on `48736` and (optionally) MCP for Unity — are **third-party and unaffected**. Unity deprecating its own first-party server says nothing about CoplayDev's.
+- `unity mcp` is the official forward path, but **it needs the Unity Pipeline package**, which this project deliberately does not have (`unity mcp` and `unity command` both require it; `unity pipeline list` does not). Adopting it therefore means committing a manifest change, which still requires Eric's approval.
+
+Unity CLI `1.0.0-beta.5` (released 2026-08-13) is the current release and is what is installed at `~/.unity/bin`.
+
 - Use MCP for Unity as the default live Unity Editor bridge when the Editor is open and connected. Treat it as local developer tooling, not a committed project dependency; if needed, install `com.coplaydev.unity-mcp` locally from `https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#main`, configure it from `Window > MCP For Unity > Local Setup Window`, and start the local server at `http://127.0.0.1:8080/mcp`.
 - Use Meta XR Operator (experimental, Meta XR Core SDK 205+) for runtime in-VR validation: session/frame/composition-layer inspection, composited eye captures, and pose control of the app running in Play mode with the Meta XR Simulator. Activate once via `Meta > Meta XR Operator > Activate`, activate the simulator per editor session, and connect only through the registered `meta-xr-operator` MCP proxy — never probe `localhost:8720/sse` directly during startup (it has crashed the editor). Full runbook: `docs/testing/meta-xr-simulator-and-mcp.md`.
-- Use Unity Skills for module-specific REST workflows, advisory docs, XR diagnostics, batch/workflow operations, console/debug triage, package-aware guidance, and targeted Unity Test Runner jobs. Treat it as local developer tooling, not a committed project dependency; if needed, install `com.besty.unity-skills` locally from `https://github.com/Besty0728/Unity-Skills.git?path=/SkillsForUnity`, start it from `Window > UnitySkills > Start Server`, and verify `http://localhost:8090/health`.
-- Before using Unity Skills, read `/Users/ericslutz/.agents/skills/unity-skills/SKILL.md`, then the relevant module `SKILL.md` from `/Users/ericslutz/.agents/skills/unity-skills/skills/`. Honor `currentMode`, approval grants, and forbidden-skill behavior. Do not add skills to the Allowlist unless Eric explicitly asks.
+- Use the Unity Agent Skills above for Unity-specific guidance (URP renderer-feature validation, UI Toolkit/uGUI, package management, audio and TMP optimisation, Shader Graph custom nodes). They are instructions an agent reads, not a server — nothing to start, no port, nothing committed.
+- Skills run with full agent permissions and are third-party content, so read a skill's `SKILL.md` before acting on it. They advise; they never override this file, the rulesets, or the guardrails above. Where a skill conflicts with a project guardrail, the guardrail wins — `setup-vivox-voice-chat` is the standing example.
 - Before using MCP for Unity, inspect the active instance and project root through MCP resources. If multiple Unity Editors are open, route to this project before mutating scenes, assets, scripts, packages, or tests.
-- Tool split: prefer MCP for Unity for general live Editor inspection and automation; prefer Unity Skills when a task needs its REST modules, advisory guidance, XR/test diagnostics, or batch/workflow semantics. Both are investigation and automation aids, not substitutes for committed scripts or test evidence.
-- A local package-cache `package.json.meta` GUID conflict can appear when both Unity Skills and MCP for Unity are installed in a developer checkout. Do not commit package manifest or lockfile changes for those tools unless Eric explicitly requests a dependency update. Treat the conflict as local-only only if Unity compiles, both local servers work, and the committed package manifests remain clean.
+- Tool split: MCP for Unity drives the live Editor; Unity Agent Skills supply written guidance. They do different jobs and neither is a substitute for committed scripts or test evidence.
+- Never commit package manifest or lockfile changes for local dev tooling unless Eric explicitly requests a dependency update. (A package-cache `package.json.meta` GUID conflict used to appear when the unofficial Unity Skills package and MCP for Unity were both installed; dropping that package removes the conflict.)
 - Several worktrees or agent sessions can run Unity at the same time; the licence is not exclusive across project paths (measured — see "Sharing the Unity License" below). Announce a long run as a courtesy, never kill another worktree's run, and get agreement before the destructive licensing recovery, which takes the licence from every worktree at once.
-- A batchmode run can dirty files you never touched. Diff the whole tree afterwards, not just the paths you expected to change, and revert anything outside your scope rather than letting it ride along in a generated-artifact diff. Two effects are known and neither is yours to commit: package-managed defines moving between build targets in `ProjectSettings.asset` (documented in [MEMORIES.md](MEMORIES.md) — the active target changes during a PlayMode run, and the owning package rewrites its define), and `Assets/UniversalRenderPipelineGlobalSettings.asset` losing the 13 entries of `m_RuntimeSettings.m_List`. **The URP one is intermittent, and not seeing it proves nothing.** It has fired on two worktrees and stayed clean across many more runs on three others, including a worktree that had never touched the asset and a second run on a worktree where it had just fired. Check every time regardless — a clean tree is the common case, not evidence that this is fixed. **That URP deletion must never be committed**, and it is the highest-consequence of the three rather than the most obscure. Those 13 entries are the runtime resource pointers URP carries into a player build; resolving them against the asset's own `references:` type map gives `UniversalRenderPipelineRuntimeXRResources` (XR runtime resources), `VrsRenderPipelineRuntimeResources` (variable rate shading, which this project pins for foveated rendering), and `ShaderStrippingSetting` (shader stripping — the mechanism behind the "renders in the editor, black on device" trap [MEMORIES.md](MEMORIES.md) already warns about), among ten others. The risk is not that the file is dirty; it is that a silent commit is a device-only rendering regression, editor-clean and very hard to diagnose after the fact. No one has yet built a player from an emptied list to confirm breakage — the established part is what the entries are, which is enough.
+- A batchmode run can dirty files you never touched. Diff the whole tree afterwards, not just the paths you expected to change, and revert anything outside your scope rather than letting it ride along in a generated-artifact diff. Two effects are known and neither is yours to commit: package-managed defines moving between build targets in `ProjectSettings.asset` (documented in [MEMORIES.md](MEMORIES.md)), and `Assets/UniversalRenderPipelineGlobalSettings.asset` losing the 13 entries of `m_RuntimeSettings.m_List`. **Neither effect requires PlayMode** — both have been observed on EditMode-only runs (measured 2026-08-23; see below), so an EditMode gate is not a safe reason to skip the diff. **The URP one is intermittent, and not seeing it proves nothing.** It has fired on three worktrees and stayed clean across many more runs on three others, including a worktree that had never touched the asset and a second run on a worktree where it had just fired. Check every time regardless — a clean tree is the common case, not evidence that this is fixed. **That URP deletion must never be committed**, and it is the highest-consequence of the three rather than the most obscure. Those 13 entries are the runtime resource pointers URP carries into a player build; resolving them against the asset's own `references:` type map gives `UniversalRenderPipelineRuntimeXRResources` (XR runtime resources), `VrsRenderPipelineRuntimeResources` (variable rate shading, which this project pins for foveated rendering), and `ShaderStrippingSetting` (shader stripping — the mechanism behind the "renders in the editor, black on device" trap [MEMORIES.md](MEMORIES.md) already warns about), among ten others. The risk is not that the file is dirty; it is that a silent commit is a device-only rendering regression, editor-clean and very hard to diagnose after the fact. No one has yet built a player from an emptied list to confirm breakage — the established part is what the entries are, which is enough.
 
-Revert it unconditionally rather than reasoning case by case: the committed asset legitimately carries all 13 (last written deliberately in `29cb1190`), and no project code touches that asset at all — `grep -rn --include='*.cs' -E "UniversalRenderPipelineGlobalSettings|RenderPipelineGraphicsSettings" Assets/Blockiverse` is empty, so nothing in this repo can be the author. It is **not** the same mechanism as the define churn: mtimes across a full gate put the URP write mid-EditMode, minutes before the PlayMode build-target switch that explains the defines. The trigger is not established. That the same worktree fired once and then stayed clean rules out anything fixed about the project or its path and points at something that varied between runs — a cold versus warm `Library`, or an asset reimport in the first run and not the second, are the obvious candidates. An EditMode-only run on a cold `Library` is the cheap experiment for narrowing it. It is easy to commit by accident because a bootstrapper rerun legitimately rewrites URP assets, so the deletion can look like part of a regeneration diff.
+Revert it unconditionally rather than reasoning case by case: the committed asset legitimately carries all 13 (last written deliberately in `29cb1190`), and no project code touches that asset at all — `grep -rn --include='*.cs' -E "UniversalRenderPipelineGlobalSettings|RenderPipelineGraphicsSettings" Assets/Blockiverse` is empty, so nothing in this repo can be the author. It is **not** the same mechanism as the define churn: mtimes across a full gate put the URP write mid-EditMode, well before any PlayMode target switch. The trigger is still not established, but the cheap experiment this section used to call for has now been run, and it removed one hypothesis and weakened another.
+
+**Measured 2026-08-23** — a third worktree, `scripts/unity/run-tests.sh --platform EditMode` only, no PlayMode at any point in the session:
+
+- The **URP deletion fired**, then did **not** re-fire on a later warm-`Library` run of the same filter. So it does not need PlayMode, and cold-vs-warm `Library` / asset reimport remains the live hypothesis — the runs that fired were doing a large import, the clean one was not. One trial: suggestive, not settled.
+- The **define churn also fired on that EditMode-only run** (`Standalone` gained `APP_UI_EDITOR_ONLY`, lost `SENTIS_ANALYTICS_ENABLED`). This falsified the then-current explanation that a PlayMode build-target switch is what rewrites it.
+
+  **RESOLVED 2026-08-24 — and the mechanism was never actually unknown.** This file claimed it was; a comment in `BlockiverseProjectBootstrapper.cs` (just above `BlockiverseScriptingDefineSymbols`) had described it the whole time: **Sentis (`com.unity.ai.inference`) manages `SENTIS_ANALYTICS_ENABLED` from the machine's EditorAnalytics opt-in, and App UI (`com.unity.dt.app-ui`) manages `APP_UI_EDITOR_ONLY` from its settings asset. Both add and remove their define on whichever build target is active**, so the Android and Standalone lists drift apart depending on what was active when the editor last ran — which is why an EditMode-only run rewrites them and why no PlayMode explanation was ever needed. `ApplyScriptingDefineSymbols` preserves whatever is already there, so the bootstrapper never fights them. Worth noting how this went wrong: two sessions reasoned about the trigger from run-mode correlations without grepping the repo for the define names, and the answer was a comment away.
+
+  **Both owning packages were removed on 2026-08-24** (`com.unity.ai.inference` and, with it, its sole-child `com.unity.dt.app-ui`; `com.unity.ai.assistant` went at the same time). Nothing installed now moves either define, so this churn should stop. **Not yet confirmed across runs** — the two defines are still sitting in `ProjectSettings.asset` as orphaned literals that nothing owns or reads, preserved because `ApplyScriptingDefineSymbols` preserves what it finds. Keep diffing the tree; if a define moves after this, the explanation above is wrong again. Removing the two dead strings is safe but unnecessary cleanup — no code reads them and no test asserts them.
+
+The honest summary: check the whole tree after **every** run, EditMode included; a clean tree on one run predicts nothing about the next. It is easy to commit by accident because a bootstrapper rerun legitimately rewrites URP assets, so the deletion can look like part of a regeneration diff.
 - Use the committed local scripts as the repeatable Unity validation source of truth. `scripts/unity/run-tests.sh` remains the required EditMode and PlayMode validation command.
-- Unity CLI (`unity`, installed at `~/.unity/bin`; experimental) is available as local developer tooling. Run `unity pipeline list` before any batchmode command to confirm no Unity Editor already has the project open — a second instance fails to launch. `unity test` and `unity build` may be used for targeted runs and CI-style builds, but the committed scripts above remain the acceptance gate. Do not install the Unity Pipeline package (`unity pipeline install`, which edits `Packages/manifest.json`) without explicit approval; treat it like MCP for Unity and Unity Skills — local-only, never committed.
+- Unity CLI (`unity`, installed at `~/.unity/bin`; experimental) is available as local developer tooling. Run `unity pipeline list` before any batchmode command to confirm no Unity Editor already has the project open — a second instance fails to launch. `unity test` and `unity build` may be used for targeted runs and CI-style builds, but the committed scripts above remain the acceptance gate. Do not install the Unity Pipeline package (`unity pipeline install`, which edits `Packages/manifest.json`) without explicit approval; treat it like MCP for Unity — local-only, never committed.
 - Use the globally installed Horizon Debug Bridge CLI, `hzdb`, for Meta Quest device work instead of enabling the hzdb MCP server in the base Codex config.
 - Verify Quest-device tooling before device work with `hzdb --version` and `hzdb device list`.
 - Use `adb` directly only when `hzdb` does not expose the needed operation or when comparing behavior against lower-level Android tooling; document why the fallback was needed.
 - Use GitHub CLI for best-effort GitHub Project updates and cleanup because connector tools may not expose all project mutations.
+
+### Batchmode Aborts With "another Unity instance is running"
+
+**Check this before reaching for the licensing recovery below.** It presents as a stuck-Unity
+problem, the licensing recovery does not fix it, and that recovery is destructive to every other
+worktree — so running it here costs someone else's build for nothing.
+
+```txt
+Aborting batchmode due to fatal error:
+It looks like another Unity instance is running with this project open.
+Multiple Unity instances cannot open the same project.
+```
+
+Measured 2026-08-23: **no Unity editor had the project open.** The holder of
+`Temp/UnityLockfile` was `adb` (`adb -L tcp:5037 fork-server server`), which had inherited the
+open file descriptor from the Unity process that spawned it for Android platform support and then
+outlived its parent. The lock persists as long as that adb lives.
+
+Distinguishing symptoms: the run exits quickly, writes **no** NUnit results file, and licensing
+succeeds normally in the log — nothing like the `505` / protocol-version failures below.
+
+```sh
+# Who actually holds it? Usually adb, not Unity.
+lsof Temp/UnityLockfile
+
+# Confirm no editor genuinely has the project open (name-anchored; cannot match your own shell)
+for p in $(pgrep -x Unity); do ps -p "$p" -o command=; done
+
+# Fix: drop the stale lockfile. Temp/ is gitignored and regenerated, and a fresh inode makes the
+# orphaned adb fd irrelevant.
+rm -f Temp/UnityLockfile
+```
+
+Prefer deleting the lockfile over killing adb: adb is a **shared per-user daemon**, so another
+worktree's session may be relying on it. Killing it also works and it respawns on demand, but it
+is the more invasive option and the same "never disturb another run's tooling" rule applies.
 
 ### Unity Licensing Recovery
 
@@ -294,6 +363,13 @@ scripts/unity/run-tests.sh
 scripts/unity/run-tests.sh --platform EditMode \
   --filter "Blockiverse.Tests.EditMode.SomeClass.SomeTest" --results-name Single
 
+# THE FULL GATE (no args) IS THE LAST STEP, NOT THE ITERATION LOOP. It takes 15-30 minutes and
+# scales with machine load from other concurrent sessions/worktrees. Iterate with --filter (above)
+# on every write/test/verify/revert cycle; run the full gate once, at the end, before commit or PR.
+# Full workflow, including the batched mutation-testing pattern that replaces "one full gate per
+# mutation" with "one filtered run for all mutations + one final full gate":
+# docs/testing/README.md, "Iterating: Filtered Runs, Not Full Gates" and "Mutation-Verify Loop".
+
 # Builds (entry points in Assets/Blockiverse/Scripts/Editor/BlockiverseBuildSmoke.cs)
 scripts/unity/build-development-apk.sh            # dev APK; runs the bootstrapper first
 # Release-signed APKs are built by .github/workflows/quest-alpha.yml only.
@@ -349,13 +425,20 @@ break and expensive to debug:
 
 Bottom → top; an assembly may only reference those below it:
 
-- **Core** (logging facade `BlockiverseLog`, canonical paths/constants in `BlockiverseProject`) and **Networking** (thin LAN session over NetworkManager/UnityTransport — no gameplay knowledge)
+- **Core** (logging facade `BlockiverseLog`, canonical paths/constants in `BlockiverseProject`) — references nothing
 - **Voxel** — the data model: `VoxelWorld` (flat `BlockId[]`, `BlockChanged` event, changed-block delta set), `BlockRegistry`, `BlockMutationAuthority` (the single validation gate for world edits), `ChunkDeltaLog`, `DeterministicHash`
 - **Survival.Health** (vitals/hazards; note its rootNamespace is `Blockiverse.Survival`) and **WorldGen** (terrain presets, seed-pure `SurvivalBiomeResolver`, structures/vegetation, Markov `WeatherService`, `WorldConstants`: ChunkSize 16, WorldMaxY 127, SeaLevel 64, 20 ticks/s, 24000-tick day)
 - **Survival** — items/inventory/crafting/stations/harvest/farming; `ItemRegistry`, `ContainerInventoryStore`
-- **Persistence** (`WorldSaveService` — see save format below) and **MetaAvatars** (Meta Avatars streaming over Netcode at 15 Hz)
-- **Gameplay** — the integration hub: `CreativeWorldManager` (central world owner for both modes; `Awake()` generates a default world), `MultiplayerChunkAuthoritySync` (block mutations + late-join world distribution), `MultiplayerSurvivalSync` (the entire survival economy command channel), rendering/lighting (`VoxelWorldRenderer`, `ChunkMeshBuilder`, `VoxelSkyLightMap`, `WorldTimeClock`)
-- **VR** (XR rig, input, comfort) → **UI** (menu router/panels + `BlockiverseWorldSessionController`) → **Editor** (the bootstrapper; editor-only)
+- **Persistence** (`WorldSaveService` — see save format below)
+- **Networking** — the LAN session over NetworkManager/UnityTransport **and the host-authoritative gameplay channels**: `MultiplayerChunkAuthoritySync` (block mutations + late-join world distribution), `MultiplayerSurvivalSync` (the entire survival economy command channel), `WorldTimeClock`. It references Voxel, WorldGen, Survival, and Persistence — this is **not** a bottom-layer transport shim, and gameplay types are legitimately visible to it.
+- **WorldRuntime** — world ownership, editing, and lighting: `CreativeWorldManager` (central world owner for both modes; `Awake()` generates a default world), `VoxelSkyLightMap`, `VoxelLightSampler`, `VoxelEmitterIndex`, `WorldEditService`, environment/lightning solvers
+- **MetaPlatform** (age category, entitlement/feature policy) → **MetaAvatars** (Meta Avatars streaming over Netcode at 15 Hz)
+- **Gameplay** — the presentation/integration hub: rendering and meshing (`VoxelWorldRenderer`, `ChunkMeshBuilder`, `BlockVisualAtlas`), plus the glue that binds the layers below into a playable world
+- **Server** — headless dedicated-server entry points (Core, Networking, Persistence, Survival, Voxel, WorldGen, WorldRuntime)
+- **VR** (XR rig, input, comfort) and **UI** (menu router/panels + `BlockiverseWorldSessionController`) are **siblings** above Gameplay — neither references the other. **UI.Toolkit** depends only on Core. **Editor** (the bootstrapper; editor-only) sits above everything.
+
+To re-derive this graph rather than trusting the prose, read the `references` arrays of
+`Assets/Blockiverse/Scripts/**/Blockiverse.*.asmdef` — they are the authority.
 
 EditMode tests live per-area under `Assets/Blockiverse/Tests/EditMode/`, PlayMode (incl. real Netcode host/client sessions) under `Tests/PlayMode/`.
 
@@ -364,6 +447,9 @@ EditMode tests live per-area under `Assets/Blockiverse/Tests/EditMode/`, PlayMod
 - **No `InternalsVisibleTo` anywhere.** `internal` members are invisible across assemblies — cross-assembly APIs must be `public`. This has shipped compile breaks before; the asmdef boundary, not the namespace, is what matters (Survival.Health shares the `Blockiverse.Survival` namespace but not the assembly).
 - **Engine-free simulation core.** Voxel, Survival, Survival.Health, and WorldGen have no `UnityEngine` dependency. This is what allows world generation on background threads (`Task.Run` in late-join sync) and plain NUnit EditMode tests. Do not introduce `UnityEngine` into these assemblies.
 - **Host authority.** The host owns chunk generation, mutation validation/commit (`ChunkAuthorityBoundary` flags), delta broadcast, late-join sync, all survival economy resolution (inventories, crafting, stations, drop rolls, shared crate), and multiplayer saves. Clients only send requests and mirror snapshots. Exception: each peer simulates its own vitals locally.
+- **The world simulation is the other exception, and it is easy to get wrong.** `CreativeWorldManager.OnWorldTick` runs leaf decay, sapling growth, wild regrowth, crop growth and fluid flow on **every peer**, ungated — environment mutations are deliberately never broadcast (nothing in `Networking/` subscribes to `BlockChanged`; `BroadcastDelta` fires only from the two player-mutation paths). It works because those sims are pure functions of `(seed, clock, world)`, so each peer independently computes the same answer. The container-loot path a hundred lines up in the same file *does* gate on `CanCommitMutations`, which makes the ungated tick look deliberate in the wrong direction.
+
+  **Adding a sim input that is not derivable from `(seed, clock, world)` — anything from player history — breaks lockstep silently.** It must be replicated, and there are **three** client apply paths that all need it: `TryApplyChunkDelta`, the late-join snapshot loop, and `HandleMutationResultMessage`. All three route through `VoxelWorld.SetBlock`, which **clears** per-block state at the position it writes, so state must be restored *after* it. Gating the sim to the host instead does not work: the host's own sim removals are not broadcast either, so clients would keep blocks the host destroyed. This is not hypothetical — a host-only `BlockState.Persistent` bit shipped exactly this desync and was caught by adversarial review, not by the suite, which has no host/client divergence test.
 - **Determinism.** Everything seed-derived goes through `DeterministicHash.Hash/UnitRoll` (distinct salts per system) or the seed-pure biome resolver; simulation advances only on `WorldTimeClock` ticks; weather RNG state and tick counts travel in sync snapshots so late-joiners stay in lockstep. Wall-clock randomness is allowed only where host-authoritative (harvest drop rolls). Never put live sim state on background threads — only pure generation.
 - **Canonical string IDs** (from the rulesets, e.g. `meadow_turf`) are the persistence and wire vocabulary; saves store canonical strings and registry hashes. Int `BlockId` values are in-memory only. New code, UI labels, and saves must use canonical IDs.
 - **Scenes and prefabs are generated, not hand-edited.** `BlockiverseProjectBootstrapper.Run()` (menu: Blockiverse → Bootstrap Unity Quest Project, 4K lines, idempotent) produces the Boot scene, XR rig prefab, network prefabs, player settings, materials, and input actions. To change scene/prefab wiring, change the bootstrapper and rerun it.
@@ -374,7 +460,7 @@ Boot scene carries the XR rig (with all world-space menus and both controllers' 
 
 ### Save format
 
-`<name>.vxlworld/` directory (schema v4): `manifest.json` (pretty-printed, registry hashes), `dimensions/main/` (dimension, environment, containers, `regions/r.<rx>.<rz>.vxlr`), `players/local_player.json`. Regions store **only changed blocks** (delta vs. terrain regenerated from seed) as 16-block sections with string palettes. All writes are atomic (`.tmp` → move/replace; regions dir swap keeps a `.bak` recovery window). Legacy v1–v3 saves fail fast — no migrations pre-release. Single-player saves live under `Application.persistentDataPath/Saves`; the multiplayer host world is `multiplayer-world.vxlworld`.
+`<name>.vxlworld/` directory (schema v5): `manifest.json` (pretty-printed, registry hashes), `dimensions/main/` (dimension, environment, containers, `regions/r.<rx>.<rz>.vxlr`), `players/local_player.json`. Regions store **only changed blocks** (delta vs. terrain regenerated from seed) as 16-block sections with string palettes. All writes are atomic (`.tmp` → move/replace; regions dir swap keeps a `.bak` recovery window). Regions also carry an optional per-block `BlockStates` array (v5). Legacy v1–v4 saves fail fast — no migrations pre-release. Single-player saves live under `Application.persistentDataPath/Saves`; the multiplayer host world is `multiplayer-world.vxlworld`.
 
 ## Documentation currency
 

@@ -116,6 +116,25 @@ namespace Blockiverse.Gameplay
         public bool TryEvaluateEnvironment(BlockPosition position, out EnvironmentState environment) =>
             TryEvaluateEnvironmentAt(position.Y, BiomeIndexAt(position.X, position.Z), out environment);
 
+        /// <summary>Whether the active weather is reaching this world position as SNOW.
+        ///
+        /// Returns a bool rather than an EnvironmentState on purpose: the caller is the creative
+        /// tools UI, and Blockiverse.UI does not reference Blockiverse.WorldGen. Handing back the
+        /// state would drag PrecipitationKind and EnvironmentState across an assembly boundary the
+        /// layering deliberately keeps closed.</summary>
+        public bool IsPrecipitationSnowAt(Vector3 worldPosition)
+        {
+            var cell = new BlockPosition(
+                Mathf.FloorToInt(worldPosition.x),
+                Mathf.FloorToInt(worldPosition.y),
+                Mathf.FloorToInt(worldPosition.z));
+
+            if (!TryEvaluateEnvironment(cell, out EnvironmentState environment))
+                return false;
+
+            return environment.Precipitation == PrecipitationKind.Snow;
+        }
+
         bool TryEvaluateEnvironmentAt(int altitudeY, int biomeIndex, out EnvironmentState environment)
         {
             if (weatherService == null)
@@ -216,7 +235,7 @@ namespace Blockiverse.Gameplay
             if (world == null)
                 return;
 
-            new VegetationService().PlaceStandardTree(world, basePos, trackChange: true);
+            new VegetationService().PlaceCrownbranchTree(world, basePos, trackChange: true);
         }
 
         // Places a seeded structure at the given base position (tracked as an edit).
@@ -536,7 +555,10 @@ namespace Blockiverse.Gameplay
             if (settings != null && World != null && GenerationPreset == CreativeWorldGenerationPreset.SurvivalLite)
             {
                 biomeResolver = new SurvivalBiomeResolver(settings.Seed, World.Bounds.Height);
-                vegetationService.Configure(biomeResolver.BiomeIndexAt);
+                // The seed rides along because Windbranch bends downwind and the wind is
+                // seed-derived: a sapling maturing on a highland ridge has to bend the same way as
+                // the wild trees generated around it.
+                vegetationService.Configure(biomeResolver.BiomeIndexAt, settings.Seed);
             }
 
             vegetationService.ScanAndTrackSaplings(World);

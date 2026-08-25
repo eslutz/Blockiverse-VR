@@ -22,6 +22,12 @@ namespace Blockiverse.Voxel
         readonly BlockId[] blocks;
         readonly Dictionary<BlockPosition, BlockChange> changedBlocks = new();
 
+        // Per-block state (save schema v5). SPARSE on purpose: the overwhelming majority of blocks
+        // carry BlockState.Default, and a parallel array over the whole world would cost one int
+        // per cell to record almost nothing. Entries are removed when a block changes, so state can
+        // never outlive the block that owned it and re-attach to whatever is placed next.
+        readonly Dictionary<BlockPosition, int> blockStates = new();
+
         public VoxelWorld(WorldBounds bounds, int chunkSize, int seed)
         {
             if (chunkSize <= 0)
@@ -45,6 +51,25 @@ namespace Blockiverse.Voxel
             return blocks[ToIndex(position)];
         }
 
+        /// <summary>Per-block state bits (save schema v5), or BlockState.Default.</summary>
+        public int GetBlockState(BlockPosition position)
+        {
+            return blockStates.TryGetValue(position, out int state) ? state : BlockState.Default;
+        }
+
+        /// <summary>Sets per-block state. Storing Default removes the entry rather than recording a
+        /// zero, so the sparse map only ever holds blocks that actually differ.</summary>
+        public void SetBlockState(BlockPosition position, int state)
+        {
+            if (state == BlockState.Default)
+                blockStates.Remove(position);
+            else
+                blockStates[position] = state;
+        }
+
+        /// <summary>Every block position carrying non-default state. Persistence enumerates this.</summary>
+        public IReadOnlyDictionary<BlockPosition, int> BlockStates => blockStates;
+
         public void SetBlock(BlockPosition position, BlockId block)
         {
             SetBlock(position, block, trackChange: true);
@@ -61,6 +86,13 @@ namespace Blockiverse.Voxel
                 return;
 
             blocks[index] = block;
+
+            // The block here changed, so any state the OLD block carried is stale. Without this a
+            // player-placed (persistent) leaf that is broken and replaced would hand its exemption
+            // to whatever is placed next, and the new block would silently inherit behaviour
+            // nobody set on it.
+            blockStates.Remove(position);
+
             var change = new BlockChange(position, previous, block);
 
             if (trackChange)

@@ -45,6 +45,10 @@ Shader "Blockiverse/Voxel Lit"
         [HideInInspector] _DstBlend("__dst", Float) = 0.0
         [HideInInspector] _ZWrite("__zw", Float) = 1.0
         [HideInInspector] _Cull("__cull", Float) = 2.0
+
+        // Alpha-cutout threshold, read only when _BLOCKIVERSE_CUTOUT is enabled by
+        // BlockVisualAtlas.CreateCutoutMaterial. Terrain never enables the keyword.
+        _Cutoff("Alpha Cutoff", Range(0, 1)) = 0.5
     }
 
     SubShader
@@ -115,7 +119,11 @@ Shader "Blockiverse/Voxel Lit"
             // references this shader (BlockVisualAtlas swaps it in at runtime), so a
             // shader_feature variant would be stripped from the Android player and water would
             // render as opaque terrain on device while looking correct in the editor.
-            #pragma multi_compile_local _ _BLOCKIVERSE_WATER
+            //
+            // Water, cutout and sky are four states on ONE line, not independent keywords: they
+            // are mutually exclusive (no material is more than one), so this compiles 4 variants
+            // where separate multi_compile_local lines would compile 8.
+            #pragma multi_compile_local _ _BLOCKIVERSE_WATER _BLOCKIVERSE_CUTOUT _BLOCKIVERSE_SKY
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -275,7 +283,69 @@ Shader "Blockiverse/Voxel Lit"
                 // would sample the LEFT eye's light clusters.
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
+                #if defined(_BLOCKIVERSE_SKY)
+                    // SKY GEOMETRY -- the cloud deck and the horizon skirt -- is unlit, takes its
+                    // colour STRAIGHT FROM THE VERTEX, and never samples the atlas at all.
+                    //
+                    // Vertex colour, because both surfaces work by becoming indistinguishable from
+                    // the sky at their outer edge and that means matching an exact colour. The lit
+                    // path below cannot deliver one: vertex colour there is (sky exposure, emitter
+                    // reach, self emission), self emission is a SCALAR added equally to all three
+                    // channels, and what lands on screen is the TEXTURE's colour at some
+                    // brightness. A pale blue vertex colour renders as a slightly dimmer white.
+                    // (Which is also why the deck's storm grey never reached the screen before
+                    // this: every weather state drew the same white cloud, dimmer or brighter.)
+                    //
+                    // NO TEXTURE FETCH, and that is a correctness fix rather than an optimisation.
+                    // The deck used to multiply by one hand-picked "white" texel of the atlas --
+                    // and that texel is white in three of the four texture sets and (194, 204, 209)
+                    // in `original`, so selecting that set tinted the whole sky 20% dark and
+                    // blue. For the skirt the same tint would have been worse than cosmetic: its
+                    // rim has to land on exactly the aerial colour to disappear, and a rim
+                    // multiplied by 0.76 is a visible line all the way round the world. Sampling
+                    // nothing makes the atlas irrelevant to the sky, which is what it should
+                    // always have been.
+                    //
+                    // MixFog closes the last gap: fog resolves to the aerial colour and both rims
+                    // are authored to that same colour, so a far rim lands on it from both
+                    // directions at once whatever the current fog density is.
+                    //
+                    // Skipping the sample also skips a texture fetch and the entire lighting solve
+                    // on the largest fill in the frame, which on a tile GPU is not nothing.
+                    //
+                    // sRGB -> LINEAR HERE, and this conversion is load-bearing. The project renders
+                    // in linear colour space, where the two routes a colour takes into a shader
+                    // disagree: Material.SetColor converts, mesh.colors does not. (That vertex
+                    // colours pass through raw is not an assumption -- the lit path below packs sky
+                    // exposure and emitter reach into them as unencoded 0..1 SCALARS and multiplies
+                    // them linearly, which would be systematically wrong if Unity converted.)
+                    //
+                    // So an unconverted rim renders far brighter than the sky it must vanish into:
+                    // at midday about 80% too bright in red, and at midnight over 12x, because the
+                    // sRGB curve is steepest in the darks -- a lit grey sea and grey clouds under a
+                    // black sky. It also defeats the deck's weather contrast, since storm grey
+                    // (0.28) is meant to be linear 0.065 and would draw as a mid grey instead.
+                    //
+                    // Converted in the SHADER rather than in C# on purpose: mesh colours are an
+                    // 8-bit stream, and 8 bits of LINEAR quantises the darks badly (a night aerial
+                    // colour of 0.0057 linear rounds to 1/255, a 30% error), while 8 bits of sRGB
+                    // is exactly what sRGB encoding exists to carry.
+                    half3 skyColor = input.color.rgb;
+
+                    #ifndef UNITY_COLORSPACE_GAMMA
+                        skyColor = SRGBToLinear(skyColor);
+                    #endif
+
+                    return half4(MixFog(skyColor, input.fogCoord), 1.0h);
+                #endif
+
                 half4 sampled = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
+
+                // Foliage cutout. Clip before any lighting work so discarded fragments cost as
+                // little as possible; on a tile GPU the alpha test has already disabled early-Z
+                // for this draw, so shading a fragment we are about to throw away is pure waste.
+                BlockiverseClipFoliage(sampled.a);
+
                 half3 normalWS = NormalizeNormalPerPixel(input.normalWS);
 
                 // Vertex colour carries the baked per-face light data from VoxelLightSampler:
@@ -489,7 +559,9 @@ Shader "Blockiverse/Voxel Lit"
             ZWrite On
             ZTest LEqual
             ColorMask 0
-            Cull Back
+            // Material-driven, not hardcoded Back: cutout foliage renders two-sided, and a
+            // single-sided shadow pass would drop the shadow of every back-facing cross quad.
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma target 3.5
@@ -499,6 +571,9 @@ Shader "Blockiverse/Voxel Lit"
             #pragma multi_compile_instancing
             // Directional and punctual shadow casters use different normal-bias formulas.
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+            // Only the cutout state matters here — water casts no shadow — so this is 2 variants,
+            // not the 3 the ForwardLit pass needs.
+            #pragma multi_compile_local _ _BLOCKIVERSE_CUTOUT
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
@@ -509,10 +584,20 @@ Shader "Blockiverse/Voxel Lit"
             float3 _LightDirection;
             float3 _LightPosition;
 
+        #if defined(_BLOCKIVERSE_CUTOUT)
+            // Only the cutout variant samples anything; the opaque shadow variant stays exactly as
+            // it was, with no texture fetch and no extra interpolator.
+            TEXTURE2D(_BaseMap);
+            SAMPLER(sampler_BaseMap);
+        #endif
+
             struct ShadowAttributes
             {
                 float4 positionOS : POSITION;
                 float3 normalOS : NORMAL;
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                float2 uv : TEXCOORD0;
+            #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -521,6 +606,9 @@ Shader "Blockiverse/Voxel Lit"
             struct ShadowVaryings
             {
                 float4 positionCS : SV_POSITION;
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                float2 uv : TEXCOORD0;
+            #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -546,12 +634,20 @@ Shader "Blockiverse/Voxel Lit"
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
 
                 output.positionCS = GetShadowPositionHClip(input);
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+            #endif
                 return output;
             }
 
             half4 ShadowFrag(ShadowVaryings input) : SV_TARGET
             {
                 UNITY_SETUP_INSTANCE_ID(input);
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                // Clip with the same threshold ForwardLit uses, or a lacy canopy casts the shadow
+                // of the solid cube it replaced — worse than the opaque leaves it is fixing.
+                BlockiverseClipFoliage(SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).a * _BaseColor.a);
+            #endif
                 return 0;
             }
             ENDHLSL
@@ -565,26 +661,39 @@ Shader "Blockiverse/Voxel Lit"
 
             ZWrite On
             ColorMask R
-            Cull Back
+            // Material-driven for the same reason as ShadowCaster: two-sided cutout geometry.
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma target 3.5
             #pragma vertex DepthVert
             #pragma fragment DepthFrag
             #pragma multi_compile_instancing
+            #pragma multi_compile_local _ _BLOCKIVERSE_CUTOUT
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "BlockiverseVoxelLitInput.hlsl"
 
+        #if defined(_BLOCKIVERSE_CUTOUT)
+            TEXTURE2D(_BaseMap);
+            SAMPLER(sampler_BaseMap);
+        #endif
+
             struct DepthAttributes
             {
                 float4 positionOS : POSITION;
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                float2 uv : TEXCOORD0;
+            #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct DepthVaryings
             {
                 float4 positionCS : SV_POSITION;
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                float2 uv : TEXCOORD0;
+            #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -597,6 +706,9 @@ Shader "Blockiverse/Voxel Lit"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+            #endif
                 return output;
             }
 
@@ -604,6 +716,9 @@ Shader "Blockiverse/Voxel Lit"
             {
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+            #if defined(_BLOCKIVERSE_CUTOUT)
+                BlockiverseClipFoliage(SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).a * _BaseColor.a);
+            #endif
                 return 0;
             }
             ENDHLSL

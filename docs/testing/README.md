@@ -192,6 +192,66 @@ scripts/unity/run-tests.sh \
   --results-name input-reference-wiring
 ```
 
+### Iterating: Filtered Runs, Not Full Gates
+
+**The full gate (`scripts/unity/run-tests.sh` with no arguments) is expensive — 15-30 minutes,
+scaling with machine load from concurrent sessions/worktrees — and using it as the iteration loop
+is what makes development grind to a halt.** Measured 2026-08-25: a session doing normal
+write-code / write-test / verify-the-test-can-fail / revert work ran the full gate roughly a dozen
+times in one session, several of them purely to re-confirm green after an unrelated one-line fix.
+
+**Use a filtered run for every iteration inside a change.** Reserve the full gate for the *last*
+check before commit/PR, and for anything touching save schema, networking, or authority (see Test
+Selection Rules below — those still want the full gate before review because cross-subsystem
+regressions do not show up in a filter).
+
+```sh
+# Iterating on a class (or several, semicolon-separated): seconds, not minutes.
+scripts/unity/run-tests.sh --platform EditMode   --filter "Blockiverse.Tests.EditMode.BlockiverseCloudDeckEditModeTests;Blockiverse.Tests.EditMode.VoxelSkyLightCanopyEditModeTests"   --results-name focus
+
+# Only run PlayMode when the change actually touches Unity-connected systems. Most mutation/revert
+# cycles on pure C# logic never need it — running it anyway roughly doubles the wait for nothing.
+```
+
+**Known gap: some EditMode tests are order- and scene-dependent and give false failures when
+filtered.** Anything that resolves `Camera.main` (`BlockiverseRigPlacement.*`, at least) returns
+whatever camera the *session* happens to have loaded, not the one the test just built, so the same
+test passes in the full suite and fails when filtered — including tests nobody touched. Treat a
+filtered failure in one of these as inconclusive, not as a regression, until confirmed against the
+full suite. Fixing the underlying order-dependence (inject the camera rather than resolving
+`Camera.main`) removes the exception; until then, don't chase a filtered-only failure as if it were
+real.
+
+**Never delete `Library/ScriptAssemblies` to "fix" a mismatch between what the code says and what a
+test observed.** It is almost never staleness — Unity recompiles automatically on a batchmode
+launch — and reaching for it is how a real bug gets waved through as an environment problem.
+Confirm with `grep 'error CS' <log>` and a fresh results XML mtime before suspecting the build at
+all; only after that, and only as a last resort, consider a clean reimport.
+
+### Mutation-Verify Loop (proving an assertion can fail)
+
+Per "Writing Tests That Can Actually Fail" below, a new assertion is not evidence until you have
+watched it go red. Doing this ONE MUTATION AT A TIME against the full gate is the single biggest
+avoidable source of gate runs. Batch it instead:
+
+1. Write every planned mutation as a scripted, reversible text swap (a small Python script using
+   exact-count anchored replacements, not sed) BEFORE writing any of them by hand. For each
+   mutation, name the exact test(s) it must turn red. Keep the mutation script itself outside
+   `Assets/` (the scratchpad, not the repo) — it is scaffolding, not shipped code.
+2. Apply every mutation for the current unit of work in one pass.
+3. Run ONE filtered EditMode pass over just the affected test classes (not the full gate — a
+   mutation that only breaks EditMode-visible behavior does not need PlayMode to prove it).
+4. Diff observed failures against the prediction. Anything predicted-but-green is a test that
+   cannot fail; anything red-but-not-predicted is either a wrong prediction or a real bug the
+   mutation exposed by accident — resolve before proceeding, don't wave it through.
+5. Revert all mutations in one pass (the same script, `revert` instead of `apply`) and confirm
+   `git diff` is byte-identical to before step 1 — the anchored-replacement approach makes this
+   exact rather than "close enough."
+6. Only THEN run the full gate once, as the final confirmation — not once per mutation.
+
+This turns "N mutations -> N full gates" into "N mutations -> 1 filtered run + 1 full gate,"
+independent of N.
+
 ### Unity Full Gate
 
 Run the full local Unity gate before moving any Unity-impacting pull request to review or merge, before creating a known-good `kg/...` checkpoint for Unity work, and before release-candidate validation:
@@ -255,16 +315,35 @@ hzdb --version
 hzdb device list
 ```
 
-`scripts/unity/build-development-apk.sh` derives local development
-`versionName` from `ProjectSettings/BlockiverseVersion.txt` as
-`MAJOR.MINOR.PATCH-dev.local.YYYYMMDDHHMMSS` and derives Android `versionCode`
-as seconds since `2020-01-01T00:00:00Z`. Override with
-`UNITY_ANDROID_VERSION_NAME` and `UNITY_ANDROID_VERSION_CODE` only when a test
-requires specific package metadata. Unity MCP builds should invoke
-`Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid()` or call
-`Blockiverse.Editor.BlockiverseBuildSmoke.ConfigureLocalDevelopmentAndroidVersion()`
-before a generic Android `manage_build` so the open-Editor build path does not
-fall back to `ProjectSettings.asset` versionCode `1`.
+`scripts/unity/build-development-apk.sh` does **not** stamp a version (ADR 0005).
+A development APK keeps whatever `ProjectSettings.asset` already carries, so
+every local build reports the same version and the file stops churning. Set
+`UNITY_ANDROID_VERSION_NAME` and `UNITY_ANDROID_VERSION_CODE` when a test
+genuinely requires specific package metadata; the script forwards them only
+when they are set.
+
+One-time transition: a headset still carrying a build from before this policy has a
+timestamped `versionCode` far higher than the committed one, so Android refuses the
+install as `INSTALL_FAILED_VERSION_DOWNGRADE`. Pass `--downgrade` once:
+
+```sh
+hzdb app install -r -g --downgrade Builds/Android/BlockiverseVR-development.apk
+```
+
+After that every local build shares the committed code and a plain `-r` replace works,
+because Android rejects only a LOWER code, never an equal one.
+
+This also means two locally built APKs can join each other. `Application.version`
+is the join gate — `BlockiverseNetworkSession` refuses a peer whose version
+differs — so the previous timestamped stamp left two dev builds made minutes
+apart unable to connect, which is precisely the LAN case a dev build exists to
+test.
+
+Unity MCP builds should invoke
+`Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid()`. There is no
+longer a separate call to stamp a development version first: falling back to the
+committed `ProjectSettings.asset` values is now the intended behaviour, not the
+failure it used to be.
 
 `hzdb` is installed under the active default `nvm` Node with `npm install -g @meta-quest/hzdb@1.2.1`; the expected current executable path is `/Users/ericslutz/.nvm/versions/node/v24.16.0/bin/hzdb`. Prefer `hzdb` for Quest device discovery, APK install and launch, log capture, screenshots, screen recordings, file transfer, and performance captures. If `hzdb device list` cannot see a connected Quest from a Codex sandboxed shell, rerun physical-device commands outside the sandbox before treating validation as blocked. Use the Meta XR Simulator or physical Quest 3/Quest 3S validation flow when a behavior cannot be proven by EditMode or PlayMode tests alone. Use OVR Metrics or equivalent captures for Quest performance work, and store summaries under `docs/testing/performance/`.
 

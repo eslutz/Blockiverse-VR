@@ -126,6 +126,48 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void PassableLayerIsPinnedToIndexFifteenWithTheCanonicalName()
+        {
+            Object[] tagManagerAssets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset");
+
+            Assert.That(tagManagerAssets, Is.Not.Null.And.Not.Empty, "TagManager settings asset must be available.");
+
+            var tagManager = new SerializedObject(tagManagerAssets[0]);
+            tagManager.UpdateIfRequiredOrScript();
+            SerializedProperty layers = tagManager.FindProperty("layers");
+
+            Assert.That(layers, Is.Not.Null, "TagManager must expose its layers array.");
+            Assert.That(BlockiverseProject.PassableLayerIndex, Is.InRange(8, layers.arraySize - 1),
+                "The passable layer must live in the user-assignable layer range.");
+            // VoxelWorldRenderer resolves this layer BY NAME and silently falls back to the raw
+            // index when the lookup fails. Without this assertion an unnamed layer 15 would let
+            // the fallback mask the fact that the bootstrapper never registered it.
+            Assert.That(layers.GetArrayElementAtIndex(BlockiverseProject.PassableLayerIndex).stringValue,
+                Is.EqualTo(BlockiverseProject.PassableLayerName),
+                "The bootstrapper must pin the passable layer name at the canonical index so LayerMask.NameToLayer, the culling mask, and the cleared collision-matrix row all address the same layer.");
+        }
+
+        [Test]
+        public void InteractionRayMaskIncludesPassableAndTeleportMaskDoesNot()
+        {
+            Assert.That(BlockiverseProject.PassableLayerMask,
+                Is.EqualTo(1 << BlockiverseProject.PassableLayerIndex),
+                "The passable mask must be the single bit for its layer index.");
+
+            // The asymmetry IS the contract: plants must be mineable, and a teleport arc must pass
+            // through them to the ground. One shared mask cannot express both.
+            Assert.That(BlockiverseProject.VoxelInteractionRaycastLayerMask & BlockiverseProject.PassableLayerMask,
+                Is.Not.EqualTo(0),
+                "The interaction ray must reach passable vegetation or no plant can be targeted, mined or harvested.");
+            Assert.That(BlockiverseProject.VrUiRaycastLayerMask & BlockiverseProject.PassableLayerMask,
+                Is.EqualTo(0),
+                "The teleport/UI ray must NOT reach passable vegetation, or arcs land on top of grass instead of the ground beneath it.");
+            Assert.That(BlockiverseProject.VoxelGroundLayerMask & BlockiverseProject.PassableLayerMask,
+                Is.EqualTo(0),
+                "Gravity's ground mask must never see passable geometry, or the player stands on grass.");
+        }
+
+        [Test]
         public void FluidLayerCollidesWithNothingInThePhysicsMatrix()
         {
             Object[] dynamicsAssets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/DynamicsManager.asset");
@@ -146,17 +188,28 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(fluidRow, Is.EqualTo(0u),
                 "The fluid layer's collision row must be empty so the player's CharacterController sweeps through water instead of standing on it.");
 
+            // Passable vegetation is exempt for the same reason fluid is, so the "every other bit
+            // must survive" half of this test has to allow BOTH bits to be clear — otherwise it
+            // fails on every row the moment a second pass-through layer exists.
             uint fluidBit = 1u << BlockiverseProject.FluidLayerIndex;
+            uint passThroughBits = fluidBit | (1u << BlockiverseProject.PassableLayerIndex);
+
+            uint passableRow = unchecked((uint)collisionMatrix
+                .GetArrayElementAtIndex(BlockiverseProject.PassableLayerIndex).longValue);
+
+            Assert.That(passableRow, Is.EqualTo(0u),
+                "The passable layer's collision row must be empty so the player walks through vegetation instead of into it.");
 
             for (int layer = 0; layer < collisionMatrix.arraySize; layer++)
             {
-                if (layer == BlockiverseProject.FluidLayerIndex)
+                if (layer == BlockiverseProject.FluidLayerIndex ||
+                    layer == BlockiverseProject.PassableLayerIndex)
                     continue;
 
                 uint mask = unchecked((uint)collisionMatrix.GetArrayElementAtIndex(layer).longValue);
 
-                Assert.That(mask & fluidBit, Is.EqualTo(0u),
-                    $"Layer {layer} keeps a collision pair with the fluid layer; the matrix is symmetric, so any surviving bit re-solidifies water.");
+                Assert.That(mask & passThroughBits, Is.EqualTo(0u),
+                    $"Layer {layer} keeps a collision pair with a pass-through layer; the matrix is symmetric, so any surviving bit re-solidifies water or vegetation.");
 
                 // The half this test originally missed (caught in PR review): clearing the fluid
                 // bit must not disturb ANY other pair. An all-zero matrix satisfies the fluid
@@ -164,8 +217,8 @@ namespace Blockiverse.Tests.EditMode
                 // bootstrapper once produced exactly that when SerializedProperty.intValue
                 // clamped its negative unsigned write to zero. Every non-fluid bit of every
                 // non-fluid row must remain set.
-                Assert.That(mask | fluidBit, Is.EqualTo(uint.MaxValue),
-                    $"Layer {layer} lost non-fluid collision pairs (row 0x{mask:X8}); the fluid clear must leave every other layer pair colliding, or solid terrain stops being solid.");
+                Assert.That(mask | passThroughBits, Is.EqualTo(uint.MaxValue),
+                    $"Layer {layer} lost collision pairs (row 0x{mask:X8}); clearing the pass-through layers must leave every other layer pair colliding, or solid terrain stops being solid.");
             }
         }
 
@@ -341,23 +394,49 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void LocalDevelopmentBuildMetadataDoesNotFallBackToProjectSettingsVersionCode()
+        public void LocalDevelopmentBuildsDoNotStampAVersion()
         {
-            string buildSmoke = File.ReadAllText(BuildSmokePath);
             string buildScript = File.ReadAllText("scripts/unity/build-development-apk.sh");
-            var sampleUtc = new DateTime(2026, 6, 21, 12, 0, 0, DateTimeKind.Utc);
 
-            Assert.That(BlockiverseBuildSmoke.CreateLocalDevelopmentVersionName(sampleUtc),
-                Is.EqualTo("0.1.0-dev.local.20260621120000"));
-            Assert.That(BlockiverseBuildSmoke.CreateAndroidVersionCode(
-                    new DateTime(2020, 1, 1, 0, 0, 1, DateTimeKind.Utc)),
-                Is.EqualTo(1));
-            Assert.That(BlockiverseBuildSmoke.CreateAndroidVersionCode(sampleUtc), Is.GreaterThan(1));
-            StringAssert.Contains("CreateLocalDevelopmentVersionName(utcNow)", buildSmoke);
-            StringAssert.Contains("CreateAndroidVersionCode(utcNow)", buildSmoke);
-            StringAssert.Contains("1577836800", buildScript);
-            StringAssert.Contains("-blockiverseBuildVersionName \"$UNITY_ANDROID_VERSION_NAME\"", buildScript);
-            StringAssert.Contains("-blockiverseBuildVersionCode \"$UNITY_ANDROID_VERSION_CODE\"", buildScript);
+            // ADR 0005: a local development build keeps whatever ProjectSettings.asset already
+            // carries. The script used to synthesise "${base_version}-dev.local.$(date)" on every
+            // run, which rewrote a tracked file each build AND -- because
+            // BlockiverseNetworkSession refuses a join when the peer's Application.version differs
+            // -- left two dev APKs built minutes apart unable to connect to each other.
+            // Targets the ASSIGNMENT, not the prose. The first version of this asserted the script
+            // contained no "dev.local." anywhere, and then failed against the comment explaining
+            // why the synthesis was removed -- a test that forbids describing the thing it forbids
+            // doing.
+            StringAssert.DoesNotContain("UNITY_ANDROID_VERSION_NAME=\"${UNITY_ANDROID_VERSION_NAME:-", buildScript,
+                "The development build script must not synthesise a version name for itself.");
+            StringAssert.DoesNotContain("UNITY_ANDROID_VERSION_CODE=\"${UNITY_ANDROID_VERSION_CODE:-", buildScript,
+                "The development build script must not synthesise a version code for itself.");
+
+            // The version arguments may still be FORWARDED, but only when the caller sets them.
+            StringAssert.Contains("if [ -n \"${UNITY_ANDROID_VERSION_NAME:-}\" ]", buildScript,
+                "An explicit version override must still reach Unity.");
+            StringAssert.Contains("if [ -n \"${UNITY_ANDROID_VERSION_CODE:-}\" ]", buildScript);
+        }
+
+        [Test]
+        public void ReleaseWorkflowsAgreeOnTheAndroidVersionCodeEpoch()
+        {
+            // The epoch used to be pinned through a C# helper that only the local development path
+            // called. That helper is gone with the local stamp, so the convention now lives in the
+            // release workflows and ADR 0005 -- and it is duplicated between two workflow files,
+            // which is exactly the kind of magic number that drifts silently. A versionCode that
+            // moved would break Android upgrade ordering for every future upload.
+            const string epochSeconds = "1577836800";
+
+            foreach (string workflow in new[] { ".github/workflows/quest-ci.yml", ".github/workflows/quest-alpha.yml" })
+            {
+                Assert.That(File.Exists(workflow), Is.True, $"{workflow} is missing.");
+                StringAssert.Contains(epochSeconds, File.ReadAllText(workflow),
+                    $"{workflow} must derive Android versionCode from the 2020-01-01T00:00:00Z epoch.");
+            }
+
+            StringAssert.Contains(epochSeconds, File.ReadAllText("docs/adr/0005-release-versioning.md"),
+                "ADR 0005 must document the epoch the workflows actually use.");
         }
 
         [Test]

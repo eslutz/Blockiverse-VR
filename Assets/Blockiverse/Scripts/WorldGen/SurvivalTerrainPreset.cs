@@ -4,7 +4,10 @@ using Blockiverse.Voxel;
 
 namespace Blockiverse.WorldGen
 {
-    enum TerrainBiome { Meadow, Pinewild, Wetland, Drybrush, Dunes, Tundra, Highlands }
+    /// <summary>Canonical biome vocabulary (voxel_biome_vegetation_ruleset §7). Public because
+    /// BiomeVegetationProfile exposes it and EditMode tests assert per-biome profiles; this repo has
+    /// no InternalsVisibleTo, so anything reachable across an asmdef boundary must be public.</summary>
+    public enum TerrainBiome { Meadow, Pinewild, Wetland, Drybrush, Dunes, Tundra, Highlands }
 
     public sealed class SurvivalTerrainPreset
     {
@@ -17,6 +20,7 @@ namespace Blockiverse.WorldGen
         static readonly ProfilerMarker s_PlaceStructuresMarker = new ProfilerMarker("SurvivalTerrain.PlaceStructures");
         static readonly ProfilerMarker s_PlaceSparseVegetationMarker = new ProfilerMarker("SurvivalTerrain.PlaceSparseVegetation");
         static readonly ProfilerMarker s_PlaceWildPlantsMarker = new ProfilerMarker("SurvivalTerrain.PlaceWildPlants");
+        static readonly ProfilerMarker s_PlaceGroundCoverMarker = new ProfilerMarker("SurvivalTerrain.PlaceGroundCover");
         static readonly ProfilerMarker s_PlaceSurfaceResourceNodesMarker = new ProfilerMarker("SurvivalTerrain.PlaceSurfaceResourceNodes");
         static readonly ProfilerMarker s_ApplySpawnSafetyMarker = new ProfilerMarker("SurvivalTerrain.ApplySpawnSafety");
         static readonly ProfilerMarker s_PlaceEasterEggWatchpostMarker = new ProfilerMarker("SurvivalTerrain.PlaceEasterEggWatchpost");
@@ -110,6 +114,14 @@ namespace Blockiverse.WorldGen
             using (s_PlaceSurfaceResourceNodesMarker.Auto())
             {
                 PlaceSurfaceResourceNodes(world, surfaceHeights, biomeMap);
+            }
+
+            // LAST of the surface passes: groundcover fills the gaps left by trees, wild plants and
+            // resource nodes, and refuses any column that is already occupied. Running it earlier
+            // would have those passes overwrite it, silently thinning the layer.
+            using (s_PlaceGroundCoverMarker.Auto())
+            {
+                PlaceGroundCover(world, surfaceHeights, biomeMap);
             }
 
             using (s_ApplySpawnSafetyMarker.Auto())
@@ -602,10 +614,25 @@ namespace Blockiverse.WorldGen
             world.SetBlock(position, resource, trackChange: false);
         }
 
+        // §12 GROUND_COVER_SAMPLE_COUNT.
+        const int GroundCoverSampleCount = 96;
+
+        // Backstop for the density lever while it is unmeasured on device.
+        const int MaxGroundCoverPerChunk = 48;
+
+        // DISTINCT salts, and distinct from the wild-plant salt 2389. Regions store only changed
+        // blocks as a delta against regenerated terrain, so reusing a salt would silently change
+        // what every existing world looks like underneath its saved edits.
+        const int GroundCoverPositionSalt = 3571;
+        const int GroundCoverChanceSalt = 3583;
+        const int GroundCoverPickSalt = 3593;
+
         void PlaceSparseVegetation(VoxelWorld world, int[] surfaceHeights, TerrainBiome[] biomeMap)
         {
             WorldBounds bounds = world.Bounds;
             var vegetation = new VegetationService();
+            // Same seed the sapling path gets, so a wild Windbranch and a grown one bend alike.
+            vegetation.Configure(biomeAt: null, seed: settings.Seed);
 
             for (int x = 0; x < bounds.Width; x++)
             {
@@ -615,13 +642,13 @@ namespace Blockiverse.WorldGen
                         continue;
 
                     TerrainBiome biome = biomeMap[SurfaceIndex(x, z)];
-                    int treeDensityPercent = BiomeTreeDensityPercent(biome);
+                    int treeDensityPercent = BiomeVegetationProfiles.For(biome).TreeDensityPercent;
 
                     if (treeDensityPercent == 0)
                         continue;
 
                     // Tree density is in percent (0–100) gated against hash % 100u — unlike the
-                    // permille (0–1000) densities used by WildPlantForBiome and SurfaceNodeTable.
+                    // permille (0–1000) densities used by the vegetation profiles and SurfaceNodeTable.
                     // Changing the modulus or unit here changes generation for existing seeds.
                     uint hash = Hash(settings.Seed, x, 0, z, salt: 1301);
                     if (hash % 100u >= (uint)treeDensityPercent)
@@ -635,41 +662,15 @@ namespace Blockiverse.WorldGen
                     if (!world.Bounds.Contains(basePos) || world.GetBlock(basePos) != BlockRegistry.Air)
                         continue;
 
-                    PlaceBiomeTree(vegetation, world, basePos, biome);
+                    vegetation.PlaceBiomeTree(world, basePos, biome);
                 }
             }
         }
 
-        static void PlaceBiomeTree(VegetationService vegetation, VoxelWorld world, BlockPosition basePos, TerrainBiome biome)
-        {
-            switch (biome)
-            {
-                case TerrainBiome.Pinewild:   vegetation.PlaceConicalTree(world, basePos);  break;
-                case TerrainBiome.Wetland:    vegetation.PlaceWillowTree(world, basePos);   break;
-                case TerrainBiome.Drybrush:   vegetation.PlaceShrubTree(world, basePos);    break;
-                case TerrainBiome.Tundra:     vegetation.PlaceSparseTree(world, basePos);   break;
-                case TerrainBiome.Highlands:  vegetation.PlaceTallTree(world, basePos);     break;
-                case TerrainBiome.Dunes:      vegetation.PlaceShrubTree(world, basePos);    break;
-                default:                      vegetation.PlaceStandardTree(world, basePos); break;
-            }
-        }
+        // §9 species dispatch. Three carry mechanics beyond their silhouette, and all three need
+        // the WORLD rather than just a position, which is why they resolve here and not inside
+        // VegetationService.
 
-        // Per-biome tree density in percent (0–100), compared against hash % 100u in
-        // PlaceSparseVegetation. NOT permille: the rest of this file uses 0–1000 densities.
-        static int BiomeTreeDensityPercent(TerrainBiome biome)
-        {
-            return biome switch
-            {
-                TerrainBiome.Pinewild  => 55,
-                TerrainBiome.Meadow    => 25,
-                TerrainBiome.Wetland   => 20,
-                TerrainBiome.Tundra    => 10,
-                TerrainBiome.Highlands => 10,
-                TerrainBiome.Drybrush  => 8,
-                TerrainBiome.Dunes     => 3,
-                _                      => 0,
-            };
-        }
 
         // Scatters single-block wild plants (berrybush, reedgrass, thornbrush, grain stalk) on the
         // surface by biome. These feed the harvest → regrowth loop (FarmingService owns berrybush;
@@ -687,10 +688,14 @@ namespace Blockiverse.WorldGen
                         continue;
 
                     TerrainBiome biome = biomeMap[SurfaceIndex(x, z)];
-                    BlockId plant = WildPlantForBiome(biome, out int densityThreshold);
+                    BiomeVegetationProfile profile = BiomeVegetationProfiles.For(biome);
+                    int densityThreshold = profile.WildPlantDensityPermille;
                     if (densityThreshold == 0)
                         continue;
 
+                    // Salt 2389 is load-bearing: it is what makes existing seeds keep the wild
+                    // plants they already have. The groundcover pass below uses its own salts for
+                    // the same reason.
                     uint hash = Hash(settings.Seed, x, 0, z, salt: 2389);
                     if (hash % 1000u >= (uint)densityThreshold)
                         continue;
@@ -703,7 +708,13 @@ namespace Blockiverse.WorldGen
                     // Only place on an empty column above a solid surface (don't overwrite trees/structures).
                     if (world.GetBlock(plantPos) != BlockRegistry.Air)
                         continue;
-                    if (world.GetBlock(new BlockPosition(x, surfaceY, z)) == BlockRegistry.Air)
+
+                    BlockId surface = world.GetBlock(new BlockPosition(x, surfaceY, z));
+                    if (surface == BlockRegistry.Air)
+                        continue;
+
+                    if (!BiomeVegetationProfiles.TryPickPlant(
+                            profile.WildPlants, surface, Hash(settings.Seed, x, 1, z, salt: 2389), out BlockId plant))
                         continue;
 
                     world.SetBlock(plantPos, plant, trackChange: false);
@@ -711,20 +722,76 @@ namespace Blockiverse.WorldGen
             }
         }
 
-        // Per-biome wild plant choice and density in tenths-of-a-percent (0–1000 → 0–100%).
-        static BlockId WildPlantForBiome(TerrainBiome biome, out int densityPermille)
+        // The dense decorative layer (§12). Sampled PER CHUNK rather than per column: groundcover
+        // runs an order of magnitude denser than the wild plants, and a per-column roll per species
+        // would walk the whole surface map once per species for no extra fidelity.
+        //
+        // GroundCoverSampleCount samples per chunk, each an independent hashed position, so the
+        // result is deterministic from the seed and independent of iteration order. Samples are
+        // drawn WITH replacement over 256 columns, so effective coverage is below the raw count —
+        // that is the ruleset's model, not an approximation of it.
+        void PlaceGroundCover(VoxelWorld world, int[] surfaceHeights, TerrainBiome[] biomeMap)
         {
-            switch (biome)
+            WorldBounds bounds = world.Bounds;
+            int chunkSize = settings.ChunkSize;
+
+            for (int chunkX = 0; chunkX * chunkSize < bounds.Width; chunkX++)
             {
-                case TerrainBiome.Meadow:   densityPermille = 28; return BlockRegistry.Berrybush;
-                case TerrainBiome.Pinewild: densityPermille = 18; return BlockRegistry.Berrybush;
-                case TerrainBiome.Wetland:  densityPermille = 45; return BlockRegistry.Reedgrass;
-                case TerrainBiome.Drybrush: densityPermille = 30; return BlockRegistry.Thornbrush;
-                case TerrainBiome.Dunes:    densityPermille = 12; return BlockRegistry.Thornbrush;
-                case TerrainBiome.Highlands:densityPermille = 14; return BlockRegistry.GrainStalk;
-                default:                    densityPermille = 0;  return BlockRegistry.Air;
+                for (int chunkZ = 0; chunkZ * chunkSize < bounds.Depth; chunkZ++)
+                {
+                    int placedInChunk = 0;
+
+                    for (int sample = 0; sample < GroundCoverSampleCount; sample++)
+                    {
+                        // Hard per-chunk cap. Density is shipped at half the ruleset values pending
+                        // a device capture, and this is the backstop that keeps a pathological
+                        // biome/surface combination from carpeting a chunk regardless.
+                        if (placedInChunk >= MaxGroundCoverPerChunk)
+                            break;
+
+                        uint positionHash = Hash(settings.Seed, chunkX, sample, chunkZ, salt: GroundCoverPositionSalt);
+                        int x = chunkX * chunkSize + (int)(positionHash % (uint)chunkSize);
+                        int z = chunkZ * chunkSize + (int)((positionHash / (uint)chunkSize) % (uint)chunkSize);
+
+                        if (x >= bounds.Width || z >= bounds.Depth)
+                            continue;
+                        if (IsInsideSpawnProtectedColumn(x, z))
+                            continue;
+
+                        TerrainBiome biome = biomeMap[SurfaceIndex(x, z)];
+                        BiomeVegetationProfile profile = BiomeVegetationProfiles.For(biome);
+                        if (profile.GroundCoverChancePermille == 0)
+                            continue;
+
+                        uint chanceHash = Hash(settings.Seed, x, sample, z, salt: GroundCoverChanceSalt);
+                        if (chanceHash % 1000u >= (uint)profile.GroundCoverChancePermille)
+                            continue;
+
+                        int surfaceY = surfaceHeights[SurfaceIndex(x, z)];
+                        var plantPos = new BlockPosition(x, surfaceY + 1, z);
+                        if (!bounds.Contains(plantPos))
+                            continue;
+
+                        // Never overwrite terrain, trees, structures, fluids or the wild plants
+                        // placed before this pass — groundcover fills the gaps between them.
+                        if (world.GetBlock(plantPos) != BlockRegistry.Air)
+                            continue;
+
+                        BlockId surface = world.GetBlock(new BlockPosition(x, surfaceY, z));
+                        if (surface == BlockRegistry.Air || FluidBlocks.IsFluid(surface))
+                            continue;
+
+                        uint pickHash = Hash(settings.Seed, x, sample, z, salt: GroundCoverPickSalt);
+                        if (!BiomeVegetationProfiles.TryPickPlant(profile.GroundCover, surface, pickHash, out BlockId plant))
+                            continue;
+
+                        world.SetBlock(plantPos, plant, trackChange: false);
+                        placedInChunk++;
+                    }
+                }
             }
         }
+
 
         // Per-biome surface node scatter (block, density in permille, salt). These are the
         // renewable-ish gathering nodes (§3) that feed early recipes: pebbles/flint for tools and

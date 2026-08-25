@@ -41,6 +41,7 @@
                         <engine:Toggle name="bv-comfort-toggle-to-mine" class="hs-field" />
                         <engine:Toggle name="bv-comfort-sprint-toggle" class="hs-field" />
                         <engine:Toggle name="bv-comfort-crouch-toggle" class="hs-field" />
+                        <engine:Toggle name="bv-comfort-place-modifier-toggle" class="hs-field" />
                     </engine:VisualElement>
 
                     <engine:VisualElement name="bv-comfort-group-player-view" class="comfort-group" picking-mode="Ignore">

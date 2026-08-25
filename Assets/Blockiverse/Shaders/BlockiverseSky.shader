@@ -90,11 +90,26 @@ Shader "Blockiverse/Sky"
             // Cheap hash-based value noise. Generated rather than sampled from a texture on
             // purpose: a cloud texture would mean a new authored art asset plus its whole
             // validation tail, and this project generates everything else it draws.
+            // 127.1 / 311.7 are the constants from the SINE hash idiom
+            // frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453), where they live inside a dot
+            // product before a sin. Dropped into a frac-multiply hash instead, only the FRACTIONAL
+            // part of each multiplier survives -- and ValueNoise only ever calls this on integer
+            // lattice points (i = floor(p)), so frac(n * 127.1) == frac(n * 0.1) and
+            // frac(n * 311.7) == frac(n * 0.7). Both are near-exact tenths, so the field very
+            // nearly repeated every 10 units on both axes, and `frac(p.x * p.y)` is symmetric in x
+            // and y, which mirrored the tile across its diagonal on top of that.
+            //
+            // Measured in float32 over a 60x60 lattice: 715 distinct values out of 3600, with
+            // 180 of 400 cells matching under a +10 shift. That is the tiled sky with repeating
+            // motifs and diagonal seams. A correct hash gives 3600 of 3600.
+            //
+            // This is Dave Hoskins' hash12: three decorrelated irrational-ish multipliers, mixed
+            // through a dot product so no single axis can dominate the result.
             float Hash2(float2 p)
             {
-                p = frac(p * float2(127.1, 311.7));
-                p += dot(p, p + 34.23);
-                return frac(p.x * p.y);
+                float3 p3 = frac(float3(p.xyx) * float3(0.1031, 0.1030, 0.0973));
+                p3 += dot(p3, p3.yzx + 33.33);
+                return frac((p3.x + p3.y) * p3.z);
             }
 
             float ValueNoise(float2 p)
@@ -158,7 +173,12 @@ Shader "Blockiverse/Sky"
 
                     // Faded out near the horizon, where the projection stretches the noise into
                     // streaks and where terrain and fog would occlude a real deck anyway.
-                    amount *= saturate(dir.y * 4.0h);
+                    // Fade must reach ZERO by the projection clamp above (dir.y = 0.08), or the
+                    // frozen smear at the clamp stays visible as a hard band of streaks along the
+                    // horizon. saturate(dir.y * 4) is still 0.32 there, which is what drew the
+                    // picket fence. Remap so the fade starts at the clamp and eases in.
+                    half horizonFade = saturate((dir.y - 0.08h) * 5.0h);
+                    amount *= horizonFade * horizonFade * (3.0h - 2.0h * horizonFade);
 
                     color = lerp(color, _CloudColor.rgb, amount * _CloudColor.a);
                 }

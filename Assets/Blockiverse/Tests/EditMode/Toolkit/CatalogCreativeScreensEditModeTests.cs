@@ -127,18 +127,22 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(root.Q<Label>("bv-category-value").text, Is.EqualTo("Terrain"),
                 "The first catalog category renders by its display name.");
             Assert.That(root.Q<Label>("bv-page-label").text, Is.EqualTo("1/1"),
-                "Ten terrain entries fit one twelve-slot page.");
+                "Eleven terrain entries fit one twelve-slot page.");
 
             BlockRegistry registry = BlockRegistry.Default;
             List<string> visible = VisibleEntryTexts(root);
-            Assert.That(visible.Count, Is.EqualTo(10),
-                "The Terrain category has exactly ten catalog entries.");
+            // Eleven since snow_block joined Terrain with the vegetation blocks. Pinned rather
+            // than derived from the catalog on purpose: the point is to notice when the category
+            // changes size, which is exactly what caught this.
+            Assert.That(visible.Count, Is.EqualTo(11),
+                "The Terrain category has exactly eleven catalog entries.");
             Assert.That(visible[0], Is.EqualTo(registry.Get(BlockRegistry.MeadowTurf).Name));
             // Positive control: a do-nothing Refresh would leave every entry blank.
             Assert.That(visible[0], Is.Not.Empty);
-            Assert.That(root.Q<Button>("bv-entry-11").style.visibility.value, Is.EqualTo(Visibility.Hidden),
+            Assert.That(root.Q<Button>("bv-entry-11").style.visibility.value, Is.EqualTo(Visibility.Visible),
+                "The eleventh slot now holds an entry.");
+            Assert.That(root.Q<Button>("bv-entry-12").style.visibility.value, Is.EqualTo(Visibility.Hidden),
                 "Unused grid slots hide without collapsing so entries never reflow.");
-            Assert.That(root.Q<Button>("bv-entry-12").style.visibility.value, Is.EqualTo(Visibility.Hidden));
 
             string placeholder = root.Q<TextField>("bv-search").textEdition.placeholder;
             Assert.That(placeholder, Is.EqualTo(UiText.Get("ui.generated.blocks.search_placeholder")));
@@ -255,8 +259,10 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(hotbar.SelectedBlockId, Is.EqualTo(BlockRegistry.LooseLoam),
                 "Picking the second Terrain entry selects it in the hotbar.");
 
-            // Negative controls: empty grid slots and junk indices change nothing.
-            controller.SelectEntry(10);
+            // Negative controls: empty grid slots and junk indices change nothing. Index 11 is the
+            // first empty slot now that Terrain holds eleven entries — 10 became a real entry when
+            // snow_block joined the category, which quietly turned this control into a no-op test.
+            controller.SelectEntry(11);
             controller.SelectEntry(-1);
             Assert.That(hotbar.SelectedBlockId, Is.EqualTo(BlockRegistry.LooseLoam));
         }

@@ -124,6 +124,20 @@ namespace Blockiverse.Gameplay
             if (HasSkyAccess(world, registry, defs, airPosition, skyLight))
                 return SurfaceLight;
 
+            // Nothing but canopy overhead: shaded, not dark.
+            //
+            // Without this, a cell under leaves had no sky access, the sideways probe below
+            // immediately hit more leaves (not light-passable), and the cell fell through to cave
+            // darkness -- a forest floor lit only by ambient, which reads as pitch black from
+            // inside the headset. Real canopies are gappy; this is that gappiness as a single
+            // multiplier rather than as geometry the mesher would have to resolve.
+            if (skyLight != null)
+            {
+                float transmittance = skyLight.SkyTransmittance(airPosition);
+                if (transmittance > 0.0f)
+                    return SurfaceLight * transmittance;
+            }
+
             int nearestOpening = maxProbeDistance + 1;
 
             foreach (BlockPosition direction in ProbeDirections)
@@ -200,6 +214,49 @@ namespace Blockiverse.Gameplay
                         continue;
 
                     if (HasLineOfSight(world, registry, defs, facePoint, lightPoint, emitter))
+                        return 1.0f;
+                }
+
+                return 0.0f;
+            }
+        }
+
+        // Emitter reach for geometry that has no face direction — cross-quad foliage, which is two
+        // intersecting planes occupying a whole cell rather than a face on its boundary.
+        //
+        // The directional overload above rejects any emitter behind the face plane before testing
+        // line of sight. Feeding it a plant's own cell with an arbitrary normal therefore discards
+        // every emitter at or below the plant: a torch set on the ground beside a bush would leave
+        // it black. Here the cell centre is the sample point and there is no rejection half-space,
+        // so reach depends only on distance and occlusion.
+        public static float SampleOmnidirectionalEmitterReach(
+            VoxelWorld world,
+            BlockRegistry registry,
+            BlockPosition cell,
+            IReadOnlyList<BlockPosition> emitters)
+        {
+            using (s_SampleEmitterReachMarker.Auto())
+            {
+                if (world == null || registry == null || emitters == null || emitters.Count == 0)
+                    return 0.0f;
+
+                BlockDefinition[] defs = registry.CachedDefinitions;
+                var samplePoint = new Vector3(cell.X + 0.5f, cell.Y + 0.5f, cell.Z + 0.5f);
+
+                for (int i = 0; i < emitters.Count; i++)
+                {
+                    BlockPosition emitter = emitters[i];
+                    BlockDefinition definition = GetDefinition(registry, defs, world.GetBlock(emitter));
+                    if (definition.EmissiveLight <= 0)
+                        continue;
+
+                    Vector3 lightPoint = new Vector3(emitter.X, emitter.Y, emitter.Z) + EmitterLightOffset;
+
+                    float reach = definition.EmissiveLight + 1.0f;
+                    if ((lightPoint - samplePoint).sqrMagnitude > reach * reach)
+                        continue;
+
+                    if (HasLineOfSight(world, registry, defs, samplePoint, lightPoint, emitter))
                         return 1.0f;
                 }
 
@@ -347,7 +404,7 @@ namespace Blockiverse.Gameplay
         }
 
         public static bool IsLightPassable(BlockDefinition definition) =>
-            !definition.IsRenderable || !definition.Occludes;
+            !definition.IsRenderable || !definition.BlocksLight;
 
         static BlockDefinition GetDefinition(BlockRegistry registry, BlockDefinition[] defs, BlockId id)
         {

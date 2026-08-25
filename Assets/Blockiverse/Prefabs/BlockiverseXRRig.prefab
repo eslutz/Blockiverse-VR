@@ -1395,7 +1395,7 @@ MonoBehaviour:
   m_LiveConeCastDebugVisuals: 0
   m_RaycastMask:
     serializedVersion: 2
-    m_Bits: 9216
+    m_Bits: 41984
   m_RaycastTriggerInteraction: 1
   m_RaycastSnapVolumeInteraction: 0
   m_RaycastUIDocumentTriggerInteraction: 1
@@ -3791,6 +3791,7 @@ MonoBehaviour:
   - bronze_tiller
   - build_table
   - campfire
+  - charred_log
   - clay_kiln
   - clay_lump
   - claybed
@@ -3828,6 +3829,7 @@ MonoBehaviour:
   - flint_tiller
   - flinty_shingle
   - freshwater_bucket
+  - frost_shard
   - frostglass
   - glass_shard
   - glowwick
@@ -3885,6 +3887,7 @@ MonoBehaviour:
   - shellgrit
   - shingle_gravel
   - smooth_branchwood
+  - snow_block
   - snowcap_turf
   - snowpack
   - spark_flare
@@ -3930,6 +3933,7 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 6ff2e81927d84c8a843a2e4b0a43f226, type: 3}
   - {fileID: 21300000, guid: d2fbacdbd2fbacdbd2fbacdbd2fbacdb, type: 3}
   - {fileID: 21300000, guid: a706569ea706569ea706569ea706569e, type: 3}
+  - {fileID: 21300000, guid: ac1c935fac1c935fac1c935fac1c935f, type: 3}
   - {fileID: 21300000, guid: 485ee663485ee663485ee663485ee663, type: 3}
   - {fileID: 21300000, guid: ce2f642785944be998462f41a521b75a, type: 3}
   - {fileID: 21300000, guid: 8918319d8918319d8918319d8918319d, type: 3}
@@ -3967,6 +3971,7 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 257ba8d4257ba8d4257ba8d4257ba8d4, type: 3}
   - {fileID: 21300000, guid: 2154cd512154cd512154cd512154cd51, type: 3}
   - {fileID: 21300000, guid: a804b809fa544d8e9218893a2c000bd7, type: 3}
+  - {fileID: 21300000, guid: 03af2cc703af2cc703af2cc703af2cc7, type: 3}
   - {fileID: 21300000, guid: f0a1a3430e063435a9a5bfb84d795f4d, type: 3}
   - {fileID: 21300000, guid: 6cf4ad448b674e29970a243544000748, type: 3}
   - {fileID: 21300000, guid: c8abc3f8c8abc3f8c8abc3f8c8abc3f8, type: 3}
@@ -4024,6 +4029,7 @@ MonoBehaviour:
   - {fileID: 21300000, guid: d1567d14d1567d14d1567d14d1567d14, type: 3}
   - {fileID: 21300000, guid: b46e2924b46e2924b46e2924b46e2924, type: 3}
   - {fileID: 21300000, guid: 984957284d4941ed84ca2ced94b3b99b, type: 3}
+  - {fileID: 21300000, guid: 7d002faa7d002faa7d002faa7d002faa, type: 3}
   - {fileID: 21300000, guid: 5a2490e05a2490e05a2490e05a2490e0, type: 3}
   - {fileID: 21300000, guid: b6610b6700d34400990b2178ae26ada7, type: 3}
   - {fileID: 21300000, guid: 78f22c43f3424ce8881016e116317cc5, type: 3}
@@ -4347,6 +4353,7 @@ MonoBehaviour:
   swimVignetteBoost: 1
   swimClimbOutEnabled: 1
   sprintToggleEnabled: 0
+  placeModifierToggleEnabled: 0
   crouchToggleEnabled: 0
 --- !u!114 &2157709069665111210
 MonoBehaviour:
@@ -4615,7 +4622,7 @@ MonoBehaviour:
   m_LiveConeCastDebugVisuals: 0
   m_RaycastMask:
     serializedVersion: 2
-    m_Bits: 9216
+    m_Bits: 41984
   m_RaycastTriggerInteraction: 1
   m_RaycastSnapVolumeInteraction: 0
   m_RaycastUIDocumentTriggerInteraction: 1

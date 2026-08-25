@@ -308,6 +308,9 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             EnsureCompositionUiLayer();
             EnsureFluidLayer();
             EnsureMirrorAvatarLayer();
+            // MUST precede the matrix configuration: that call clears this layer's row, and a
+            // layer that does not exist yet cannot be verified.
+            EnsurePassableLayer();
             ConfigureFluidLayerCollisionMatrix();
             EnsureInteractionMaterials();
             EnsureInputActions();
@@ -318,6 +321,7 @@ const string MultiplayerSessionMenuName = "Multiplayer Session Menu";
             EnsureCompositionUiLayer();
             EnsureFluidLayer();
             EnsureMirrorAvatarLayer();
+            EnsurePassableLayer();
             ConfigureScriptingDefineSymbols();
 
             AssetDatabase.SaveAssets();
@@ -1103,12 +1107,30 @@ UnityEngine.XR.OpenXR.Features.OpenXRFeature feature =
             return EnsureUnityLayer(BlockiverseProject.MirrorAvatarLayerName, BlockiverseProject.MirrorAvatarLayerIndex);
         }
 
+        static int EnsurePassableLayer()
+        {
+            return EnsureUnityLayer(BlockiverseProject.PassableLayerName, BlockiverseProject.PassableLayerIndex);
+        }
+
         // Clears the fluid layer's row in the physics collision matrix so the player's
         // CharacterController sweeps straight through water. The fluid MeshCollider also sets
         // excludeLayers = ~0, but that is contact-pair filtering on the collider; the matrix is the
         // documented, deterministic mechanism and does not depend on how PhysX treats a character
         // controller sweep against an excluded collider.
         static void ConfigureFluidLayerCollisionMatrix()
+        {
+            // Generalised to a SET of pass-through layers. Fluid was the first; passable vegetation
+            // is the second, and both need identical treatment. Adding a second exempt layer while
+            // the verification pass still assumed exactly one would have made every row fail the
+            // `(mask | fluidBit) == uint.MaxValue` check and thrown mid-bootstrap.
+            ConfigurePassThroughCollisionLayers(new[]
+            {
+                BlockiverseProject.FluidLayerIndex,
+                BlockiverseProject.PassableLayerIndex,
+            });
+        }
+
+        static void ConfigurePassThroughCollisionLayers(int[] passThroughLayers)
         {
             const string dynamicsManagerPath = "ProjectSettings/DynamicsManager.asset";
             UnityEngine.Object[] dynamicsAssets = AssetDatabase.LoadAllAssetsAtPath(dynamicsManagerPath);
@@ -1121,11 +1143,16 @@ UnityEngine.XR.OpenXR.Features.OpenXRFeature feature =
             if (collisionMatrix == null)
                 throw new InvalidOperationException("DynamicsManager is missing m_LayerCollisionMatrix.");
 
-            int fluidLayer = BlockiverseProject.FluidLayerIndex;
-            if (fluidLayer < 0 || fluidLayer >= collisionMatrix.arraySize)
+            uint passThroughBits = 0u;
+            foreach (int passThroughLayer in passThroughLayers)
             {
-                throw new InvalidOperationException(
-                    $"Fluid layer index {fluidLayer} is outside the physics collision matrix ({collisionMatrix.arraySize} rows).");
+                if (passThroughLayer < 0 || passThroughLayer >= collisionMatrix.arraySize)
+                {
+                    throw new InvalidOperationException(
+                        $"Pass-through layer index {passThroughLayer} is outside the physics collision matrix ({collisionMatrix.arraySize} rows).");
+                }
+
+                passThroughBits |= 1u << passThroughLayer;
             }
 
             // The matrix is symmetric, so the pair is only truly disabled when the fluid bit is
@@ -1137,13 +1164,13 @@ UnityEngine.XR.OpenXR.Features.OpenXRFeature feature =
             // pair in the game (caught in PR review; the landing tests were masked by gravity's
             // own grounding cast). The verification pass below makes any regression of this fail
             // the bootstrap loudly instead of shipping a no-collision world.
-            uint fluidBit = 1u << fluidLayer;
             bool changed = false;
             for (int layer = 0; layer < collisionMatrix.arraySize; layer++)
             {
                 SerializedProperty row = collisionMatrix.GetArrayElementAtIndex(layer);
                 uint mask = unchecked((uint)row.longValue);
-                uint updated = layer == fluidLayer ? 0u : mask & ~fluidBit;
+                bool isPassThrough = (passThroughBits & (1u << layer)) != 0u;
+                uint updated = isPassThrough ? 0u : mask & ~passThroughBits;
 
                 if (mask == updated)
                     continue;
@@ -1160,24 +1187,27 @@ UnityEngine.XR.OpenXR.Features.OpenXRFeature feature =
                 AssetDatabase.ImportAsset(dynamicsManagerPath, ImportAssetOptions.ForceUpdate);
             }
 
-            // Verify what actually landed in the asset: the fluid row must be empty, the fluid
-            // bit clear everywhere, and every OTHER bit of every other row untouched.
+            // Verify what actually landed in the asset: every pass-through row must be empty, the
+            // pass-through bits clear everywhere, and every OTHER bit of every other row untouched.
+            // The all-ones half of this check is what catches the intValue-clamping regression
+            // described above, so it must survive the generalisation.
             var verify = new SerializedObject(AssetDatabase.LoadAllAssetsAtPath(dynamicsManagerPath)[0]);
             SerializedProperty verifyMatrix = verify.FindProperty("m_LayerCollisionMatrix");
             for (int layer = 0; layer < verifyMatrix.arraySize; layer++)
             {
                 uint mask = unchecked((uint)verifyMatrix.GetArrayElementAtIndex(layer).longValue);
-                bool ok = layer == fluidLayer
+                bool isPassThrough = (passThroughBits & (1u << layer)) != 0u;
+                bool ok = isPassThrough
                     ? mask == 0u
-                    : (mask & fluidBit) == 0u && (mask | fluidBit) == uint.MaxValue;
+                    : (mask & passThroughBits) == 0u && (mask | passThroughBits) == uint.MaxValue;
 
                 if (!ok)
                 {
                     throw new InvalidOperationException(
-                        $"Fluid collision-matrix write produced row {layer} = 0x{mask:X8}; expected " +
-                        (layer == fluidLayer
-                            ? "0x00000000 (fluid collides with nothing)."
-                            : $"0x{~fluidBit:X8} (all non-fluid pairs preserved). Refusing to ship a broken matrix."));
+                        $"Pass-through collision-matrix write produced row {layer} = 0x{mask:X8}; expected " +
+                        (isPassThrough
+                            ? "0x00000000 (a pass-through layer collides with nothing)."
+                            : $"0x{~passThroughBits:X8} (all other pairs preserved). Refusing to ship a broken matrix."));
                 }
             }
         }
@@ -1201,6 +1231,15 @@ UnityEngine.XR.OpenXR.Features.OpenXRFeature feature =
         static LayerMask GetVrUiRaycastLayerMask()
         {
             return (LayerMask)BlockiverseProject.VrUiRaycastLayerMask;
+        }
+
+        // Interaction ray only — adds the passable layer so vegetation can be aimed at and mined.
+        // The teleport ray keeps GetVrUiRaycastLayerMask so its arc passes through grass to the
+        // ground beneath. Both values are BAKED into the rig prefab, so widening the wrong one here
+        // silently changes teleport behaviour on device.
+        static LayerMask GetVoxelInteractionRaycastLayerMask()
+        {
+            return (LayerMask)BlockiverseProject.VoxelInteractionRaycastLayerMask;
         }
 
         static int GetInteractionLayerIndex()

@@ -46,8 +46,19 @@ namespace Blockiverse.Networking
                     // peers disagreeing on it build different geometry from the same delta.
                     ((int)definition.Category).ToString(CultureInfo.InvariantCulture),
                     definition.IsSolid ? "1" : "0",
-                    definition.Occludes ? "1" : "0",
+                    definition.OccludesFaces ? "1" : "0",
+                    definition.BlocksLight ? "1" : "0",
+                    // Skylight is recomputed on every peer rather than replicated, so a peer that
+                    // disagreed about how much light a leaf passes would render a different world
+                    // from the same blocks.
+                    definition.LightTransmission.ToString("0.###", CultureInfo.InvariantCulture),
                     definition.IsRenderable ? "1" : "0",
+                    // Render shape selects which geometry both peers build from the same delta —
+                    // a cube versus a cross quad is the same class of divergence as Category
+                    // above. Passability is a physics divergence: one peer walks through a plant
+                    // the other collides with.
+                    ((int)definition.RenderShape).ToString(CultureInfo.InvariantCulture),
+                    definition.IsPassable ? "1" : "0",
                     definition.EmissiveLight.ToString(CultureInfo.InvariantCulture),
                     ((int)definition.HardnessClass).ToString(CultureInfo.InvariantCulture),
                     definition.HarvestTierMin.ToString(CultureInfo.InvariantCulture),

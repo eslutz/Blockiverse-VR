@@ -12,7 +12,7 @@ BLOCK_TEXTURE_SET_IDS = ("original", "enhanced", "ai_simplified", "ai")
 ITEM_DIR = "Assets/Blockiverse/Art/Textures/Items"
 UI_DIR = "Assets/Blockiverse/Art/Sprites/UI"
 VFX_DIR = "Assets/Blockiverse/Art/Sprites/VFX"
-ATLAS_COLUMNS = 10
+ATLAS_COLUMNS = 12
 ATLAS_ROWS = 10
 TILE_PIXELS = 32
 ATLAS_TILE_PADDING_PIXELS = 8
@@ -142,6 +142,10 @@ BLOCK_SOURCE_ALIASES = [
 
 
 ITEMS = [
+    # Vegetation additions (voxel_biome_vegetation_ruleset §4).
+    ("frost_shard", (120, 176, 198), (226, 246, 252), "crystal"),
+    ("charred_log", (38, 32, 29), (92, 74, 62), "block"),
+    ("snow_block", (198, 214, 224), (245, 250, 253), "block"),
     ("meadow_turf", (57, 134, 68), (151, 211, 83), "block"),
     ("dry_turf", (136, 112, 47), (215, 174, 71), "block"),
     ("snowcap_turf", (98, 134, 124), (231, 242, 240), "block"),
@@ -213,16 +217,16 @@ ITEMS = [
 ]
 
 
-UI_SPRITES = [
-    ("hotbar_frame", 128, 24, (34, 39, 48, 168), (104, 191, 147, 235), "frame"),
-    ("settings_panel", 96, 64, (37, 42, 51, 218), (112, 178, 220, 245), "panel"),
-    ("feedback_toast", 96, 32, (32, 38, 43, 216), (255, 206, 83, 245), "badge"),
-]
 # Retired with the uGUI menus (selected_slot, health_pip, inventory_panel, crafting_panel,
 # multiplayer_status_badge). UI Toolkit styles those surfaces from USS tokens and borders rather
 # than sprites, so regenerating them only re-created files nothing loaded. Removing them here is
 # what stops the next art run from resurrecting them; the .png/.meta pairs were deleted with the
 # panels. Re-add an entry here if a Toolkit screen ever wants a real bitmap for one of these.
+UI_SPRITES = [
+    ("hotbar_frame", 128, 24, (34, 39, 48, 168), (104, 191, 147, 235), "frame"),
+    ("settings_panel", 96, 64, (37, 42, 51, 218), (112, 178, 220, 245), "panel"),
+    ("feedback_toast", 96, 32, (32, 38, 43, 216), (255, 206, 83, 245), "badge"),
+]
 
 
 VFX_SPRITES = [
@@ -488,24 +492,98 @@ ALPHA_FOLIAGE_PATTERNS = {
 }
 
 
+def grass_blade_mask(pattern, seed, x, y):
+    """Clustered hard-edge blades; y grows down from the pointed tips to the root."""
+    if pattern == "meadow_grass":
+        # Pairs and short gaps make clumps rather than an evenly spaced picket fence.
+        bases = (1, 3, 6, 7, 12, 14, 15, 20, 21, 25, 28, 30)
+        minimum_height, height_range = 12, 13
+    else:
+        # Dry tufts are visibly sparser and lower, with a few stubborn tall blades.
+        bases = (2, 5, 6, 11, 15, 19, 20, 25, 29)
+        minimum_height, height_range = 9, 14
+
+    for index, base_x in enumerate(bases):
+        value = hash_pixel(index, seed, 701 + len(pattern))
+        height = minimum_height + value % height_range
+        rise = TILE_PIXELS - 1 - y
+        if rise < 0 or rise > height:
+            continue
+
+        lean = (value // 7) % 5 - 2
+        centre = base_x + round(lean * rise / float(height))
+        # Broad lower blades taper to a one-pixel irregular tip.
+        width = 1 if rise < height * 0.38 and value % 3 == 0 else 0
+        if rise >= height - 2:
+            width = 0
+        if abs(x - centre) <= width:
+            return True
+    return False
+
+
 def foliage_mask(pattern, seed, x, y):
     """Returns hard alpha coverage for cutout/cross foliage (never partial alpha)."""
     dx = x - 15.5
     h = hash_pixel(x, y, seed)
     if pattern == "leaves":
-        return (dx * dx) / 240 + ((y - 15) * (y - 15)) / 205 < 1 and h % 7 > 2
+        # Leafmoss is a CutoutCube: this tile is a BLOCK FACE, not a billboard silhouette, so it
+        # must cover its whole square. The previous form was an ellipse inscribed in the tile
+        # (dx*dx/240 + (y-15)^2/205 < 1), which made all four corners fully transparent — on a
+        # six-faced block that reads as sky showing through the corner of every face.
+        #
+        # Lacy comes from INTERIOR holes, never from an outline. Holes are punched per 2x2 cell
+        # rather than per pixel: single-pixel holes average away into a grey fringe at the first
+        # mip and stop reading as holes at distance.
+        cell = hash_pixel(x // 2, y // 2, seed + 17)
+        # Denser along the tile border so neighbouring leaf blocks read as one canopy mass
+        # instead of a visible grid of separate tiles.
+        border = x < 3 or x > TILE_PIXELS - 4 or y < 3 or y > TILE_PIXELS - 4
+        return cell % 8 > (0 if border else 1)
     if pattern in ("berries_cluster", "bush_sprout", "bush_mid", "shrub"):
-        radius = {"bush_sprout": 7, "bush_mid": 10, "shrub": 13}.get(pattern, 12)
-        return dx * dx + (y - 17) * (y - 17) < radius * radius and h % 9 > 1
+        # Base-heavy and ragged. The previous form was a literal circle centred at (15.5, 17),
+        # which read as a drawn ball rather than foliage — the same "why is it round" the leaf
+        # ellipse caused, just on a cross-quad instead of a block face.
+        top = {"bush_sprout": 17, "bush_mid": 11, "shrub": 7}.get(pattern, 8)
+        if y < top:
+            return False
+        half = min(4.0 + (y - top) * 0.62, 14.0)
+        ragged = (hash_pixel(x // 3, y // 3, seed + 5) % 5) - 1
+        return abs(dx) <= half + ragged and h % 9 > 1
     if pattern in ("sapling", "sapling_mid", "sapling_tall"):
         height = {"sapling": 16, "sapling_mid": 21, "sapling_tall": 27}[pattern]
         trunk = abs(dx) <= 1 and y >= 31 - height
         canopy = y < 21 and abs(dx) < (8 - y * 0.18) and y >= 5 and h % 5 > 0
         return trunk or canopy
-    if pattern in ("fern", "wildflowers"):
+    if pattern == "fern":
+        # Fronds that arch UP and OUTWARD from a base, each carrying leaflets.
+        #
+        # The previous mask was a vertical stem plus two straight diagonals spreading downward,
+        # which on a cross-quad reads as a four-legged spider rather than a plant -- a player
+        # looking at a frost fern in the headset asked what it was supposed to be.
+        if y < 3:
+            return False
+        base_y = 31
+        # (direction, lean, height) per frond: a tall centre, a tall pair, a short outer pair.
+        for k, (side, lean, height) in enumerate(
+                ((0, 0.0, 27), (-1, 1.0, 23), (1, 0.95, 22), (-1, 1.9, 16), (1, 1.85, 15))):
+            span = base_y - y
+            if span < 0 or span > height:
+                continue
+            t = span / float(height)                      # 0 at the base, 1 at the tip
+            rachis_x = 15.5 + side * lean * (t ** 1.3) * 11.0
+            d = abs(x - rachis_x)
+            if d <= 0.9:
+                return True                                # the frond's spine
+            # Leaflets: perpendicular ticks, longest low on the frond and tapering to the tip.
+            leaflet = (1.0 - t) * 4.2 + 0.8
+            if d <= leaflet and (span + k * 2) % 3 == 0:
+                return True
+        return False
+
+    if pattern == "wildflowers":
         stem = abs(dx) <= 1 and y >= 13
         frond = y >= 8 and abs(abs(dx) - (y - 8) * 0.34) <= 1.2
-        flower = pattern == "wildflowers" and y < 14 and ((x - 9) ** 2 + (y - 10) ** 2 < 8 or (x - 22) ** 2 + (y - 8) ** 2 < 8)
+        flower = y < 14 and ((x - 9) ** 2 + (y - 10) ** 2 < 8 or (x - 22) ** 2 + (y - 8) ** 2 < 8)
         return stem or frond or flower
     if pattern == "hanging_reeds":
         return y <= 25 and (abs(dx + 6 - math.sin(y * .35) * 2) <= 1 or abs(dx - 4 - math.sin(y * .31) * 2) <= 1)
@@ -513,8 +591,10 @@ def foliage_mask(pattern, seed, x, y):
         return y >= 9 and (abs(dx + (y - 20) * .22) <= 1 or abs(dx - (y - 20) * .18) <= 1 or (y > 18 and abs(dx) < 10 and h % 5 == 0))
     if pattern == "thorn":
         return y >= 5 and (abs(dx + math.sin(y * .6) * 5) <= 1 or abs(dx - math.sin(y * .5) * 4) <= 1)
-    if pattern in ("grain_heads", "crop_sprout", "crop_mid", "crop_full", "reed_sprout", "reeds", "drygrass", "meadow_grass", "salt_reeds"):
-        density = 4 if pattern in ("meadow_grass", "drygrass") else 6
+    if pattern in ("drygrass", "meadow_grass"):
+        return grass_blade_mask(pattern, seed, x, y)
+    if pattern in ("grain_heads", "crop_sprout", "crop_mid", "crop_full", "reed_sprout", "reeds", "salt_reeds"):
+        density = 6
         start = {"crop_sprout": 20, "crop_mid": 13, "crop_full": 6, "reed_sprout": 18}.get(pattern, 4)
         blade = (x + seed) % density <= 1 and y >= start - (x % 3)
         head = pattern in ("grain_heads", "crop_full") and y < 13 and x % 7 in (2, 3)
@@ -865,7 +945,15 @@ def write_texture_meta(
     path = os.path.join(ROOT, f"{relative_path}.meta")
     texture_type = 8 if sprite else 0
     sprite_mode = 1 if sprite else 0
-    alpha_transparency = 1 if sprite else 0
+    # Colour dilation. Unity only bleeds the nearest opaque RGB into fully-transparent texels when
+    # this is set; without it those texels keep their authored colour, which for the block atlas is
+    # pure black. Mip generation then averages plant-green with black and every blade grows a dark
+    # fringe that worsens with distance. mipMapsPreserveCoverage fixes the ALPHA at each mip, not
+    # the RGB, so it does not cover this.
+    #
+    # Tied to preserve_alpha_coverage rather than to `sprite`: that flag is what marks a texture as
+    # carrying a real alpha cutout, which is exactly when dilation matters.
+    alpha_transparency = 1 if (sprite or preserve_alpha_coverage) else 0
     pixels_per_unit = 16 if sprite else 100
     with open(path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(

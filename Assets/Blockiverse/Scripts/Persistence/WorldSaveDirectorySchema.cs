@@ -192,5 +192,20 @@ namespace Blockiverse.Persistence
         public string[] BlockPalette;
         public int[] ChangePositions;
         public int[] PaletteIndices;
+
+        // Schema v5. Index-aligned with ChangePositions, empty when every block in the section
+        // carries BlockState.Default.
+        //
+        // Riding on the delta list is only safe because BuildChangedBlockDeltas guarantees a delta
+        // exists for EVERY position that carries state — including positions whose delta the world
+        // itself dropped. VoxelWorld.RecordChangedBlock deletes a delta when an edit reverts a
+        // position to its original block, so breaking a worldgen leaf and placing one back would
+        // otherwise leave state with nothing to ride on: saved cleanly, silently lost, and the leaf
+        // rots on the next load.
+        //
+        // JsonUtility writes a null int[] as [] rather than dropping the key, so the field is
+        // always present; what the empty form avoids is one zero per delta, the cost that scales.
+        // Readers must treat absent, empty, and short arrays alike as "default from here".
+        public int[] BlockStates;
     }
 }

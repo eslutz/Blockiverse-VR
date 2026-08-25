@@ -488,28 +488,98 @@ Weather cloud bonuses:
 
 ### 7.2 Cloud rendering
 
-Clouds are painted **into the sky itself**, not drawn as a layer at altitude. The earlier draft
-specified a cloud plane at `y = 176` translated by a wind vector; that was never implemented, and
-what ships is cheaper and better suited to a tile GPU, where the sky is already full-screen fill and
-a second large transparent layer above the world would be the most expensive thing on screen.
+Clouds ship as **two layers with one coverage between them**: a geometry deck of blocky cells at
+altitude, and a veil painted into the skybox itself. Neither alone was enough. A skybox-only sky has
+no volume and no underside, so it reads as painted on; a geometry-only sky needs an absurd extent to
+reach the horizon.
 
-Coverage drives a **threshold**, not an opacity:
+**The deck** is a grid of 10 m cells at `y = 160`, above `WorldMaxY` so nothing buildable can reach
+it, drifting with the wind. Occupancy comes from two octaves of interpolated value noise thresholded
+against a measured quantile table, so a requested fraction of cells is the fraction that appears.
+Interpolated rather than box-filtered noise is what makes masses with ragged edges instead of
+salt-and-pepper.
+
+Three properties of the deck are load-bearing:
+
+- **It is render-only.** Never a voxel, never saved, never collided with, and a pure function of
+  `(seed, clock)` — so every peer computes the same sky with nothing on the wire, consistent with
+  the lockstep world simulation.
+- **The deck's coverage is not the weather's coverage.** A cell is 10 m across and 5 m deep, so at a
+  grazing angle its silhouette is several times its footprint — roughly 2.9× at 15° of elevation,
+  and most of the sky's solid angle is near the horizon. The same coverage also drives the veil. The
+  deck therefore fills `cloudCoverage^1.75` of its cells: Clear 0.10 → 0.018, Partly Cloudy 0.45 →
+  0.25, Overcast 0.80 → 0.68, Thunderstorm 1.00 → 1.00.
+
+  The coverage-to-occupancy mapping is a **measured quantile table**, not a formula, and its stops
+  are dense at both ends deliberately. A table that interpolates straight across the density field's
+  tail is wrong exactly where it matters: an earlier one ran a line from "empty" to the 5% quantile
+  and rendered **0.07% of cells for a requested 1.78%** — a 25× miss, i.e. a completely cloudless
+  sky at Clear. Measured over 43,200 cells across three seeds, the shipped table is within 0.46
+  percentage points at its worst across all ten weather states.
+- **The deck is a circle, and it dissolves rather than ending.** A filled square's boundary is 41%
+  further away at the corners than at the edge midpoints, so at a fixed altitude the rim rises and
+  falls around the compass — an unmistakably man-made signature. Inside a radius of 450 m, coverage
+  ramps to zero over the outer half, cell thickness tapers, and every face crossfades to the aerial
+  colour (§7.4), so the far cells are still drawn and simply stop being distinguishable from the sky.
+
+  In angles, from a player at sea level with the deck ~90 m overhead — and these are what to check
+  a change against, since the metres mean nothing on their own:
+
+  | Zone | Radius | Elevation | Share of the sky's solid angle |
+  |---|---|---|---|
+  | Deck at full strength | 0–207 m | above 23.5° | 60% |
+  | Dissolving | 207–450 m | 23.5° down to 11.3° | 20% |
+  | Veil only | beyond 450 m | below 11.3° | 20% |
+
+  (The share of a hemisphere's solid angle above elevation θ is `1 − sin θ`, which is why so much
+  of the sky sits near the horizon and why the deck's thickness matters more than its footprint.)
+
+  Note the square it replaced reached only 17.8°, so the deck now extends FURTHER while its
+  full-strength core is smaller — which is the shape "enlarge it and blend the edges" asks for.
+
+- **The deck is only used for Clear, Partly Cloudy, and Overcast.** All seven precipitation and fog
+  states render the veil alone, at full coverage share (see below). This is not a simplification for
+  those states, it is a correction: at the near-total coverage those states request, the deck's
+  circular rim projects, under ordinary perspective, as a conic that pinches toward a point in
+  whatever direction the player happens to be looking near the ring's own elevation — the "two
+  edges meeting at a corner" a solid overcast sheet reads as on screen. That compression is a
+  property of viewing a bounded disc edge-on; no width of world-space fade band removes it, because
+  the fade dissolves the boundary in world space and the compression happens in the PROJECTION of
+  that already-dissolved boundary. The deck's geometric depth is also invisible once coverage is
+  that high — a solid flat-bottomed sheet looks the same with or without geometry under it — so
+  those states lose nothing real by dropping it. The veil has no rim to compress, being painted at
+  infinity.
+
+  For the three states that keep the deck, the rim's COLOUR fade (not its occupancy — which cells
+  exist stays a linear function of `RimFade`) is eased with `smoothstep` rather than blended
+  linearly. This is a mitigation for the same projection effect at lower coverage, where it is
+  present but less severe: spending more of the fade band already close to the sky colour softens
+  how much of the compressed edge survives on screen. A true fix would compute the fade per camera
+  per frame, which the flat, unlit, baked-per-vertex contract the deck renders under does not
+  support.
+
+**The veil** keeps the rest of the hemisphere, including the band below the deck's rim, so the two
+layers hand off to each other. Coverage drives a **threshold** there, not an opacity:
 
 ```ts
 // Two octaves of value noise, generated in the shader -- no cloud texture ships.
 density   = cloudNoise(viewDirection projected onto a plane overhead);
-threshold = 1.0 - cloudCoverage;
+threshold = 1.0 - cloudCoverage * skyVeilShare;
 amount    = smoothstep(threshold, threshold + softness, density);
 ```
 
 Threshold rather than opacity matters: at low coverage a few small clouds appear and grow and join
 up as it rises, whereas fading a full-sky sheet in and out reads as haze rather than as weather.
+Coverage is **split** between the layers and never applied twice while the deck is in play —
+driving both at once stacks an opaque deck under an opaque veil and reads as soup rather than as
+overcast. `skyVeilShare` is the deck's usual thin share (0.35) for Clear, Partly Cloudy, and
+Overcast, and jumps to 1.0 for every other state, where the veil is the only layer carrying the
+weather and has to be able to close the sky on its own.
 
-Clouds are faded out near the horizon, where the projection stretches the noise into streaks, and
-they drift slowly so the sky is not static. They grey toward storm and darken at night along with
-the rest of the sky, but never to black — an overcast night must not become a flat void.
+Both layers grey toward storm and darken at night along with the rest of the sky, but never to
+black — an overcast night must not become a flat void.
 
-Gameplay effect (unchanged, and the *only* thing coverage did before this):
+Gameplay effect (unchanged, and the *only* thing coverage did before any of this):
 
 ```ts
 if cloudCoverage > 0.75:
@@ -543,6 +613,37 @@ dayAmount    = smoothstep over the twilight band around elevation 0
 ---
 
 ---
+
+### 7.4 The aerial colour, and the edge of the world
+
+The world is a fixed 128 × 128 blocks. That is the whole world, not a streaming radius — its outer
+columns are real rendered faces with nothing behind them, so from any elevation the map ended in a
+square cliff standing in an empty band of sky.
+
+A **horizon skirt** covers it: a flat plane at sea level filling a rectangular annulus from the
+world's own boundary out to 360 m. It extends nothing. It is not a voxel, is not saved, is not
+collidable, and is not simulated; the island it leaves behind reads as an island in an open sea,
+which is a coherent thing to be rather than a truncation. Its outer extent is bounded by the
+camera's 500 m far clip, not by taste: a triangle crossing the far plane is clipped, and a hard arc
+sweeping around the player at exactly 500 m would be worse than the edge it replaces.
+
+The plane is finite too, so it has the same problem one ring out, and it is solved by colour rather
+than by size. Define the **aerial colour** as what anything infinitely far away looks like — the
+sky's own horizon colour for the current time of day and weather. Four things are driven from it and
+must not hold separate opinions:
+
+| Surface | Why it has to match |
+|---|---|
+| `RenderSettings.fogColor` | Distant terrain melts into the sky; that is what aerial perspective is |
+| The skybox's below-horizon band | Below the horizon is, by definition, infinitely distant ground |
+| The cloud deck's rim | Its last cells must be indistinguishable from the sky behind them |
+| The horizon skirt's rim | Same, one ring further out |
+
+The skybox is deliberately never fogged (Background queue, no `MixFog`), so every surface that has
+to disappear against it disappears against a colour computed elsewhere. With four of them meeting,
+any deviation at all draws a seam somewhere, and the sky's horizon colour is the only choice that
+makes all four agree. It already carries time of day and the overcast darkening, so nothing is lost
+by not tinting it separately.
 
 ## 8. Weather state machine
 

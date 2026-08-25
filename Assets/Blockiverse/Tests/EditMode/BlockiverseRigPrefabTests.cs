@@ -476,7 +476,7 @@ namespace Blockiverse.Tests.EditMode
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
             Assert.That(prefab, Is.Not.Null);
-            AssertRayTargetsTerrainAndFluid(prefab.transform, "Interaction Ray");
+            AssertRayTargetsTerrainAndFluid(prefab.transform, "Interaction Ray", includesPassable: true);
 
             GameObject instance = Object.Instantiate(prefab);
 
@@ -486,7 +486,7 @@ namespace Blockiverse.Tests.EditMode
 
                 Assert.That(inputRig, Is.Not.Null);
                 inputRig.RepairRuntimeTracking();
-                AssertRayTargetsTerrainAndFluid(instance.transform, "Interaction Ray");
+                AssertRayTargetsTerrainAndFluid(instance.transform, "Interaction Ray", includesPassable: true);
             }
             finally
             {
@@ -500,7 +500,7 @@ namespace Blockiverse.Tests.EditMode
             GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BlockiverseProject.XrRigPrefabPath);
 
             Assert.That(prefab, Is.Not.Null);
-            AssertRayTargetsTerrainAndFluid(prefab.transform, "Teleport Ray");
+            AssertRayTargetsTerrainAndFluid(prefab.transform, "Teleport Ray", includesPassable: false);
 
             GameObject instance = Object.Instantiate(prefab);
 
@@ -510,7 +510,7 @@ namespace Blockiverse.Tests.EditMode
 
                 Assert.That(inputRig, Is.Not.Null);
                 inputRig.RepairRuntimeTracking();
-                AssertRayTargetsTerrainAndFluid(instance.transform, "Teleport Ray");
+                AssertRayTargetsTerrainAndFluid(instance.transform, "Teleport Ray", includesPassable: false);
             }
             finally
             {
@@ -1569,8 +1569,18 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(gravityProvider.sphereCastTriggerInteraction, Is.EqualTo(QueryTriggerInteraction.Ignore));
         }
 
-        static void AssertRayTargetsTerrainAndFluid(Transform rigRoot, string rayName)
+        // The two rays deliberately want DIFFERENT masks, so this is parameterised by ray rather
+        // than asserting one shared value. The interaction ray must reach passable vegetation or
+        // no plant can be mined or harvested; the teleport ray must NOT, or an arc aimed across a
+        // meadow lands on top of the grass instead of passing through to the ground
+        // (vegetation ruleset §4a.4). Asserting a single mask for both is what previously let the
+        // interaction ray silently lose vegetation.
+        static void AssertRayTargetsTerrainAndFluid(Transform rigRoot, string rayName, bool includesPassable)
         {
+            int expected = includesPassable
+                ? BlockiverseProject.VoxelInteractionRaycastLayerMask
+                : BlockiverseProject.VrUiRaycastLayerMask;
+
             foreach (string hand in new[] { "Left", "Right" })
             {
                 XRRayInteractor ray = rigRoot
@@ -1582,8 +1592,20 @@ namespace Blockiverse.Tests.EditMode
                     $"{hand} {rayName} must still hit solid voxel terrain.");
                 Assert.That(ray.raycastMask.value & BlockiverseProject.FluidLayerMask, Is.Not.EqualTo(0),
                     $"{hand} {rayName} must hit fluid surfaces: block targeting, drink/bucket fill, and teleport landings all stop at the water surface.");
-                Assert.That(ray.raycastMask.value, Is.EqualTo(BlockiverseProject.VrUiRaycastLayerMask),
-                    $"{hand} {rayName} should target exactly the VR UI raycast mask (terrain | fluid).");
+
+                if (includesPassable)
+                {
+                    Assert.That(ray.raycastMask.value & BlockiverseProject.PassableLayerMask, Is.Not.EqualTo(0),
+                        $"{hand} {rayName} must hit passable vegetation, or plants cannot be targeted, mined or harvested.");
+                }
+                else
+                {
+                    Assert.That(ray.raycastMask.value & BlockiverseProject.PassableLayerMask, Is.EqualTo(0),
+                        $"{hand} {rayName} must NOT hit passable vegetation: the teleport arc has to pass through grass and land on the ground beneath it.");
+                }
+
+                Assert.That(ray.raycastMask.value, Is.EqualTo(expected),
+                    $"{hand} {rayName} should target exactly its canonical mask.");
             }
         }
 

@@ -41,6 +41,15 @@ namespace Blockiverse.WorldGen
         // entire world, making elevation thermally irrelevant next to the 42 °C biome spread
         // (Tundra -8 → Dunes 34).
         public const float AltitudeLapseRatePerBlockC = 0.15f;
+        // Briefly lowered to -2.5 chasing a report of "rain effects are broken" on a shoreline
+        // tree. Reverted: the arithmetic did not support the change and the tests caught it.
+        //
+        // At a shoreline tree (about y=75) this value already leaves Pinewild at 3.35C and
+        // Highlands at 1.35C -- both rain. The only biome that converts down there is Tundra,
+        // which is meant to and does so at any altitude. Meanwhile -2.5 put the Pinewild peak
+        // fixture (y=112) at +0.30C instead of -2.20C, erasing a DESIGNED behaviour that
+        // WeatherServiceEditModeTests pins in four places: the same storm falls as rain on the
+        // forest floor and as snow on the peak above it.
         public const float NightTemperatureModifierC = -5f;
         public const float RainTemperatureModifierC = -2f;
         public const float SnowTemperatureModifierC = -4f;

@@ -146,6 +146,33 @@ namespace Blockiverse.Survival
 
             // ── Additional canonical vegetation ──────────────────────────────
             rules.RegisterForBlock(BlockRegistry.Thornbrush,         HarvestToolKind.Sickle);
+
+            // ── Vegetation additions (voxel_biome_vegetation_ruleset §4) ─────────────────────
+            // Every row is Sickle / tier 0; drop tables follow the §4 table verbatim.
+            rules.RegisterForBlock(BlockRegistry.DrygrassTuft, new ItemStack(ItemId.ReedFiber, 1), HarvestToolKind.Sickle,
+                new DropTable(new DropTableEntry(ItemId.ReedFiber, 1, 1), new DropTableEntry(ItemId.DrygrassSeed, 1, 1, chance: 0.15f)));
+            rules.RegisterForBlock(BlockRegistry.MeadowTuft, new ItemStack(ItemId.ReedFiber, 1), HarvestToolKind.Sickle,
+                new DropTable(new DropTableEntry(ItemId.ReedFiber, 1, 1), new DropTableEntry(ItemId.MeadowSeed, 1, 1, chance: 0.15f)));
+            rules.RegisterForBlock(BlockRegistry.WildflowerCluster, new ItemStack(ItemId.MeadowSeed, 1), HarvestToolKind.Sickle,
+                new DropTable(new DropTableEntry(ItemId.MeadowSeed, 1, 1, chance: 0.2f)));
+            rules.RegisterForBlock(BlockRegistry.DuneSage, new ItemStack(ItemId.ReedFiber, 1), HarvestToolKind.Sickle,
+                new DropTable(new DropTableEntry(ItemId.ReedFiber, 1, 1), new DropTableEntry(ItemId.ResinKnot, 1, 1, chance: 0.1f)));
+            rules.RegisterForBlock(BlockRegistry.SaltReed, new ItemStack(ItemId.ReedFiber, 1), HarvestToolKind.Sickle,
+                new DropTable(new DropTableEntry(ItemId.ReedFiber, 1, 2), new DropTableEntry(ItemId.Brightsalt, 1, 1, chance: 0.08f)));
+            rules.RegisterForBlock(BlockRegistry.FrostFern, new ItemStack(ItemId.ReedFiber, 1), HarvestToolKind.Sickle,
+                new DropTable(new DropTableEntry(ItemId.ReedFiber, 1, 1), new DropTableEntry(ItemId.FrostShard, 1, 1, chance: 0.05f)));
+            rules.RegisterForBlock(BlockRegistry.WindrootShrub, new ItemStack(ItemId.ReedFiber, 1), HarvestToolKind.Sickle,
+                new DropTable(new DropTableEntry(ItemId.ReedFiber, 1, 1), new DropTableEntry(ItemId.ResinKnot, 1, 1, chance: 0.15f)));
+            rules.RegisterForBlock(BlockRegistry.HangingReed, new ItemStack(ItemId.ReedFiber, 1), HarvestToolKind.Sickle,
+                new DropTable(new DropTableEntry(ItemId.ReedFiber, 1, 2)));
+            rules.RegisterForBlock(BlockRegistry.MossCarpet, new ItemStack(ItemId.Leafmoss, 1), HarvestToolKind.Sickle,
+                new DropTable(new DropTableEntry(ItemId.Leafmoss, 1, 1, chance: 0.6f)));
+            rules.RegisterForBlock(BlockRegistry.SnowLichen, new ItemStack(ItemId.Leafmoss, 1), HarvestToolKind.Sickle,
+                new DropTable(new DropTableEntry(ItemId.Leafmoss, 1, 1, chance: 0.4f)));
+            rules.RegisterForBlock(BlockRegistry.FallenLeaves, new ItemStack(ItemId.Leafmoss, 1), HarvestToolKind.Sickle,
+                new DropTable(new DropTableEntry(ItemId.Leafmoss, 1, 1, chance: 0.5f)));
+            rules.RegisterForBlock(BlockRegistry.CharredLog,         HarvestToolKind.Feller);
+            rules.RegisterForBlock(BlockRegistry.SnowBlock,          HarvestToolKind.Spade);
             rules.RegisterForBlock(BlockRegistry.Sapling,            HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.Sapling_S1,         HarvestToolKind.Sickle);
             rules.RegisterForBlock(BlockRegistry.Sapling_S2,         HarvestToolKind.Sickle);
