@@ -173,7 +173,23 @@ namespace Blockiverse.UI
 
             // Creative has health and nothing else. Hiding rather than emptying is the only honest
             // rendering: an unbound meter draws as empty, which reads as starvation.
-            bool survivalPresent = survivalVitals != null;
+            //
+            // `survivalVitals != null` alone is not the mode check it looks like:
+            // SurvivalVitalsRuntime.SurvivalVitalsView always returns a live instance regardless of
+            // mode — switching to Creative stops TICKING it, it does not remove it — so a Creative
+            // session would render hunger/thirst/stamina from stale/default values instead of
+            // hiding the rows. Gated on IsSurvivalModeActive too when a runtime is bound; a test
+            // seam binding survivalVitals directly (no runtime, no scene) has nothing to gate on and
+            // is trusted, matching BindSurvivalVitals's existing test-first contract.
+            // `survivalVitals != null` alone is not the mode check it looks like:
+            // SurvivalVitalsRuntime.SurvivalVitalsView always returns a live instance regardless of
+            // mode — switching to Creative stops TICKING it, it does not remove it — so a Creative
+            // session would render hunger/thirst/stamina from stale/default values instead of
+            // hiding the rows. Gated on IsSurvivalModeActive too when a runtime is bound; a test
+            // seam binding survivalVitals directly (no runtime, no scene) has nothing to gate on and
+            // is trusted, matching BindSurvivalVitals's existing test-first contract.
+            bool survivalPresent = survivalVitals != null &&
+                (vitalsRuntime == null || vitalsRuntime.IsSurvivalModeActive);
 
             if (!lastSurvivalVitalsPresentValid || lastSurvivalVitalsPresent != survivalPresent)
             {

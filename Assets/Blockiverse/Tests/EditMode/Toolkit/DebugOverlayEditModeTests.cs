@@ -42,6 +42,38 @@ namespace Blockiverse.Tests.EditMode.Toolkit
             public void CloseStationView() { }
         }
 
+        // Records every SetActionMenu push, keyed by screen id, so a test can inspect what a route
+        // was actually pushed with rather than only what MenuActions.Settings(bool) would produce
+        // in isolation.
+        //
+        // A standalone implementation, not an InertFrontend subclass: SetActionMenu is not virtual,
+        // and BlockiverseMenuController holds its frontend through the IBlockiverseMenuFrontend
+        // interface, so a `new`-hiding override in a derived class would never actually be called —
+        // the interface dispatch stays bound to whichever class first implemented the member.
+        sealed class RecordingFrontend : IBlockiverseMenuFrontend
+        {
+            public readonly Dictionary<string, (string title, IReadOnlyList<MenuAction> actions)> Pushed = new();
+
+            public void SetActionMenu(string screenId, string title, IReadOnlyList<MenuAction> actions) =>
+                Pushed[screenId] = (title, actions);
+
+            public void SetScreenStatus(string screenId, string message) { }
+            public void SetSaveList(IEnumerable<WorldSaveSummary> saves) { }
+            public void ShowWorldDetails(WorldSaveSummary save) { }
+            public void SetTitleMenuPose(Pose pose) { }
+            public void RefreshCreativeEnvironmentControls() { }
+            public void ToggleQuickBlockMenu() { }
+            public void HideQuickBlockMenu() { }
+            public void CycleHotbarSlot(int delta) { }
+            public void ResetNewWorldScreen() { }
+            public NewWorldConfig PendingNewWorldConfig => null;
+            public WorldSaveSummary? PendingLoadSave => null;
+            public WorldSaveSummary? PendingDetailsSave => null;
+            public string PendingDetailsRenameText => string.Empty;
+            public bool IsStationOpenAt(Blockiverse.Voxel.BlockPosition position) => false;
+            public void CloseStationView() { }
+        }
+
         readonly List<GameObject> objectsToDestroy = new();
 
         [TearDown]
@@ -301,6 +333,45 @@ namespace Blockiverse.Tests.EditMode.Toolkit
             Assert.That(on.Label, Is.Not.EqualTo(off.Label));
             Assert.That(on.Label, Does.Contain("On"));
             Assert.That(off.Label, Does.Contain("Off"));
+        }
+
+        // Flagged by review: the Settings row is populated once by RefreshStaticMenus, which runs
+        // from this controller's own Start/RegisterFrontend — but the persisted flag it reads loads
+        // in a DIFFERENT component's Start (BlockiverseSettingsPersistence), whose ordering relative
+        // to this one is not guaranteed. A save loaded AFTER the first push left the row reading
+        // "Off" while the overlay was actually on, and pressing it then turned the overlay off while
+        // the label — now genuinely matching the flipped value — looked unchanged to the player.
+        [Test]
+        public void OpeningSettingsRebuildsTheRowRatherThanTrustingTheEarlierPush()
+        {
+            var rig = new GameObject("Menu Rig");
+            objectsToDestroy.Add(rig);
+            var controller = rig.AddComponent<BlockiverseMenuController>();
+
+            var frontend = new RecordingFrontend();
+            controller.RegisterFrontend(frontend);
+
+            // The comfort settings object does not exist yet at registration time, so the first
+            // push resolves the setting as absent and reads "Off" — this is the race, reproduced.
+            (string title, IReadOnlyList<MenuAction> actions) firstPush = frontend.Pushed[MenuActions.SettingsScreen];
+            MenuAction firstRow = firstPush.actions.First(a => a.ActionId == MenuActions.SettingsToggleDebugOverlay);
+            Assert.That(firstRow.Label, Does.Contain("Off"),
+                "positive control: the race must actually reproduce, or the fix below proves nothing");
+
+            // Now the "other component's Start" runs late and loads a saved on-flag.
+            BlockiverseComfortSettings settings = CreateSettings();
+            settings.DebugOverlayEnabled = true;
+
+            MethodInfo handleAction = typeof(BlockiverseMenuController)
+                .GetMethod("HandleAction", BindingFlags.Instance | BindingFlags.NonPublic);
+            handleAction.Invoke(controller, new object[] { MenuActions.PauseSettings });
+
+            (string title, IReadOnlyList<MenuAction> actions) secondPush = frontend.Pushed[MenuActions.SettingsScreen];
+            MenuAction secondRow = secondPush.actions.First(a => a.ActionId == MenuActions.SettingsToggleDebugOverlay);
+
+            Assert.That(secondRow.Label, Does.Contain("On"),
+                "opening Settings must rebuild the row from the current setting, not replay the " +
+                "stale push from before the setting finished loading");
         }
     }
 }

@@ -68,6 +68,13 @@ namespace Blockiverse.Gameplay
         public IPlayerVitalsView HealthView => Vitals;
         public ISurvivalVitalsView SurvivalVitalsView => SurvivalVitals;
 
+        // Whether hunger/thirst/stamina are actually meaningful right now. SurvivalVitalsView
+        // always returns a live instance regardless of mode — switching to Creative stops ticking
+        // it, it does not remove it — so a UI that binds on presence alone renders stale/default
+        // survival readings in Creative instead of hiding the rows. Public so GameplayStatsController
+        // can gate visibility on the mode rather than on whether an instance exists.
+        public bool IsSurvivalModeActive => InSurvivalMode;
+
         // Fired when the local player's health reaches zero; the menu layer shows the death screen.
         public event Action LocalPlayerDied;
         public event Action<HealthChangeResult> LocalPlayerDamaged;

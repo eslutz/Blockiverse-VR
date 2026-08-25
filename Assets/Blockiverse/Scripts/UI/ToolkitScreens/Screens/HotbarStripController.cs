@@ -132,6 +132,13 @@ namespace Blockiverse.UI
 
         void Cycle(int delta)
         {
+            // In Creative the underlying inventory instance still reports a positive
+            // HotbarSlotCount (SwitchToCreative clears slots, not the instance), so without this
+            // check the face buttons would silently cycle the survival selection while the strip
+            // itself sits collapsed and gives no feedback that anything happened.
+            if (survivalSync != null && survivalSync.CurrentMode != PlayerModeState.Survival)
+                return;
+
             int count = inventory != null ? inventory.HotbarSlotCount : 0;
 
             if (count <= 0)
@@ -270,8 +277,14 @@ namespace Blockiverse.UI
             if (slots[0] == null)
                 return;
 
-            // No survival inventory means Creative: collapse rather than draw ten empty recesses.
-            bool hasHotbar = inventory != null && inventory.HotbarSlotCount > 0;
+            // `inventory != null` alone does not detect Creative: SurvivalCreativeModeSwitch.
+            // SwitchToCreative clears the existing inventory's SLOTS but keeps the same instance
+            // bound with its HotbarSlotCount unchanged, so the strip would keep drawing ten empty
+            // recesses in Creative — and overlap the Creative quick block menu, which is exactly
+            // the collision this collapse exists to prevent. Gated on CurrentMode too when a sync
+            // is bound; BindForTest's direct-bind seam has no sync to ask and is trusted.
+            bool hasHotbar = inventory != null && inventory.HotbarSlotCount > 0 &&
+                (survivalSync == null || survivalSync.CurrentMode == PlayerModeState.Survival);
             strip?.EnableInClassList(StripHiddenClass, !hasHotbar);
 
             if (!hasHotbar)

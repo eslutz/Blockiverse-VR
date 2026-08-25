@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
+using Blockiverse.Gameplay;
+using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.UI;
 using NUnit.Framework;
@@ -225,6 +228,77 @@ namespace Blockiverse.Tests.EditMode.Toolkit
             Assert.DoesNotThrow(() => controller.SelectNext());
             Assert.DoesNotThrow(() => controller.SelectPrevious());
             Assert.DoesNotThrow(() => controller.SelectSlot(4));
+        }
+
+        // ── Creative mode ────────────────────────────────────────────────────
+        //
+        // Flagged by review: `inventory != null` alone does not detect Creative.
+        // SurvivalCreativeModeSwitch.SwitchToCreative clears the bound Inventory's SLOTS but keeps
+        // the same instance, with HotbarSlotCount unchanged — so without a mode check the strip
+        // would keep drawing ten empty recesses in Creative, overlapping the Creative quick block
+        // menu, and the face buttons would keep cycling a selection nobody can see change.
+
+        (HotbarStripController controller, VisualElement root, MultiplayerSurvivalSync sync)
+            CreateStripInCreativeWorld()
+        {
+            var managerObject = new GameObject("World Manager");
+            objectsToDestroy.Add(managerObject);
+            CreativeWorldManager manager = managerObject.AddComponent<CreativeWorldManager>();
+            manager.SetGameMode(WorldGameMode.Creative);
+
+            var syncObject = new GameObject("Survival Sync");
+            objectsToDestroy.Add(syncObject);
+            MultiplayerSurvivalSync sync = syncObject.AddComponent<MultiplayerSurvivalSync>();
+            sync.Configure(null, null, manager);
+
+            sync.SetMode(PlayerModeState.Creative);
+            Assert.That(sync.CurrentMode, Is.EqualTo(PlayerModeState.Creative),
+                "fixture failed: could not enter Creative mode");
+
+            (HotbarStripController controller, VisualElement root) = CreateStrip();
+
+            // Bound directly via reflection rather than left to OnAwake's BindFromScene. The full
+            // EditMode suite runs many fixtures in one shared domain, and BlockiverseSceneLookup.Find
+            // returns whichever MultiplayerSurvivalSync FindFirstObjectByType happens to enumerate
+            // first — a leftover instance from an unrelated fixture that has not been torn down.
+            // These tests target the CurrentMode check inside Refresh()/Cycle(), not scene discovery,
+            // so binding the exact instance this fixture created is what makes them deterministic.
+            typeof(HotbarStripController)
+                .GetField("survivalSync", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(controller, sync);
+
+            return (controller, root, sync);
+        }
+
+        [Test]
+        public void StripStaysCollapsedInCreativeEvenWithAPositiveHotbarSlotCount()
+        {
+            (HotbarStripController controller, VisualElement root, _) = CreateStripInCreativeWorld();
+            VisualElement strip = root.Q<VisualElement>("bv-hotbar-strip");
+
+            controller.BindForTest(new Inventory());
+            controller.Refresh();
+
+            Assert.That(new Inventory().HotbarSlotCount, Is.GreaterThan(0),
+                "positive control: a fresh Inventory reports slots, so collapse must come from " +
+                "the mode check and not from an empty inventory");
+            Assert.That(strip.ClassListContains("hb-strip--hidden"), Is.True,
+                "the strip must stay collapsed in Creative even though the bound inventory still " +
+                "reports a positive HotbarSlotCount");
+        }
+
+        [Test]
+        public void CyclingDoesNothingInCreative()
+        {
+            (HotbarStripController controller, _, _) = CreateStripInCreativeWorld();
+            controller.BindForTest(new Inventory());
+
+            int before = controller.SelectedSlotIndex;
+            controller.SelectNext();
+
+            Assert.That(controller.SelectedSlotIndex, Is.EqualTo(before),
+                "cycling must be inert in Creative, not silently move a selection the collapsed " +
+                "strip gives no feedback about");
         }
     }
 }

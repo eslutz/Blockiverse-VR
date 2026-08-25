@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Blockiverse.Core;
+using Blockiverse.Gameplay;
 using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.UI;
@@ -317,6 +319,76 @@ namespace Blockiverse.Tests.EditMode
             // 40/100 is below half, so stamina carries the low signal while hunger does not.
             Assert.That(root.Q<VisualElement>("bv-vital-stamina").ClassListContains("gs-vital--low"), Is.True);
             Assert.That(root.Q<VisualElement>("bv-vital-hunger").ClassListContains("gs-vital--low"), Is.False);
+        }
+
+        // Flagged by review: `survivalVitals != null` alone does not detect Creative mode.
+        // SurvivalVitalsRuntime.SurvivalVitalsView always returns a live SurvivalVitals instance
+        // regardless of mode — switching to Creative stops TICKING it, it does not remove it — so
+        // without a mode check a Creative session would render hunger/thirst/stamina from
+        // stale/default values instead of hiding the rows behind gs-vital--absent.
+        [Test]
+        public void SurvivalRowsStayHiddenInCreativeEvenThoughTheRuntimeStillHasAVitalsInstance()
+        {
+            var managerObject = new GameObject("World Manager");
+            objectsToDestroy.Add(managerObject);
+            CreativeWorldManager manager = managerObject.AddComponent<CreativeWorldManager>();
+            manager.SetGameMode(WorldGameMode.Creative);
+
+            var syncObject = new GameObject("Survival Sync");
+            objectsToDestroy.Add(syncObject);
+            MultiplayerSurvivalSync sync = syncObject.AddComponent<MultiplayerSurvivalSync>();
+            sync.Configure(null, null, manager);
+            sync.SetMode(PlayerModeState.Creative);
+
+            var runtimeObject = new GameObject("Vitals Runtime");
+            objectsToDestroy.Add(runtimeObject);
+            SurvivalVitalsRuntime runtime = runtimeObject.AddComponent<SurvivalVitalsRuntime>();
+            runtime.Configure(sync, manager);
+
+            Assert.That(runtime.IsSurvivalModeActive, Is.False,
+                "fixture failed: the runtime must agree it is not in survival mode");
+            Assert.That(runtime.SurvivalVitalsView, Is.Not.Null,
+                "positive control: the runtime still hands back a live instance in Creative, which " +
+                "is exactly the trap `survivalVitals != null` alone falls into");
+
+            GameplayStatsController controller = CreateScreen<GameplayStatsController>();
+            VisualElement root = AttachFreshTree(controller);
+            controller.Bind(new PlayerVitals(currentHealth: 75));
+
+            // BindFromScene is invoked explicitly rather than relied on from Awake/OnShown: this
+            // fixture creates the runtime and the controller in the same synchronous test method,
+            // and Awake's automatic discovery does not reliably observe a scene object created
+            // moments earlier in this harness. Calling the real method directly still exercises the
+            // exact production binding and the exact survivalPresent computation this test targets
+            // — it is the discovery TIMING being sidestepped, not the logic under test.
+            MethodInfo bindFromScene = typeof(GameplayStatsController).GetMethod(
+                "BindFromScene", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(bindFromScene, Is.Not.Null, "BindFromScene is the seam this test targets.");
+            bindFromScene.Invoke(controller, null);
+
+            var vitalsRuntimeField = typeof(GameplayStatsController).GetField(
+                "vitalsRuntime", BindingFlags.Instance | BindingFlags.NonPublic);
+            var survivalVitalsField = typeof(GameplayStatsController).GetField(
+                "survivalVitals", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            // Positive control: confirm BindFromScene actually discovered the runtime and bound
+            // survivalVitals through it, rather than the rows happening to read "hidden" below
+            // because nothing was ever bound at all.
+            Assert.That(vitalsRuntimeField.GetValue(controller), Is.Not.Null,
+                "positive control failed: BindFromScene never discovered the runtime.");
+            Assert.That(survivalVitalsField.GetValue(controller), Is.Not.Null,
+                "positive control failed: survivalVitals was never bound.");
+
+            controller.Refresh();
+
+            foreach (string vital in new[] { "hunger", "thirst", "stamina" })
+            {
+                Assert.That(
+                    root.Q<VisualElement>($"bv-vital-{vital}").ClassListContains("gs-vital--absent"),
+                    Is.True,
+                    $"{vital} rendered from the runtime's stale Creative-mode values instead of " +
+                    "being hidden.");
+            }
         }
 
         // Creative has health and nothing else. An unbound meter draws as an empty bar, which reads

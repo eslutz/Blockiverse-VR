@@ -490,6 +490,15 @@ namespace Blockiverse.UI
                     router.PopScreen();
                     break;
                 case MenuActions.PauseSettings:
+                    // Rebuilt immediately before showing rather than trusting RefreshStaticMenus'
+                    // earlier push: that one runs from this controller's own Start/registration,
+                    // and persisted comfort settings load in a DIFFERENT component's Start, whose
+                    // ordering relative to this one is not guaranteed. A saved
+                    // DebugOverlayEnabled=true loaded after the earlier push would otherwise leave
+                    // the row reading "Off" while the overlay is actually on, and pressing it would
+                    // turn the overlay off while the label — now matching the flipped value —
+                    // appeared unchanged.
+                    RefreshSettingsMenu();
                     router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));
                     break;
                 case MenuActions.PauseReturnToTitle:
