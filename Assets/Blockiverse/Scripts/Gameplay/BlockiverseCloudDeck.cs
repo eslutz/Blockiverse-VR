@@ -541,6 +541,21 @@ namespace Blockiverse.Gameplay
         // the sky behind it, which is the whole trick for "the clouds go on forever" on an opaque
         // material: the far cells are still drawn, they simply stop being distinguishable from the
         // sky, so there is no boundary left to see.
+        //
+        // EASED, not linear, and only here — the fade used for OCCUPANCY (CellTop's cutoff, which
+        // decides whether a cell exists at all) stays linear in RimFade, so this changes nothing
+        // about which cells are present or how many quads the deck builds; it only bends how their
+        // colour approaches the sky.
+        //
+        // The reason to bend it: a ring viewed from near its own elevation projects, under ordinary
+        // perspective, to a conic that pinches toward a point in whatever direction you're looking
+        // near the ring's angle. A LINEAR world-space fade still compresses to a hard-looking edge
+        // there, because the compression is a property of viewing a bounded boundary edge-on, not
+        // of how gradual the boundary's own colour ramp is. Smoothstep spends more of the fade
+        // BAND already close to the aerial colour before the outer few percent, which is where that
+        // compression bites hardest, so less of the visible sharpness survives it. It is a
+        // mitigation, not a fix -- the full fix would need the fade computed per camera per frame,
+        // which the flat, unlit, baked-per-vertex contract this deck runs under does not support.
         void ApplyVertexColors()
         {
             if (mesh == null || vertexFade.Count == 0)
@@ -551,7 +566,8 @@ namespace Blockiverse.Gameplay
             for (int i = 0; i < vertexFade.Count; i++)
             {
                 Color baseColor = vertexIsTop[i] ? topColor : sideColor;
-                colors.Add(Color.Lerp(baseColor, horizonColor, vertexFade[i]));
+                float eased = Mathf.SmoothStep(0.0f, 1.0f, vertexFade[i]);
+                colors.Add(Color.Lerp(baseColor, horizonColor, eased));
             }
 
             mesh.SetColors(colors);

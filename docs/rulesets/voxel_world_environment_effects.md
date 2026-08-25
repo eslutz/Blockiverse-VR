@@ -537,6 +537,27 @@ Three properties of the deck are load-bearing:
   Note the square it replaced reached only 17.8°, so the deck now extends FURTHER while its
   full-strength core is smaller — which is the shape "enlarge it and blend the edges" asks for.
 
+- **The deck is only used for Clear, Partly Cloudy, and Overcast.** All seven precipitation and fog
+  states render the veil alone, at full coverage share (see below). This is not a simplification for
+  those states, it is a correction: at the near-total coverage those states request, the deck's
+  circular rim projects, under ordinary perspective, as a conic that pinches toward a point in
+  whatever direction the player happens to be looking near the ring's own elevation — the "two
+  edges meeting at a corner" a solid overcast sheet reads as on screen. That compression is a
+  property of viewing a bounded disc edge-on; no width of world-space fade band removes it, because
+  the fade dissolves the boundary in world space and the compression happens in the PROJECTION of
+  that already-dissolved boundary. The deck's geometric depth is also invisible once coverage is
+  that high — a solid flat-bottomed sheet looks the same with or without geometry under it — so
+  those states lose nothing real by dropping it. The veil has no rim to compress, being painted at
+  infinity.
+
+  For the three states that keep the deck, the rim's COLOUR fade (not its occupancy — which cells
+  exist stays a linear function of `RimFade`) is eased with `smoothstep` rather than blended
+  linearly. This is a mitigation for the same projection effect at lower coverage, where it is
+  present but less severe: spending more of the fade band already close to the sky colour softens
+  how much of the compressed edge survives on screen. A true fix would compute the fade per camera
+  per frame, which the flat, unlit, baked-per-vertex contract the deck renders under does not
+  support.
+
 **The veil** keeps the rest of the hemisphere, including the band below the deck's rim, so the two
 layers hand off to each other. Coverage drives a **threshold** there, not an opacity:
 
@@ -549,8 +570,11 @@ amount    = smoothstep(threshold, threshold + softness, density);
 
 Threshold rather than opacity matters: at low coverage a few small clouds appear and grow and join
 up as it rises, whereas fading a full-sky sheet in and out reads as haze rather than as weather.
-Coverage is **split** between the layers and never applied twice — driving both from the raw value
-stacks an opaque deck under an opaque veil and reads as soup rather than as overcast.
+Coverage is **split** between the layers and never applied twice while the deck is in play —
+driving both at once stacks an opaque deck under an opaque veil and reads as soup rather than as
+overcast. `skyVeilShare` is the deck's usual thin share (0.35) for Clear, Partly Cloudy, and
+Overcast, and jumps to 1.0 for every other state, where the veil is the only layer carrying the
+weather and has to be able to close the sky on its own.
 
 Both layers grey toward storm and darken at night along with the rest of the sky, but never to
 black — an overcast night must not become a flat void.

@@ -173,6 +173,17 @@ This file is the concise handoff for future agent work in the Blockiverse VR pro
   fogged, so any deviation shows up somewhere. `SkyGradientSolver.GroundColor` / `NightGround` were
   deleted rather than kept as a second opinion; `DayGround` survives only as the authored asset
   default. Ruleset: `voxel_world_environment_effects.md` §7.4.
+- **The geometry deck is used for Clear/PartlyCloudy/Overcast only** (`BlockiverseLightingCycleController.WeatherUsesCloudDeck`),
+  everything else (all precipitation states plus Fog) is skybox veil alone at full `skyVeilShare`
+  (1.0 instead of the deck-sharing 0.35). Device feedback (Eric, 2026-08-25): at the near-total
+  coverage those states request, the deck's circular rim reads on screen as two edges meeting at a
+  point — a ring viewed near its own elevation compresses under ordinary perspective, which no
+  width of world-space fade band fixes because the compression happens in the PROJECTION of an
+  already-dissolved boundary, not in how gradual the boundary itself is. The three states that keep
+  the deck got a mitigation for the same effect at lower severity: the rim's COLOUR fade (not its
+  occupancy, which stays linear in `RimFade`) is `Mathf.SmoothStep`-eased in
+  `BlockiverseCloudDeck.ApplyVertexColors`. A full fix needs the fade computed per camera per frame,
+  which the flat unlit baked-per-vertex contract does not support.
 - **Canopy skylight is per-CELL and floored, and it is ONE value for rendering AND gameplay.** `VoxelSkyLightMap.SkyTransmittance` walks the
   transmitting layers strictly above the queried cell (it used to be one cached product per column,
   which charged a cell inside a crown for the leaves below it too), and the Beer–Lambert product is

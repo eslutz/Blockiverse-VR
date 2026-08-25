@@ -371,6 +371,87 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void TheRimColourFadeIsEASEDNotLinear()
+        {
+            // The occupancy fade (which cells exist) stays linear in RimFade -- this only asserts
+            // that the COLOUR each vertex is painted follows an eased curve, which is what softens
+            // the rim's on-screen sharpness without moving which cells are built (see the comment
+            // on ApplyVertexColors for why: a linear world-space fade still compresses to a hard
+            // edge under near-tangential viewing, and easing the colour only is the mitigation that
+            // does not disturb the occupancy tests).
+            //
+            // Picked at a fade value where linear and smoothstep visibly disagree (0.25 -> linear
+            // 0.25, smoothstep ~0.156) and read back from the ACTUAL mesh colours the deck wrote,
+            // not from calling Mathf.SmoothStep ourselves -- that would just check that Unity's own
+            // function agrees with itself.
+            // Locate a SPECIFIC cell whose fade is near 0.25 first (each quad's four corners share
+            // one fade value, computed once for the cell -- recomputing RimFade from a raw corner
+            // position is unsound, because three of a top quad's four corners round to a
+            // NEIGHBOURING cell's integer offset, not the cell's own).
+            const float TargetFade = 0.25f;
+            int bestGx = 0, bestGz = 0;
+            float bestCellDelta = float.MaxValue;
+
+            for (int gz = -46; gz < 46; gz++)
+            {
+                for (int gx = -46; gx < 46; gx++)
+                {
+                    float delta = Mathf.Abs(BlockiverseCloudDeck.RimFade(gx, gz) - TargetFade);
+                    if (delta < bestCellDelta)
+                    {
+                        bestCellDelta = delta;
+                        bestGx = gx;
+                        bestGz = gz;
+                    }
+                }
+            }
+
+            Assert.That(bestCellDelta, Is.LessThan(0.01f), "No cell landed near fade 0.25; the fixture found nothing to check.");
+
+            BlockiverseCloudDeck deck = CreateDeck();
+            var top = new Color(1.0f, 0.0f, 0.0f, 1.0f);
+            var horizon = new Color(0.0f, 1.0f, 0.0f, 1.0f);
+            // Full coverage so the located cell is actually occupied and not skipped for density.
+            deck.SetSky(1.0f, top, top, horizon);
+            deck.RebuildAt(0, 0);
+
+            Mesh mesh = deck.GetComponent<MeshFilter>().sharedMesh;
+            Vector3[] verts = mesh.vertices;
+            Vector3[] norms = mesh.normals;
+            Color[] colors = mesh.colors;
+
+            float expectedX0 = bestGx * BlockiverseCloudDeck.CellMeters;
+            float expectedZ0 = bestGz * BlockiverseCloudDeck.CellMeters;
+            Color? found = null;
+
+            for (int i = 0; i < verts.Length; i += 4)
+            {
+                if (norms[i].y <= 0.5f)
+                    continue; // top faces only
+
+                float minX = Mathf.Min(Mathf.Min(verts[i].x, verts[i + 1].x), Mathf.Min(verts[i + 2].x, verts[i + 3].x));
+                float minZ = Mathf.Min(Mathf.Min(verts[i].z, verts[i + 1].z), Mathf.Min(verts[i + 2].z, verts[i + 3].z));
+
+                if (Mathf.Approximately(minX, expectedX0) && Mathf.Approximately(minZ, expectedZ0))
+                {
+                    found = colors[i];
+                    break;
+                }
+            }
+
+            Assert.That(found, Is.Not.Null,
+                $"Cell ({bestGx},{bestGz}) with fade {TargetFade} built no top quad; it was culled, " +
+                "so this fixture is not exercising the fade this test is about.");
+
+            float linearR = Mathf.Lerp(top.r, horizon.r, TargetFade);
+            float easedR = Mathf.Lerp(top.r, horizon.r, Mathf.SmoothStep(0.0f, 1.0f, TargetFade));
+
+            Assert.That(Mathf.Abs(found.Value.r - linearR), Is.GreaterThan(Mathf.Abs(found.Value.r - easedR)),
+                $"Vertex colour {found.Value.r:0.000} sits closer to the LINEAR prediction ({linearR:0.000}) " +
+                $"than the eased one ({easedR:0.000}); the fade is not actually eased.");
+        }
+
+        [Test]
         public void ChangingTheSKYCOLOURRepaintsWithoutRebuildingGeometry()
         {
             // Now that the sky variant is unlit, the baked vertex colour is the deck's ONLY colour.

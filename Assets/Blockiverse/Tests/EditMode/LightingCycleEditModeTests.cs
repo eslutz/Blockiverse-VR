@@ -117,6 +117,40 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void OnlyLightAndClearWeatherStatesUseTheGeometryDeck()
+        {
+            // Device feedback (Eric, 2026-08-25): under heavy precipitation the deck's near-total
+            // coverage turns its dissolved rim into what reads on screen as a hard edge -- a
+            // property of viewing a bounded disc edge-on, not something a wider world-space fade
+            // band fixes. The deck's geometric depth is also invisible at that coverage anyway, so
+            // heavy states drop it and rely on the skybox veil alone, which has no rim to see.
+            //
+            // Pinned exhaustively over every state rather than spot-checked, so adding a new
+            // WeatherState forces a decision here instead of silently defaulting one way or another.
+            var expectDeck = new System.Collections.Generic.Dictionary<WeatherState, bool>
+            {
+                [WeatherState.Clear] = true,
+                [WeatherState.PartlyCloudy] = true,
+                [WeatherState.Overcast] = true,
+                [WeatherState.LightRain] = false,
+                [WeatherState.HeavyRain] = false,
+                [WeatherState.Thunderstorm] = false,
+                [WeatherState.LightSnow] = false,
+                [WeatherState.HeavySnow] = false,
+                [WeatherState.Blizzard] = false,
+                [WeatherState.Fog] = false,
+            };
+
+            foreach (WeatherState weather in System.Enum.GetValues(typeof(WeatherState)))
+            {
+                Assert.That(expectDeck, Does.ContainKey(weather),
+                    $"{weather} has no expectation recorded here -- a new state must be a deliberate choice.");
+                Assert.That(BlockiverseLightingCycleController.WeatherUsesCloudDeck(weather), Is.EqualTo(expectDeck[weather]),
+                    $"{weather} deck usage does not match the recorded policy.");
+            }
+        }
+
+        [Test]
         public void LightingCycleEvaluatorKeepsNightDimmerThanDay()
         {
             LightingCycleState day = LightingCycleEvaluator.Evaluate(0.25f);

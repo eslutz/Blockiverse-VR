@@ -162,6 +162,7 @@ namespace Blockiverse.Gameplay
             bool applyFog = false;
             float fogDensity = 0f;
             float cloudCoverage = 0f;
+            WeatherState weather = WeatherState.Clear;
             if (environmentSource != null &&
                 environmentSource.TryEvaluateEnvironment(WorldConstants.SeaLevel, out EnvironmentState environment))
             {
@@ -169,6 +170,7 @@ namespace Blockiverse.Gameplay
                 fogDensity = EnvironmentLightingSolver.FogDensity(environment);
                 applyFog = fogDensity > 0f;
                 cloudCoverage = Mathf.Clamp01(environment.CloudCoverage);
+                weather = environment.Weather;
             }
 
             // One directional light serves as both bodies — URP only ever promotes a single
@@ -216,8 +218,35 @@ namespace Blockiverse.Gameplay
                 cloudCoverage,
                 MoonPhaseIndex / (float)EnvironmentLightComputer.FullMoonLightLevel);
             ApplyFog(applyFog, skyHorizon, fogDensity, submergedBlend);
-            ApplySky(worldTimeClock.NormalizedTime, cloudCoverage, skyHorizon);
+            ApplySky(worldTimeClock.NormalizedTime, cloudCoverage, skyHorizon, weather);
         }
+
+        /// <summary>
+        /// Whether this weather state gets the geometry deck, or the skybox veil alone.
+        /// </summary>
+        /// <remarks>
+        /// Device feedback (Eric, 2026-08-25): under heavy precipitation the deck's near-total
+        /// coverage turns its circular rim into what reads on screen as two straight edges meeting
+        /// at a point. The rim IS dissolved in world space (see BlockiverseCloudDeck.RimFade), but
+        /// a ring viewed from near its own elevation projects, under ordinary perspective, to a
+        /// conic that pinches toward a point in whatever direction you happen to be looking near
+        /// the ring's angle — so a gradual world-space fade still compresses to a hard-looking line
+        /// on screen depending on view direction. No width of world-space fade band fixes that; it
+        /// is a property of viewing a bounded disc edge-on, not of how the boundary itself softens.
+        ///
+        /// The deck's geometric depth is also invisible at near-total coverage anyway — a solid
+        /// flat-bottomed sheet looks the same with or without the geometry underneath it. So heavy
+        /// states lose nothing by dropping the deck: LightRain, HeavyRain, Thunderstorm, LightSnow,
+        /// HeavySnow, Blizzard, and Fog all render through the skybox veil alone, which has no rim
+        /// to see because it is painted at infinity.
+        /// </remarks>
+        public static bool WeatherUsesCloudDeck(WeatherState weather) => weather switch
+        {
+            WeatherState.Clear => true,
+            WeatherState.PartlyCloudy => true,
+            WeatherState.Overcast => true,
+            _ => false,
+        };
 
         // Drives the generated sky material. This exists because the stock procedural skybox
         // derives everything from the direction of RenderSettings.sun, and this project points one
@@ -240,7 +269,7 @@ namespace Blockiverse.Gameplay
             horizonSkirt = skirt;
         }
 
-        void ApplySky(float normalizedTime, float cloudCoverage, Color aerial)
+        void ApplySky(float normalizedTime, float cloudCoverage, Color aerial, WeatherState weather)
         {
             // ONLY ever writes a material this component minted for itself.
             //
@@ -270,34 +299,51 @@ namespace Blockiverse.Gameplay
             skyMaterial.SetColor(SunColorId, SkyGradientSolver.SunDiskColor(normalizedTime, moonPhaseScale));
             skyMaterial.SetColor(CloudColorId, SkyGradientSolver.CloudColor(normalizedTime, cloudCoverage));
 
-            // Coverage is SPLIT between the two layers, never applied twice. The geometry deck
-            // carries the weather; the skybox keeps a thin high veil that thickens only slightly.
-            // Driving both from the raw value would stack an opaque deck under an opaque veil and
-            // read as muddy soup rather than as overcast.
-            skyMaterial.SetFloat(CloudCoverageId, cloudCoverage * SkyVeilShare);
+            bool useDeck = WeatherUsesCloudDeck(weather);
+
+            // Coverage is SPLIT between the two layers, never applied twice, EXCEPT when the deck
+            // is not in play at all — then the veil is the only thing carrying the weather and has
+            // to be able to close the sky completely on its own, so it takes the FULL coverage
+            // rather than its usual thin share. Driving both at full strength together would stack
+            // an opaque deck under an opaque veil and read as muddy soup rather than as overcast.
+            float veilShare = useDeck ? SkyVeilShare : 1.0f;
+            skyMaterial.SetFloat(CloudCoverageId, cloudCoverage * veilShare);
 
             if (cloudDeck != null)
             {
-                Color deckColor = SkyGradientSolver.CloudColor(normalizedTime, cloudCoverage);
+                if (useDeck)
+                {
+                    Color deckColor = SkyGradientSolver.CloudColor(normalizedTime, cloudCoverage);
 
-                // Underside darker than the top, which is most of what gives a flat-bottomed deck
-                // its volume from below — the angle a player on the ground always sees it from.
-                //
-                // These are LITERAL colours now. Through the lit path they were not: vertex colour
-                // there is baked light data, so the deck rendered as its white texel at a
-                // brightness derived from these, and every weather state drew the same white cloud
-                // slightly dimmer or brighter. The sky shader variant is unlit and takes the
-                // vertex colour as written, so the storm grey in CloudColor finally arrives — and
-                // the top/underside split has to carry its own contrast rather than borrowing the
-                // sun's, hence the darkening here.
-                Color underside = Color.Lerp(
-                    new Color(deckColor.r * 0.70f, deckColor.g * 0.70f, deckColor.b * 0.72f, 1.0f),
-                    aerial,
-                    0.25f);
+                    // Underside darker than the top, which is most of what gives a flat-bottomed
+                    // deck its volume from below — the angle a player on the ground always sees it
+                    // from.
+                    //
+                    // These are LITERAL colours now. Through the lit path they were not: vertex
+                    // colour there is baked light data, so the deck rendered as its white texel at
+                    // a brightness derived from these, and every weather state drew the same white
+                    // cloud slightly dimmer or brighter. The sky shader variant is unlit and takes
+                    // the vertex colour as written, so the storm grey in CloudColor finally
+                    // arrives — and the top/underside split has to carry its own contrast rather
+                    // than borrowing the sun's, hence the darkening here.
+                    Color underside = Color.Lerp(
+                        new Color(deckColor.r * 0.70f, deckColor.g * 0.70f, deckColor.b * 0.72f, 1.0f),
+                        aerial,
+                        0.25f);
 
-                // The fourth colour is what the deck's rim dissolves into, and it is the aerial
-                // colour rather than another cloud tone for the same reason the skirt's is.
-                cloudDeck.SetSky(cloudCoverage, deckColor, underside, aerial);
+                    // The fourth colour is what the deck's rim dissolves into, and it is the aerial
+                    // colour rather than another cloud tone for the same reason the skirt's is.
+                    cloudDeck.SetSky(cloudCoverage, deckColor, underside, aerial);
+                }
+                else
+                {
+                    // WeatherUsesCloudDeck false: empty the deck rather than leaving it built at
+                    // whatever coverage the last deck-enabled state left behind. SetSky(0, ...)
+                    // drives DeckCoverage(0) = 0, which is CoverageCutoff's admits-nothing case, so
+                    // the next rebuild produces zero geometry. One rebuild on the transition, then
+                    // nothing — LateUpdate only rebuilds again once coverage actually changes.
+                    cloudDeck.SetSky(0.0f, aerial, aerial, aerial);
+                }
             }
 
             if (horizonSkirt != null)
