@@ -389,14 +389,30 @@ namespace Blockiverse.Gameplay
             main.startSize = isSnow ? 0.16f : Mathf.Lerp(0.05f, 0.11f, intensity);
             // Splashes pop upward a little; ground snow is blown sideways by the same wind that
             // drives the falling flakes, so the two agree instead of looking like separate systems.
-            main.startSpeed = isSnow ? BlizzardWindMetersPerSecond * intensity : 0.5f;
+            // Both kinds emit gently upward off the surface. Ground snow gets its sideways motion
+            // from velocityOverLifetime below, NOT from the emission direction -- see the shape
+            // rotation note.
+            main.startSpeed = isSnow ? 0.35f : 0.5f;
             main.startColor = isSnow
                 ? new Color(1.0f, 1.0f, 1.0f, 0.5f * intensity)
                 : new Color(0.78f, 0.88f, 1.0f, 0.5f);
 
+            // The disc stays FLAT for both kinds. A Circle shape emits in its local XY plane, so
+            // leaving the rotation at zero stood the ring upright and fired particles out to the
+            // left and right of the player -- "a line of squares moving away from me in either
+            // direction". The +90 about X is what lays it on the ground; it is not optional for
+            // one kind and not the other.
             ParticleSystem.ShapeModule shape = groundParticles.shape;
-            // Snow blows outward along the surface; splashes rise from where they land.
-            shape.rotation = isSnow ? new Vector3(0.0f, 0.0f, 0.0f) : new Vector3(90.0f, 0.0f, 0.0f);
+            shape.rotation = new Vector3(90.0f, 0.0f, 0.0f);
+
+            // Sideways drift belongs in velocity, where it can match the wind driving the falling
+            // snow instead of being baked into the emission direction.
+            ParticleSystem.VelocityOverLifetimeModule drift = groundParticles.velocityOverLifetime;
+            drift.enabled = isSnow;
+            drift.space = ParticleSystemSimulationSpace.World;
+            float groundWind = isSnow ? BlizzardWindMetersPerSecond * intensity : 0.0f;
+            drift.x = new ParticleSystem.MinMaxCurve(groundWind * 0.5f, groundWind);
+            drift.z = new ParticleSystem.MinMaxCurve(-groundWind * 0.25f, groundWind * 0.25f);
 
             return kind switch
             {

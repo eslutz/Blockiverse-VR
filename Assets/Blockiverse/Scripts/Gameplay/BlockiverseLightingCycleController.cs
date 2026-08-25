@@ -327,6 +327,21 @@ namespace Blockiverse.Gameplay
         // here so they cannot fight each other frame to frame.
         void ApplyFog(bool applyWeatherFog, Color weatherFogColor, float weatherFogDensity, float submergedBlend)
         {
+            // Same guard, and the same reason, as ApplySky above: RenderSettings fog is SERIALISED
+            // INTO THE SCENE, so writing it outside play mode bakes whatever weather the caller
+            // happened to be simulating into Boot.unity and MultiplayerTest.unity, and the
+            // bootstrapper's scene save commits it.
+            //
+            // This was invisible until fog became unconditional. Before that the write was
+            // `RenderSettings.fog = applyWeatherFog`, which is false in clear weather and therefore
+            // matched the scenes' committed `m_Fog: 0` -- a no-op that left no diff. Making fog
+            // always-on turned the same code path into a guaranteed two-scene diff on every build,
+            // with a computed fog colour whose alpha was above 1, which no one would author.
+            //
+            // Runtime lighting belongs to the runtime. The scenes keep their authored baseline.
+            if (!Application.isPlaying)
+                return;
+
             if (submergedBlend <= 0.0f)
             {
                 // Unconditional. EnvironmentLightingSolver.FogDensity now floors at

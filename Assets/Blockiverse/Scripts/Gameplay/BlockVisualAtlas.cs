@@ -198,6 +198,18 @@ namespace Blockiverse.Gameplay
 
         // Face-aware overload. `faceIndex` is a ChunkMeshBuilder face index; -1 means "no
         // particular face", which is what cross quads and decals pass.
+        // A zero-area UV rect over the atlas's whitest fully-opaque texel, for geometry that wants
+        // a flat colour rather than a block texture — the cloud deck tints it by vertex colour.
+        //
+        // Measured from the generated atlas: texel (302, 345) of 576x480 is rgb (248, 255, 255).
+        // Recompute if the atlas layout changes; a texel that landed on a transparent or coloured
+        // pixel would tint every quad that samples it.
+        public static readonly Rect WhiteTexelUv = new(
+            (302.0f + 0.5f) / AtlasWidthPixels,
+            1.0f - ((345.0f + 0.5f) / AtlasHeightPixels),
+            0.0f,
+            0.0f);
+
         public static Rect GetTileRect(BlockId blockId, int faceIndex)
         {
             return BuildTileRect(ResolveTileIndex(blockId, faceIndex));

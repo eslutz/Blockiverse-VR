@@ -124,6 +124,20 @@ namespace Blockiverse.Gameplay
             if (HasSkyAccess(world, registry, defs, airPosition, skyLight))
                 return SurfaceLight;
 
+            // Nothing but canopy overhead: shaded, not dark.
+            //
+            // Without this, a cell under leaves had no sky access, the sideways probe below
+            // immediately hit more leaves (not light-passable), and the cell fell through to cave
+            // darkness -- a forest floor lit only by ambient, which reads as pitch black from
+            // inside the headset. Real canopies are gappy; this is that gappiness as a single
+            // multiplier rather than as geometry the mesher would have to resolve.
+            if (skyLight != null)
+            {
+                float transmittance = skyLight.SkyTransmittance(airPosition);
+                if (transmittance > 0.0f)
+                    return SurfaceLight * transmittance;
+            }
+
             int nearestOpening = maxProbeDistance + 1;
 
             foreach (BlockPosition direction in ProbeDirections)

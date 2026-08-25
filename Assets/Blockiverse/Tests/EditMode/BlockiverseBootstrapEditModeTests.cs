@@ -394,23 +394,49 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void LocalDevelopmentBuildMetadataDoesNotFallBackToProjectSettingsVersionCode()
+        public void LocalDevelopmentBuildsDoNotStampAVersion()
         {
-            string buildSmoke = File.ReadAllText(BuildSmokePath);
             string buildScript = File.ReadAllText("scripts/unity/build-development-apk.sh");
-            var sampleUtc = new DateTime(2026, 6, 21, 12, 0, 0, DateTimeKind.Utc);
 
-            Assert.That(BlockiverseBuildSmoke.CreateLocalDevelopmentVersionName(sampleUtc),
-                Is.EqualTo("0.1.0-dev.local.20260621120000"));
-            Assert.That(BlockiverseBuildSmoke.CreateAndroidVersionCode(
-                    new DateTime(2020, 1, 1, 0, 0, 1, DateTimeKind.Utc)),
-                Is.EqualTo(1));
-            Assert.That(BlockiverseBuildSmoke.CreateAndroidVersionCode(sampleUtc), Is.GreaterThan(1));
-            StringAssert.Contains("CreateLocalDevelopmentVersionName(utcNow)", buildSmoke);
-            StringAssert.Contains("CreateAndroidVersionCode(utcNow)", buildSmoke);
-            StringAssert.Contains("1577836800", buildScript);
-            StringAssert.Contains("-blockiverseBuildVersionName \"$UNITY_ANDROID_VERSION_NAME\"", buildScript);
-            StringAssert.Contains("-blockiverseBuildVersionCode \"$UNITY_ANDROID_VERSION_CODE\"", buildScript);
+            // ADR 0005: a local development build keeps whatever ProjectSettings.asset already
+            // carries. The script used to synthesise "${base_version}-dev.local.$(date)" on every
+            // run, which rewrote a tracked file each build AND -- because
+            // BlockiverseNetworkSession refuses a join when the peer's Application.version differs
+            // -- left two dev APKs built minutes apart unable to connect to each other.
+            // Targets the ASSIGNMENT, not the prose. The first version of this asserted the script
+            // contained no "dev.local." anywhere, and then failed against the comment explaining
+            // why the synthesis was removed -- a test that forbids describing the thing it forbids
+            // doing.
+            StringAssert.DoesNotContain("UNITY_ANDROID_VERSION_NAME=\"${UNITY_ANDROID_VERSION_NAME:-", buildScript,
+                "The development build script must not synthesise a version name for itself.");
+            StringAssert.DoesNotContain("UNITY_ANDROID_VERSION_CODE=\"${UNITY_ANDROID_VERSION_CODE:-", buildScript,
+                "The development build script must not synthesise a version code for itself.");
+
+            // The version arguments may still be FORWARDED, but only when the caller sets them.
+            StringAssert.Contains("if [ -n \"${UNITY_ANDROID_VERSION_NAME:-}\" ]", buildScript,
+                "An explicit version override must still reach Unity.");
+            StringAssert.Contains("if [ -n \"${UNITY_ANDROID_VERSION_CODE:-}\" ]", buildScript);
+        }
+
+        [Test]
+        public void ReleaseWorkflowsAgreeOnTheAndroidVersionCodeEpoch()
+        {
+            // The epoch used to be pinned through a C# helper that only the local development path
+            // called. That helper is gone with the local stamp, so the convention now lives in the
+            // release workflows and ADR 0005 -- and it is duplicated between two workflow files,
+            // which is exactly the kind of magic number that drifts silently. A versionCode that
+            // moved would break Android upgrade ordering for every future upload.
+            const string epochSeconds = "1577836800";
+
+            foreach (string workflow in new[] { ".github/workflows/quest-ci.yml", ".github/workflows/quest-alpha.yml" })
+            {
+                Assert.That(File.Exists(workflow), Is.True, $"{workflow} is missing.");
+                StringAssert.Contains(epochSeconds, File.ReadAllText(workflow),
+                    $"{workflow} must derive Android versionCode from the 2020-01-01T00:00:00Z epoch.");
+            }
+
+            StringAssert.Contains(epochSeconds, File.ReadAllText("docs/adr/0005-release-versioning.md"),
+                "ADR 0005 must document the epoch the workflows actually use.");
         }
 
         [Test]

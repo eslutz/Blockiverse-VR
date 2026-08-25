@@ -109,7 +109,8 @@ namespace Blockiverse.Voxel
             // needs different answers: hide no faces, but still block light.
             bool? occludesFaces = null,
             bool? blocksLight = null,
-            bool decaysWithoutSupport = false)
+            bool decaysWithoutSupport = false,
+            float lightTransmission = 0.0f)
         {
             if (string.IsNullOrWhiteSpace(canonicalId))
                 throw new ArgumentException("Block canonical IDs must be non-empty.", nameof(canonicalId));
@@ -137,6 +138,7 @@ namespace Blockiverse.Voxel
             RenderShape = renderShape;
             IsPassable = isPassable;
             DecaysWithoutSupport = decaysWithoutSupport;
+            LightTransmission = lightTransmission < 0f ? 0f : (lightTransmission > 1f ? 1f : lightTransmission);
             // Canonical mining hardness (voxel_survival_ruleset §2/§3). When not specified
             // explicitly, derive a representative value from the hardness class.
             Hardness = hardness >= 0f ? hardness : HardnessFromClass(hardnessClass);
@@ -191,6 +193,16 @@ namespace Blockiverse.Voxel
         /// BlockState.Persistent for, and recording it for every block would turn a deliberately
         /// sparse map into one entry per placed block.</summary>
         public bool DecaysWithoutSupport { get; }
+
+        /// <summary>How much skylight passes THROUGH this block, 0..1, when it blocks light at all.
+        ///
+        /// BlocksLight is binary, and binary is why a forest floor was pitch black: a canopy zeroed
+        /// the column, the sideways light probe hit more leaves and gave up, and the only thing
+        /// left under a tree was ambient. Real canopies are gappy. A leaf layer at 0.45 still
+        /// shades the ground properly while letting enough through to see by.
+        ///
+        /// 0 means a true opaque blocker (stone, a roof) — light stops dead.</summary>
+        public float LightTransmission { get; }
         public int EmissiveLight { get; }
         public BlockHardnessClass HardnessClass { get; }
         public int HarvestTierMin { get; }
@@ -350,7 +362,7 @@ namespace Blockiverse.Voxel
             // Leaves need all three answers to differ: solid (you do not fall through a canopy),
             // cutout-cube geometry, and non-occluding so the alpha gaps reveal the canopy's own
             // interior faces instead of a hollow shell.
-            registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.CutoutCube, occludesFaces: false, decaysWithoutSupport: true));
+            registry.Register(new BlockDefinition(Leafmoss,            "leafmoss",           "Leafmoss",             BlockCategory.Organic,  isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Soft, renderShape: BlockRenderShape.CutoutCube, occludesFaces: false, decaysWithoutSupport: true, lightTransmission: 0.45f));
             // Natural cave light, emissive 7 (voxel_world_environment_effects.md §5.3, voxel_survival_ruleset.md §12.1).
             registry.Register(new BlockDefinition(LumenQuartzCluster,  "lumen_quartz_cluster","Lumen Quartz Cluster", BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 3, emissiveLight: 7));
             registry.Register(new BlockDefinition(EmbercoalSeam,       "embercoal_seam",     "Embercoal Seam",       BlockCategory.Resource, isSolid: true,  isRenderable: true,  hardnessClass: BlockHardnessClass.Hard,   harvestTierMin: 2));

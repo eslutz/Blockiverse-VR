@@ -42,33 +42,45 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void CoverageDrivesHowMuchOfTheSkyIsCloud()
+        public void CoverageProducesRoughlyThatFractionOfSky()
         {
+            // The previous version of this test asserted only that clear == 0, light > 0 and
+            // overcast > light. All three held while the mapping was catastrophically wrong:
+            // coverage 0.05 produced 57% cloud and coverage 0.30 produced 91%, because a 3x3
+            // average of uniform hashes concentrates at 0.5 with a standard deviation of 0.096,
+            // so a band around the mean swallowed nearly everything. Monotonicity was true;
+            // magnitude was nonsense. Clear zero passed only because it is special-cased.
+            //
+            // Measure the actual fraction instead.
             BlockiverseCloudDeck deck = CreateDeck();
 
-            int Occupied(float coverage)
+            float Fraction(float coverage)
             {
-                int count = 0;
-                for (int z = -30; z < 30; z++)
+                int occupied = 0;
+                int total = 0;
+
+                for (int z = -60; z < 60; z++)
                 {
-                    for (int x = -30; x < 30; x++)
+                    for (int x = -60; x < 60; x++)
                     {
+                        total++;
                         if (deck.IsCloudCell(x, z, coverage))
-                            count++;
+                            occupied++;
                     }
                 }
 
-                return count;
+                return occupied / (float)total;
             }
 
-            int clear = Occupied(0.0f);
-            int light = Occupied(0.3f);
-            int overcast = Occupied(1.0f);
+            Assert.That(Fraction(0.0f), Is.EqualTo(0.0f), "Clear must be an empty sky.");
 
-            Assert.That(clear, Is.Zero, "Zero coverage must produce an empty sky, not sparse debris.");
-            Assert.That(light, Is.GreaterThan(0), "Light cover must actually put some cloud up there.");
-            Assert.That(overcast, Is.GreaterThan(light),
-                "Overcast must be cloudier than light cover, or coverage is not connected to anything.");
+            foreach (float coverage in new[] { 0.1f, 0.3f, 0.5f, 0.7f })
+            {
+                float actual = Fraction(coverage);
+                Assert.That(actual, Is.EqualTo(coverage).Within(0.12f),
+                    $"Coverage {coverage:0.00} produced {actual:0.00} of the sky. The quantile table " +
+                    "no longer matches the density field it was measured from.");
+            }
         }
 
         [Test]

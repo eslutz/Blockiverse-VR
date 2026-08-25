@@ -340,6 +340,20 @@ namespace Blockiverse.Gameplay
             placementPreview.ShowAt(placement, CanPlaceBlock(placement));
         }
 
+        /// <summary>Highlights the TARGET block rather than the cell a block would go into.
+        ///
+        /// For a survival tool that acts on the block it is aimed at — stripping a branchwood log
+        /// with a Feller, tilling soil — the placement cell is the empty space NEXT to the target,
+        /// so the ordinary preview would point at the wrong cell entirely. The highlight has to
+        /// answer "what will this do", and for a tool the answer is "that block".</summary>
+        public void UpdatePreviewAtTarget(BlockPosition targetPosition)
+        {
+            if (placementPreview == null)
+                return;
+
+            placementPreview.ShowAt(targetPosition, true);
+        }
+
         public void HidePreview()
         {
             CurrentTarget = null;

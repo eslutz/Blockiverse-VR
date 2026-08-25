@@ -23,8 +23,6 @@ namespace Blockiverse.Editor
         const string BaseVersionFilePath = "ProjectSettings/BlockiverseVersion.txt";
         const string MetaAvatarSamplePresetDirectory = "Assets/Oculus/Avatar2_SampleAssets/SampleAssets/SampleAssets";
         const string MetaAvatarSamplePresetMarkerFile = ".blockiverse-no-sample-presets";
-        static readonly DateTime AndroidVersionCodeEpochUtc =
-            new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         [MenuItem("Blockiverse/Build/Build and Install Android APK")]
         public static void BuildAndInstallAndroid()
@@ -340,32 +338,6 @@ namespace Blockiverse.Editor
             PlayerSettings.Android.keyaliasPass = keyPassword;
         }
 
-        public static void ConfigureLocalDevelopmentAndroidVersion()
-        {
-            DateTime utcNow = DateTime.UtcNow;
-            ApplyAndroidVersion(
-                CreateLocalDevelopmentVersionName(utcNow),
-                CreateAndroidVersionCode(utcNow).ToString(CultureInfo.InvariantCulture));
-        }
-
-        public static string CreateLocalDevelopmentVersionName(DateTime utcNow)
-        {
-            string buildStamp = utcNow
-                .ToUniversalTime()
-                .ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
-
-            return $"{ReadBaseVersion()}-dev.local.{buildStamp}";
-        }
-
-        public static int CreateAndroidVersionCode(DateTime utcNow)
-        {
-            double totalSeconds = (utcNow.ToUniversalTime() - AndroidVersionCodeEpochUtc).TotalSeconds;
-            if (totalSeconds < 1 || totalSeconds > int.MaxValue)
-                throw new InvalidOperationException($"Android versionCode timestamp is out of range: {utcNow:o}");
-
-            return (int)Math.Floor(totalSeconds);
-        }
-
         static void ConfigureAndroidVersion(bool allowLocalDevelopmentDefaults, bool requireExplicitVersion)
         {
             string versionName = GetArgumentValue(BuildVersionNameArgument)
@@ -373,13 +345,23 @@ namespace Blockiverse.Editor
             string versionCode = GetArgumentValue(BuildVersionCodeArgument)
                 ?? Environment.GetEnvironmentVariable("UNITY_ANDROID_VERSION_CODE");
 
-            if (allowLocalDevelopmentDefaults && (string.IsNullOrWhiteSpace(versionName) || string.IsNullOrWhiteSpace(versionCode)))
+            // A local development build with no explicit version writes NOTHING. It keeps whatever
+            // ProjectSettings already carries (ADR 0005's local-development row).
+            //
+            // Stamping a timestamp here was wrong twice over. It rewrote ProjectSettings.asset on
+            // every build, so a tracked file churned constantly and real churn -- the URP
+            // m_RuntimeSettings deletion that must never be committed -- had to be spotted among
+            // that noise. And because BlockiverseNetworkSession refuses a join when the peer's
+            // Application.version differs, two dev APKs built minutes apart could not connect to
+            // each other, which is precisely the local LAN case a dev build exists to test.
+            //
+            // Releases are unaffected: CI passes explicit values, and requireExplicitVersion still
+            // fails a release build that does not.
+            if (allowLocalDevelopmentDefaults &&
+                string.IsNullOrWhiteSpace(versionName) &&
+                string.IsNullOrWhiteSpace(versionCode))
             {
-                DateTime utcNow = DateTime.UtcNow;
-                if (string.IsNullOrWhiteSpace(versionName))
-                    versionName = CreateLocalDevelopmentVersionName(utcNow);
-                if (string.IsNullOrWhiteSpace(versionCode))
-                    versionCode = CreateAndroidVersionCode(utcNow).ToString(CultureInfo.InvariantCulture);
+                return;
             }
 
             if (requireExplicitVersion && (string.IsNullOrWhiteSpace(versionName) || string.IsNullOrWhiteSpace(versionCode)))

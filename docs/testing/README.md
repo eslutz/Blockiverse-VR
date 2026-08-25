@@ -255,16 +255,24 @@ hzdb --version
 hzdb device list
 ```
 
-`scripts/unity/build-development-apk.sh` derives local development
-`versionName` from `ProjectSettings/BlockiverseVersion.txt` as
-`MAJOR.MINOR.PATCH-dev.local.YYYYMMDDHHMMSS` and derives Android `versionCode`
-as seconds since `2020-01-01T00:00:00Z`. Override with
-`UNITY_ANDROID_VERSION_NAME` and `UNITY_ANDROID_VERSION_CODE` only when a test
-requires specific package metadata. Unity MCP builds should invoke
-`Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid()` or call
-`Blockiverse.Editor.BlockiverseBuildSmoke.ConfigureLocalDevelopmentAndroidVersion()`
-before a generic Android `manage_build` so the open-Editor build path does not
-fall back to `ProjectSettings.asset` versionCode `1`.
+`scripts/unity/build-development-apk.sh` does **not** stamp a version (ADR 0005).
+A development APK keeps whatever `ProjectSettings.asset` already carries, so
+every local build reports the same version and the file stops churning. Set
+`UNITY_ANDROID_VERSION_NAME` and `UNITY_ANDROID_VERSION_CODE` when a test
+genuinely requires specific package metadata; the script forwards them only
+when they are set.
+
+This also means two locally built APKs can join each other. `Application.version`
+is the join gate — `BlockiverseNetworkSession` refuses a peer whose version
+differs — so the previous timestamped stamp left two dev builds made minutes
+apart unable to connect, which is precisely the LAN case a dev build exists to
+test.
+
+Unity MCP builds should invoke
+`Blockiverse.Editor.BlockiverseBuildSmoke.BuildDevelopmentAndroid()`. There is no
+longer a separate call to stamp a development version first: falling back to the
+committed `ProjectSettings.asset` values is now the intended behaviour, not the
+failure it used to be.
 
 `hzdb` is installed under the active default `nvm` Node with `npm install -g @meta-quest/hzdb@1.2.1`; the expected current executable path is `/Users/ericslutz/.nvm/versions/node/v24.16.0/bin/hzdb`. Prefer `hzdb` for Quest device discovery, APK install and launch, log capture, screenshots, screen recordings, file transfer, and performance captures. If `hzdb device list` cannot see a connected Quest from a Codex sandboxed shell, rerun physical-device commands outside the sandbox before treating validation as blocked. Use the Meta XR Simulator or physical Quest 3/Quest 3S validation flow when a behavior cannot be proven by EditMode or PlayMode tests alone. Use OVR Metrics or equivalent captures for Quest performance work, and store summaries under `docs/testing/performance/`.
 

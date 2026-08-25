@@ -33,12 +33,34 @@ Android `versionName` values derive from `ProjectSettings/BlockiverseVersion.txt
 
 | Stage | Android versionName format | Example |
 |---|---|---|
-| Local development | `MAJOR.MINOR.PATCH-dev.local.YYYYMMDDHHMMSS` | `0.1.0-dev.local.20260621120000` |
+| Local development | *(unchanged — whatever `ProjectSettings.asset` already carries)* | `0.1.0-dev.phase5` |
 | CI smoke | `MAJOR.MINOR.PATCH-ci.runRUN.ATTEMPT.SHORTSHA` | `0.1.0-ci.run318.4.663f074` |
 | Alpha | `MAJOR.MINOR.PATCH-alpha.runRUN.ATTEMPT.SHORTSHA` | `0.1.0-alpha.run318.4.663f074` |
 | Beta candidate | `MAJOR.MINOR.PATCH-beta.N` | `0.1.0-beta.1` |
 | RC candidate | `MAJOR.MINOR.PATCH-rc.N` | `0.1.0-rc.1` |
 | Production | `MAJOR.MINOR.PATCH` | `0.1.0` |
+
+**Local development builds do not stamp a version.** `PlayerSettings.bundleVersion` and
+`AndroidBundleVersionCode` in `ProjectSettings.asset` are treated as a stable committed
+placeholder that only an explicit version overwrites, which in practice means CI and release
+builds — and those run in ephemeral checkouts where the write is invisible.
+
+This replaces an earlier rule that stamped `MAJOR.MINOR.PATCH-dev.local.YYYYMMDDHHMMSS` on every
+local build. That was wrong for two independent reasons:
+
+- It rewrote a tracked file on every build, so `ProjectSettings.asset` churned constantly and
+  genuinely dangerous churn had to be spotted among the noise — specifically the
+  `UniversalRenderPipelineGlobalSettings` `m_RuntimeSettings` deletion that CLAUDE.md says must
+  never be committed.
+- `BlockiverseNetworkSession` refuses a join when the peer's `Application.version` differs, and
+  `Application.version` *is* `bundleVersion`. Two development APKs built minutes apart therefore
+  carried different timestamps and **could not connect to each other** — breaking exactly the
+  local LAN testing a development build exists for.
+
+The cost is that every local build reports the same version, so the in-app version string cannot
+distinguish two dev APKs. Build identity for development comes from the APK's own timestamp and
+install time instead. Release builds are unaffected: `requireExplicitVersion` still fails any
+release build that does not pass a version.
 
 `ProjectSettings/BlockiverseVersion.txt` is advanced by a normal pull request
 before starting a new release train. `quest-alpha.yml` computes Alpha version
@@ -46,7 +68,8 @@ names automatically for normal `main` pushes. Manual Alpha dispatch may supply
 a `version_name` override when a build should be tested in Alpha with a Beta,
 RC, or Production-facing name before promotion.
 
-Android `versionCode` is generated as seconds since `2020-01-01T00:00:00Z`.
+Android `versionCode` is generated as seconds since `2020-01-01T00:00:00Z`
+(Unix epoch seconds `1577836800`).
 It is monotonic across all newly uploaded builds and must not reset per channel.
 The Android code is not the product version; it exists only to satisfy Android
 package upgrade ordering.

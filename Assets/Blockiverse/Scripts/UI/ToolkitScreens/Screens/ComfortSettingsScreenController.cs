@@ -47,6 +47,7 @@ namespace Blockiverse.UI
         const string ToggleToMineKey = "ui.generated.comfort.toggle_to_mine";
         const string SprintToggleKey = "ui.generated.comfort.sprint_toggle";
         const string CrouchToggleKey = "ui.generated.comfort.crouch_toggle";
+        const string PlaceModifierToggleKey = "ui.generated.comfort.place_modifier_toggle";
         const string ViewComfortKey = "ui.generated.comfort.view_comfort";
         const string MotionVignetteKey = "ui.generated.comfort.motion_vignette";
         const string VignetteStrengthKey = "ui.generated.comfort.vignette_strength";
@@ -76,6 +77,7 @@ namespace Blockiverse.UI
         Toggle toggleToMineToggle;
         Toggle sprintToggleToggle;
         Toggle crouchToggleToggle;
+        Toggle placeModifierToggleToggle;
         Toggle vignetteToggle;
         Toggle realPlayerHeightToggle;
         Toggle swimPassiveSinkToggle;
@@ -143,6 +145,7 @@ namespace Blockiverse.UI
             leftHandToggle = Require<Toggle>(root, "bv-comfort-left-hand", ref allFound);
             toggleToMineToggle = Require<Toggle>(root, "bv-comfort-toggle-to-mine", ref allFound);
             sprintToggleToggle = Require<Toggle>(root, "bv-comfort-sprint-toggle", ref allFound);
+            placeModifierToggleToggle = Require<Toggle>(root, "bv-comfort-place-modifier-toggle", ref allFound);
             crouchToggleToggle = Require<Toggle>(root, "bv-comfort-crouch-toggle", ref allFound);
             vignetteToggle = Require<Toggle>(root, "bv-comfort-vignette", ref allFound);
             realPlayerHeightToggle = Require<Toggle>(root, "bv-comfort-real-height", ref allFound);
@@ -386,6 +389,9 @@ namespace Blockiverse.UI
             if (sprintToggleToggle != null)
                 settings.SprintToggleEnabled = sprintToggleToggle.value;
 
+            if (placeModifierToggleToggle != null)
+                settings.PlaceModifierToggleEnabled = placeModifierToggleToggle.value;
+
             if (crouchToggleToggle != null)
                 settings.CrouchToggleEnabled = crouchToggleToggle.value;
 
@@ -434,6 +440,7 @@ namespace Blockiverse.UI
                 toggleToMineToggle?.SetValueWithoutNotify(settings.ToggleToMineEnabled);
                 realPlayerHeightToggle?.SetValueWithoutNotify(settings.RealPlayerHeightEnabled);
                 sprintToggleToggle?.SetValueWithoutNotify(settings.SprintToggleEnabled);
+                placeModifierToggleToggle?.SetValueWithoutNotify(settings.PlaceModifierToggleEnabled);
                 crouchToggleToggle?.SetValueWithoutNotify(settings.CrouchToggleEnabled);
                 swimPassiveSinkToggle?.SetValueWithoutNotify(settings.SwimPassiveSinkEnabled);
                 swimVignetteToggle?.SetValueWithoutNotify(settings.SwimVignetteBoost);
@@ -469,6 +476,7 @@ namespace Blockiverse.UI
             SetFieldLabel(leftHandToggle, LeftHandedKey);
             SetFieldLabel(toggleToMineToggle, ToggleToMineKey);
             SetFieldLabel(sprintToggleToggle, SprintToggleKey);
+            SetFieldLabel(placeModifierToggleToggle, PlaceModifierToggleKey);
             SetFieldLabel(crouchToggleToggle, CrouchToggleKey);
             SetFieldLabel(vignetteToggle, MotionVignetteKey);
             SetFieldLabel(realPlayerHeightToggle, RealPlayerHeightKey);

@@ -60,6 +60,7 @@ namespace Blockiverse.Core
         // broken. The switch exists because it is still an automatic vertical translation.
         [SerializeField] bool swimClimbOutEnabled = true;
         [SerializeField] bool sprintToggleEnabled;
+        [SerializeField] bool placeModifierToggleEnabled;
         [SerializeField] bool crouchToggleEnabled;
 
         public BlockiverseLocomotionMode LocomotionMode
@@ -156,6 +157,21 @@ namespace Blockiverse.Core
         {
             get => sprintToggleEnabled;
             set => sprintToggleEnabled = value;
+        }
+
+        /// <summary>
+        /// How the grip switches the trigger between breaking and placing. False (default) means
+        /// HOLD grip to place and release to return to breaking; true means the grip press TOGGLES
+        /// between the two.
+        ///
+        /// Same hold-versus-toggle shape as <see cref="SprintToggleEnabled"/> and
+        /// <see cref="CrouchToggleEnabled"/>, resolved through the same
+        /// BlockiverseInputRig.ResolveModifierActive helper so all three behave identically.
+        /// </summary>
+        public bool PlaceModifierToggleEnabled
+        {
+            get => placeModifierToggleEnabled;
+            set => placeModifierToggleEnabled = value;
         }
 
         /// <summary>

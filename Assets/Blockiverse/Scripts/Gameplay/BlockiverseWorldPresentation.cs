@@ -164,9 +164,14 @@ namespace Blockiverse.Gameplay
                 ? BlockVisualAtlas.CreateMaterial(chunkMaterial, ResolveSelectedBlockAtlas(textureSetId), textureSetId)
                 : null;
 
-            // Snowpack is the nearest thing to a flat white tile in the atlas, so the deck needs
-            // no slot of its own; vertex colour supplies the actual sky-driven tint.
-            Rect cloudTile = BlockVisualAtlas.GetTileRect(BlockRegistry.SnowBlock);
+            // A ZERO-AREA rect over the atlas's whitest opaque texel, measured at (302, 345) of
+            // 576x480, rgb (248, 255, 255). All four corners sample that one texel, so every quad
+            // is flat white and the sky-driven vertex colour supplies the entire tint.
+            //
+            // Sampling snow_block's tile instead put a block texture on the sky, which read as
+            // masonry rather than cloud. A degenerate rect avoids that without spending one of the
+            // atlas's free slots on a cloud tile.
+            Rect cloudTile = BlockVisualAtlas.WhiteTexelUv;
 
             // Follows the head so the deck stays overhead wherever the player walks, the same
             // window-that-travels-with-you pattern the precipitation volume uses. Falls back to

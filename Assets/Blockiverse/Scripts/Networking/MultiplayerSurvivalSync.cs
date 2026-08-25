@@ -716,6 +716,27 @@ namespace Blockiverse.Networking
             return clone;
         }
 
+        /// <summary>Whether the equipped item places a block, as opposed to acting on the block it
+        /// is aimed at (a Feller stripping a log, a Tiller working soil).
+        ///
+        /// Exposed as a bool because Blockiverse.VR references Survival.Health but not Survival, so
+        /// the input bridge cannot look an ItemDefinition up for itself. It drives which cell the
+        /// placement highlight lands on: the adjacent cell for a placeable, the target block for a
+        /// tool. Empty hands count as neither.</summary>
+        public bool EquippedItemPlacesBlock
+        {
+            get
+            {
+                ItemStack held = EquippedItem;
+
+                if (held.IsEmpty)
+                    return false;
+
+                return ItemRegistry.Default.TryGet(held.ItemId, out ItemDefinition definition)
+                       && definition.BlockId.HasValue;
+            }
+        }
+
         public ItemStack EquippedItem
         {
             get
