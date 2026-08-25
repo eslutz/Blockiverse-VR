@@ -15,7 +15,6 @@ namespace Blockiverse.Core
         public static readonly string[] MenuOptions =
         {
             Enhanced,
-            CuratedV1,
             AiSimplified,
             Ai,
             Original,
