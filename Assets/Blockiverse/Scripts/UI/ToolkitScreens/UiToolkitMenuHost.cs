@@ -416,6 +416,23 @@ namespace Blockiverse.UI
 
         public void HideQuickBlockMenu() => quickBlockMenu?.SetQuickMenuVisible(false);
 
+        // Cycles the held hotbar slot from the support hand's face buttons. Resolved through
+        // FindScreen rather than a cached field for the same reason every other screen verb is:
+        // the strip is one of the panels this host instantiates, and a stale reference after a
+        // regeneration would silently stop the buttons working with nothing to show for it.
+        public void CycleHotbarSlot(int delta)
+        {
+            HotbarStripController strip = FindScreen<HotbarStripController>();
+
+            if (strip == null)
+                return;
+
+            if (delta >= 0)
+                strip.SelectNext();
+            else
+                strip.SelectPrevious();
+        }
+
         public void ResetNewWorldScreen() => FindScreen<IUiToolkitNewWorldScreen>()?.ResetForNewWorld();
 
         public NewWorldConfig PendingNewWorldConfig => FindScreen<IUiToolkitNewWorldScreen>()?.Config;

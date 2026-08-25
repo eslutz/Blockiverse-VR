@@ -1525,6 +1525,56 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 5195086324721254459
+  - m_Id: 861465144713216
+    m_Key: ui.screen.vitals.health
+    m_Metadata:
+      m_Items:
+      - rid: 5195086365795287040
+  - m_Id: 861465169879040
+    m_Key: ui.screen.vitals.hunger
+    m_Metadata:
+      m_Items:
+      - rid: 5195086365795287041
+  - m_Id: 861465169879041
+    m_Key: ui.screen.vitals.marker.critical
+    m_Metadata:
+      m_Items:
+      - rid: 5195086365795287042
+  - m_Id: 861465169879042
+    m_Key: ui.screen.vitals.marker.low
+    m_Metadata:
+      m_Items:
+      - rid: 5195086365795287043
+  - m_Id: 861465169879043
+    m_Key: ui.screen.vitals.stamina
+    m_Metadata:
+      m_Items:
+      - rid: 5195086365795287044
+  - m_Id: 861465169879044
+    m_Key: ui.screen.vitals.thirst
+    m_Metadata:
+      m_Items:
+      - rid: 5195086365795287045
+  - m_Id: 869917040566272
+    m_Key: ui.action.settings.debug_overlay_off
+    m_Metadata:
+      m_Items:
+      - rid: 5195086366323769344
+  - m_Id: 869917044760576
+    m_Key: ui.action.settings.debug_overlay_on
+    m_Metadata:
+      m_Items:
+      - rid: 5195086366323769345
+  - m_Id: 873087372353536
+    m_Key: ui.status.multiplayer.player_joined
+    m_Metadata:
+      m_Items:
+      - rid: 5195086366521688064
+  - m_Id: 873087376547840
+    m_Key: ui.status.multiplayer.player_left
+    m_Metadata:
+      m_Items:
+      - rid: 5195086366521688065
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
@@ -2816,3 +2866,60 @@ MonoBehaviour:
       data:
         m_CommentText: New World starting-biome value label; humanize-fallback parity
           for canonical id 'wetland'.
+    - rid: 5195086365795287040
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Gameplay HUD vital label, beside a meter and a number. Noun,
+          not a verb. The label column is about 110 px wide, so a long translation
+          clips rather than wraps.
+    - rid: 5195086365795287041
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Gameplay HUD vital label. The player's need for food, not
+          their appetite. Same 110 px width constraint as Health.
+    - rid: 5195086365795287042
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Marker beside a gameplay HUD vital below a quarter - the more
+          urgent partner of the low marker, and it must read as MORE severe than
+          that one. Same one-to-two character ASCII constraint.
+    - rid: 5195086365795287043
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: One-character marker beside a gameplay HUD vital that has
+          fallen below half. It exists so the warning does not depend on colour alone.
+          Keep to one or two characters and prefer ASCII - it must render in every
+          locale's font.
+    - rid: 5195086365795287044
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Gameplay HUD vital label. The exertion budget sprinting and
+          harvesting consume. Same 110 px width constraint.
+    - rid: 5195086365795287045
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Gameplay HUD vital label. The player's need for water. Same
+          110 px width constraint.
+    - rid: 5195086366323769344
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Settings row that turns the diagnostic readout ON when pressed.
+          The label states the CURRENT state, not the action.
+    - rid: 5195086366323769345
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Settings row that turns the diagnostic readout OFF when pressed
+          - the label states the CURRENT state, not the action, matching how the
+          other stateful rows in this game read. 'Debug Overlay' is the developer-facing
+          readout of position, biome, weather and frame time.
+    - rid: 5195086366521688064
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Subtitle shown when another player joins the session. A full
+          sentence with a period, matching the other subtitle lines. 'Player' is
+          any other person in the session, not a role or class.
+    - rid: 5195086366521688065
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: Subtitle shown when another player leaves the session, whether
+          deliberately or by disconnecting. Full sentence with a period.

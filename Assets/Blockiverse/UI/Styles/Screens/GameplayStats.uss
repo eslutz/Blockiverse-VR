@@ -1,0 +1,100 @@
+/*
+ * GameplayStats — layout only. Colours, spacing steps and type sizes resolve from Tokens/Base.
+ *
+ * THIS FILE'S NAME IS LOAD-BEARING. The bootstrapper resolves a screen's own sheet as
+ * Styles/Screens/<documentName>.uss, and the per-screen sheet is optional by design — so a
+ * document whose sheet is missing renders unstyled and reports itself healthy. These rules used to
+ * live in GameplayHud.uss and stopped applying the moment the readout moved into its own document.
+ * If GameplayStats.uxml is ever renamed, this file is renamed with it.
+ *
+ * Four rows of marker + label + value + meter. Sized so the whole readout stays inside the panel
+ * without scrolling: 4 × 42 px of row plus the screen padding.
+ */
+
+.gs-root {
+    flex-direction: column;
+    justify-content: center;
+}
+
+.gs-vital {
+    flex-direction: row;
+    align-items: center;
+    min-height: 42px;
+}
+
+/* The redundant channel for LEVEL, and the reason a vital is never colour-only. Empty at the OK
+   level, so the marker's PRESENCE is itself the signal and the eye is not asked to read a glyph
+   that means "fine". Fixed width so the four labels stay aligned whether or not a marker is
+   showing — a column that shifts sideways as vitals change is its own distraction. */
+.gs-vital__marker {
+    width: 34px;
+    font-size: var(--hs-type-body);
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    color: var(--hs-ink-soft);
+}
+
+.gs-vital__label {
+    width: 110px;
+    font-size: var(--hs-type-caption);
+    color: var(--hs-ink-soft);
+}
+
+/* Tabular figures via hs-figures on the element, so the number does not jitter sideways as it
+   counts down — a value that shifts every tick reads as motion in the periphery. */
+/* 130 px, not 70. The widest value this renders is "100 / 100" — nine glyphs of 26 px bold type,
+   roughly 105 px — so 70 px could not hold it. Without nowrap the label wrapped to a second line
+   and pushed the row past its 42 px min-height, silently breaking the four-row budget this file's
+   header depends on; with nowrap it would have clipped instead. The meter is flex-grow, so the
+   extra 60 px comes out of its length rather than out of the panel.
+
+   nowrap is belt-and-braces: a number is never improved by being broken across two lines, whatever
+   the box width ends up being. */
+.gs-vital__value {
+    width: 130px;
+    white-space: nowrap;
+    font-size: var(--hs-type-body);
+    color: var(--hs-ink);
+    -unity-text-align: middle-right;
+    -unity-font-style: bold;
+}
+
+/* hs-well supplies the inset surface and border; only the size belongs here. */
+.gs-vital__meter {
+    flex-grow: 1;
+    height: 18px;
+    margin-left: var(--hs-space-3);
+}
+
+/* Moss is the "confirmed / healthy" signal. Width is set inline from C# as a percentage. */
+.gs-vital__fill {
+    height: 100%;
+    width: 0%;
+    background-color: var(--hs-moss);
+}
+
+/* Below half, and below a quarter. Both also drive the marker and the value colour from the same
+   computed level, so the three channels cannot disagree about what state a vital is in. */
+.gs-vital__fill--low {
+    background-color: var(--hs-ochre);
+}
+
+.gs-vital__fill--critical {
+    background-color: var(--hs-oxide);
+}
+
+.gs-vital--low .gs-vital__marker,
+.gs-vital--low .gs-vital__value {
+    color: var(--hs-ochre-text);
+}
+
+.gs-vital--critical .gs-vital__marker,
+.gs-vital--critical .gs-vital__value {
+    color: var(--hs-oxide-text);
+}
+
+/* Creative has health and nothing else. Hidden rather than drawn empty: an unbound meter renders
+   as an empty bar, which reads as "you are starving" instead of "this does not apply here". */
+.gs-vital--absent {
+    display: none;
+}

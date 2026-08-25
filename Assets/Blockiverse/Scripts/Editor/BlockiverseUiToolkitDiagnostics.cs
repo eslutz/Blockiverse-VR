@@ -98,7 +98,9 @@ namespace Blockiverse.Editor
                     MenuActions.TitleScreen => MenuActions.Title(hasLatestSave: true, hasAnySave: true, canQuit: true),
                     MenuActions.PauseScreen => MenuActions.PauseMenu(canToggleMode: true, canOpenCreativeTools: true, canQuit: true),
                     MenuActions.DeathScreen => MenuActions.Death(hasBedrollSpawn: true),
-                    MenuActions.SettingsScreen => MenuActions.Settings,
+                    // "Debug Overlay: Off" is one character longer than "...: On", so the disabled
+                    // state is the wider list — which is what this sweep wants.
+                    MenuActions.SettingsScreen => MenuActions.Settings(debugOverlayEnabled: false),
                     MenuActions.WorldDetailsScreen => MenuActions.WorldDetails,
                     MenuActions.ConfirmModal => MenuActions.Confirm(),
                     MenuActions.ErrorModal => MenuActions.Error(),

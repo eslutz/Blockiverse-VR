@@ -24,8 +24,10 @@ namespace Blockiverse.Tests.EditMode
     {
         const string DocumentPath = "Assets/Blockiverse/UI/Documents/ComfortSettingsScreen.uxml";
 
-        // 14 toggles + 6 sliders + close + height reset.
-        const int ExpectedElementCallbackCount = 22;
+        // 15 toggles + 6 sliders + close + height reset. The fifteenth toggle is the view anchor,
+        // added 2026-08-25 — the setting existed and persisted but had no control anywhere, so the
+        // comfort dot could never be switched on.
+        const int ExpectedElementCallbackCount = 23;
 
         readonly List<GameObject> objectsToDestroy = new();
 

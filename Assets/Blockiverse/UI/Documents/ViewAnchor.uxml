@@ -1,0 +1,42 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Comfort view anchor: one small static dot at the centre of vision. OFF by default.
+
+        ── What this is NOT ─────────────────────────────────────────────────────
+
+        It is not an aiming reticle, and calling it one would make it actively misleading. This game
+        aims with the CONTROLLER: the creative input bridge raycasts from the XRI ray interactor's
+        origin, and the block a trigger press will break is wherever the hand points — almost never
+        the centre of the view. Target feedback already exists in the right place, in world space,
+        as PlacementPreview.
+
+        The FPV HUD report treats a centre reticle as a HUD element to migrate. It is not one: this
+        repository has never had a reticle, and the report's own anchoring table asks for something
+        this project's aiming model cannot support.
+
+        ── What it IS ───────────────────────────────────────────────────────────
+
+        A comfort feature. Seok et al. found a first-person visual guide correlated with reduced
+        VR-sickness measures, and the mechanism has nothing to do with aiming: a fixed visual
+        reference gives the vestibular system something stationary to hold onto while the world
+        slides past during continuous locomotion. That benefit stands whether or not the dot marks
+        anything. The same work warns that a LARGER guide costs presence, which is why this is a dot
+        rather than a cross, and why growing it "to be safe" is the wrong instinct.
+
+        It therefore lives with the comfort options next to the vignette, not with the HUD settings,
+        and it is off until the player asks for it.
+
+        ── Placement ────────────────────────────────────────────────────────────
+
+        Dead centre with NO pitch, unlike every other HUD-family panel. The rest of the family is
+        tilted 12° down because it sits below the eyeline and should face the player; this one sits
+        ON the view axis, where a tilt would push it off centre.
+
+        Read-only: every element is picking-mode Ignore, so the panel generates no collider. A
+        collider at the exact centre of the player's view would intercept every world interaction
+        they attempt — the single worst place in the whole HUD to put one.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen va-root" picking-mode="Ignore">
+        <engine:VisualElement name="bv-view-anchor" class="va-dot" picking-mode="Ignore" />
+    </engine:VisualElement>
+</engine:UXML>

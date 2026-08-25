@@ -303,6 +303,114 @@ typeface or a contrast ratio at 0.95 m.
   the acceptance matrix covers Quest 3 and Quest 3S separately because 3S is the
   lower-performance target.
 
+## Amendment 2026-08-25: the HUD against the FPV research report
+
+The migration in #344 ported the uGUI HUD faithfully — matrix rows 21-24, with
+`SurvivalHudController`'s semantics preserved — and then split it into an action bar and a
+stats readout after Eric reported the centred panel blocked his view. That is a fidelity
+migration plus one ergonomics fix. It was **not** a redesign against the FPV HUD research
+report, and this amendment records the gap so nobody assumes otherwise from the fact that the
+HUD is "done".
+
+Eric supplied the report on 2026-08-24 and directed (2026-08-25) that its recommendations be
+applied on top of the merged architecture. The gaps it names:
+
+| Report recommendation | State after #344 |
+|---|---|
+| Hotbar always visible, ray-interactive only on demand | No strip; changing the held block opens a routed screen |
+| Vitals as meters, never colour-only, glanceable | Health bar plus one sentence carrying hunger/thirst/stamina as numbers |
+| Transient messages prioritised, not last-write-wins | Single label; `BlockiverseSubtitleToastPanel` still shares the sink |
+| Small view-referenced comfort cue | None |
+| Sizing derived from angular targets at a known distance | Sizes tuned by content-fit measurement |
+
+Three findings that survive from the report review regardless of what gets built:
+
+- **There must not be an aiming reticle.** This game aims with the CONTROLLER: the input
+  bridge raycasts from the XRI ray interactor's origin and `PlacementPreview` already marks the
+  target in world space. A centre-of-view crosshair would claim to mark the block a trigger
+  press will break and would be wrong almost every time. What the cybersickness literature
+  actually supports is a *static comfort anchor*, which is a different thing and belongs with
+  the vignette, off by default.
+- **The hotbar is 10 slots, not the report's 8-9.** `Inventory.DefaultHotbarSlotCount` is 10,
+  and that number is the wire, save and selection range rather than a layout choice.
+- **The report's pixel dimensions are hypotheses, not standards.** They are derived from
+  angular targets at an assumed 1.2 m and this project's 1 px = 1 mm convention. None has been
+  measured in a headset.
+
+### What was built against the report (2026-08-25)
+
+Four of the five gaps above are closed on top of the merged architecture, as ordinary
+`[UiToolkitScreen]` controllers — the attribute is the whole registration, so none of this touched
+the bootstrapper or the host.
+
+| Change | Note |
+|---|---|
+| Vitals became four metered rows | Marker + word + number + bar. The level is computed once and drives all four, so the channels cannot disagree. Hunger/thirst/stamina hide in Creative rather than drawing empty. |
+| `HotbarStripController` | Ten always-visible slots, `NonInteractive`. Ten because `Inventory.DefaultHotbarSlotCount` is ten — the wire, save and selection range. |
+| Hotbar cycling | New `HotbarNextPressed`/`HotbarPreviousPressed` on `IBlockiverseInputRig`, bound to the support hand's face buttons — the only gameplay inputs the shipped mapping leaves unclaimed. No existing control was reassigned. |
+| Toast severity | Five levels; lower cannot displace higher; expiry releases the floor. Reuses `Base.uss`'s existing signal stripes. |
+| `ViewAnchorController` | The comfort dot. Off by default, dead centre at **0° pitch** where the rest of the family tilts 12°. |
+| `GameplayDebugController` | Twelve-line diagnostic readout, off by default, toggled from Settings. |
+
+Two decisions inside that are easy to reverse by accident:
+
+- **The hotbar strip is `NonInteractive` and has no collider.** The report asks for a hotbar that
+  is ray-interactive on demand; it warns far more strongly against a persistent HUD panel carrying
+  a live trigger volume. Cycling from the face buttons covers the frequent case and the inventory
+  screen still covers arbitrary picks. Doing the on-demand ray mode properly means teaching
+  `UiToolkitScreenController` to toggle a collider from a held input — a change to every screen —
+  and it is deferred rather than approximated.
+- **The debug readout prints raw canonical ids and enum names**, not display names, and is not
+  localized. A diagnostic line should carry the identifier you would put in a bug report or grep
+  for; a localized "Meadow" is worse there than `meadow`. Its GC field prints `—` rather than `0`
+  where the profiler recorder is absent, because "no data" and "zero bytes" are opposite
+  conclusions and conflating them would make a release build look like it hit the 0 B/frame target.
+
+### A stylesheet-reachability defect the split introduced
+
+`e19de17e` moved the health markup into `GameplayStats.uxml` but left its `gh-*` rules in
+`GameplayHud.uss`. The bootstrapper resolves a screen's own sheet by **document name**, and the
+per-screen sheet is optional by design — so `GameplayStats` loads Tokens + Base only and every
+one of its own classes is inert. Its health bar has no height and no fill colour.
+
+`HudFamilyEditModeTests` stayed green because it asserts `fill.style.width`, the *inline* value
+the controller writes; inline styles resolve with or without a sheet. Height and colour come
+from USS and were never asserted.
+
+`ScreenStyleSheetReachabilityEditModeTests` now fails when a document uses a class defined in
+some other screen's sheet. A class defined in no sheet at all is allowed — those are state
+markers toggled from C#.
+
+### Two screen-authoring rules, both learned from defects that shipped past a green suite
+
+Found by an adversarial review of the HUD work on 2026-08-25, after the changes were written and
+the suite was passing. Both are binding on every future screen.
+
+**A screen must not declare `Awake`, `OnEnable`, or `OnDisable`.** `UiToolkitScreenController`
+owns its document lifecycle through those messages, declared *private*
+(`void OnEnable() => Attach();`). Unity dispatches lifecycle messages **by name to the most-derived
+declaration only** — it is not virtual dispatch — so a subclass declaring `OnEnable` replaces the
+base's outright. `Attach()` never runs, `OnAttach` never runs, every cached element stays null, and
+the screen renders nothing for the whole session. C# issues no warning, because the base members
+are private and so not visibly hidden. `GameplayDebugController` did this to start a
+`ProfilerRecorder`. Use `OnAwake`/`OnShown`/`OnHidden`, or `OnDestroy`, which the base does not
+declare.
+
+**A screen must not collapse `bv-screen-root` with a USS class.** `SetVisible` writes an **inline**
+`style.display` onto that element. UI Toolkit resolves inline styles above every stylesheet rule
+and USS has no `!important`, so a `display: none` class on the root is silently discarded the
+moment the router shows the screen. `GameplayDebugController` and `ViewAnchorController` both hid
+themselves this way and would have shipped permanently visible — a blank opaque diagnostic plate,
+and a dot at the exact centre of vision that the comfort setting existed to prevent. Collapse a
+**child**, as every pre-existing HUD screen already does (`StatusToastController` →
+`bv-toast-label`, `MiningProgressController` → `bv-mining-body`).
+
+Neither is visible to an EditMode test written the obvious way: tests call `AttachForTest(root)`
+directly, so they never travel through `OnEnable`, and they never call `SetVisible`, so no inline
+style is ever written. `ScreenLifecycleContractEditModeTests` now enforces both, with a positive
+control that fails if the base class stops owning those messages — otherwise the guard would sit
+there passing vacuously after the thing it protects has moved.
+
 ## Open
 
 - **No device validation exists yet for any of this.** This ADR ratifies a direction

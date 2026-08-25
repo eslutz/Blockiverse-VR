@@ -77,8 +77,15 @@ namespace Blockiverse.Tests.PlayMode
             AssertScreenRendersText(craftingScreen, "Work Plank x6");
             AssertScreenRendersText(craftingScreen, "Ready");
             // The ratio renders on the stats panel now, not the action bar.
+            // The vitals panel was rebuilt around labelled meters (FPV HUD report, ADR 0010
+            // amendment 2026-08-25): each vital is a row carrying its own name, a current/max
+            // ratio and a proportional fill. The old single "Stable" state word it used to render
+            // no longer exists, so this asserts the shapes that replaced it — a ratio, and a row
+            // label proving the LocalizedString bindings resolved rather than leaving the row
+            // blank. Checking a vital OTHER than health, because health is what the ratio above
+            // already covers.
             AssertScreenRendersText(stats, "100 / 100");
-            AssertScreenRendersText(stats, "Stable");
+            AssertScreenRendersText(stats, "Thirst");
         }
 
         static T FindScreenIncludingInactive<T>() where T : UiToolkitScreenController =>

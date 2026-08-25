@@ -151,7 +151,10 @@ namespace Blockiverse.Gameplay
         // Biome index for a world column, or SurvivalBiomeResolver.AnyBiomeIndex when this world
         // has no biomes (flat creative / void builder presets) or is not configured yet. Pure seed
         // math, so host and clients resolve identical biomes without any extra sync traffic.
-        int BiomeIndexAt(int worldX, int worldZ) =>
+        // Public since 2026-08-25 for the gameplay debug readout, which reports the biome the
+        // player is standing in. Safe to expose: it is pure seed math with no state, which is the
+        // same property that lets host and clients resolve identical biomes with no sync traffic.
+        public int BiomeIndexAt(int worldX, int worldZ) =>
             biomeResolver != null
                 ? biomeResolver.BiomeIndexAt(worldX, worldZ)
                 : SurvivalBiomeResolver.AnyBiomeIndex;

@@ -184,8 +184,7 @@ namespace Blockiverse.UI
             RefreshTitleMenu();
             RefreshPauseMenu();
 
-            string settingsTitle = BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitleSettings);
-            frontend?.SetActionMenu(MenuActions.SettingsScreen, settingsTitle, MenuActions.Settings);
+            RefreshSettingsMenu();
 
             string worldDetailsTitle = BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitleWorldDetails);
             frontend?.SetActionMenu(MenuActions.WorldDetailsScreen, worldDetailsTitle, MenuActions.WorldDetails);
@@ -196,6 +195,35 @@ namespace Blockiverse.UI
             IReadOnlyList<MenuAction> actions = MenuActions.Title(latestSaveExists, anySaveExists, CanQuit());
             frontend?.SetActionMenu(MenuActions.TitleScreen, BlockiverseProject.ProductName, actions);
         }
+
+        // Rebuilt rather than pushed once, because the debug-overlay row reports its own state in
+        // its label. Called again immediately after the toggle so the row shows what just happened
+        // — without it the setting flips and the button keeps claiming the old value.
+        void RefreshSettingsMenu()
+        {
+            string title = BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitleSettings);
+            frontend?.SetActionMenu(
+                MenuActions.SettingsScreen, title, MenuActions.Settings(DebugOverlayEnabled));
+        }
+
+        // Reads through to the comfort settings, which own the persisted flag. False when they are
+        // absent, so a scene without them shows "Off" rather than throwing.
+        bool DebugOverlayEnabled
+        {
+            get
+            {
+                BlockiverseComfortSettings settings = ResolveComfortSettings();
+                return settings != null && settings.DebugOverlayEnabled;
+            }
+        }
+
+        BlockiverseComfortSettings ResolveComfortSettings() =>
+            comfortSettings != null
+                ? comfortSettings
+                : comfortSettings = BlockiverseSceneLookup.Find<BlockiverseComfortSettings>(
+                    FindObjectsInactive.Include);
+
+        BlockiverseComfortSettings comfortSettings;
 
         void RefreshPauseMenu()
         {
@@ -227,6 +255,8 @@ namespace Blockiverse.UI
             {
                 inputRig.MenuPressed.RemoveListener(OnMenuPressed);
                 inputRig.QuickMenuPressed.RemoveListener(OnQuickMenuPressed);
+                inputRig.HotbarNextPressed.RemoveListener(OnHotbarNextPressed);
+                inputRig.HotbarPreviousPressed.RemoveListener(OnHotbarPreviousPressed);
             }
         }
 
@@ -263,6 +293,10 @@ namespace Blockiverse.UI
                 inputRig.MenuPressed.AddListener(OnMenuPressed);
                 inputRig.QuickMenuPressed.RemoveListener(OnQuickMenuPressed);
                 inputRig.QuickMenuPressed.AddListener(OnQuickMenuPressed);
+                inputRig.HotbarNextPressed.RemoveListener(OnHotbarNextPressed);
+                inputRig.HotbarNextPressed.AddListener(OnHotbarNextPressed);
+                inputRig.HotbarPreviousPressed.RemoveListener(OnHotbarPreviousPressed);
+                inputRig.HotbarPreviousPressed.AddListener(OnHotbarPreviousPressed);
             }
         }
 
@@ -498,6 +532,9 @@ namespace Blockiverse.UI
                 case MenuActions.SettingsOpenControls:
                     router.PushScreen(new ScreenRoute(MenuActions.ControlsScreen, pauseGame: true));
                     break;
+                case MenuActions.SettingsToggleDebugOverlay:
+                    ToggleDebugOverlay();
+                    break;
                 case MenuActions.SettingsClose:
                 case MenuActions.ComfortSettingsClose:
                     if (string.Equals(actionId, MenuActions.ComfortSettingsClose, StringComparison.Ordinal))
@@ -615,6 +652,24 @@ namespace Blockiverse.UI
         }
 
         void OnQuickMenuPressed() => frontend?.ToggleQuickBlockMenu();
+
+        // Flips the persisted flag and rebuilds the row so its label reports the new state. The
+        // overlay itself polls the setting rather than being pushed to, so nothing else is needed
+        // here — and nothing here needs to know the overlay exists.
+        void ToggleDebugOverlay()
+        {
+            BlockiverseComfortSettings settings = ResolveComfortSettings();
+
+            if (settings == null)
+                return;
+
+            settings.DebugOverlayEnabled = !settings.DebugOverlayEnabled;
+            RefreshSettingsMenu();
+        }
+
+        void OnHotbarNextPressed() => frontend?.CycleHotbarSlot(1);
+
+        void OnHotbarPreviousPressed() => frontend?.CycleHotbarSlot(-1);
 
         public void CloseControllerMappingScreen()
         {

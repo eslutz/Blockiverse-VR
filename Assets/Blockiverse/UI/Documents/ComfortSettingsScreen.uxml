@@ -73,6 +73,13 @@
                     <engine:VisualElement name="bv-comfort-group-view-comfort" class="comfort-group" picking-mode="Ignore">
                         <engine:Label name="bv-comfort-view-comfort-heading" class="hs-heading" picking-mode="Ignore" />
                         <engine:Toggle name="bv-comfort-vignette" class="hs-field" />
+                        <!--
+                            The static view anchor (ViewAnchor.uxml). It sits here rather than with
+                            the HUD settings because it is a comfort feature, not a reticle: a fixed
+                            visual reference reduces sickness during continuous locomotion, which is
+                            the same reason the vignette above it exists. Off by default.
+                        -->
+                        <engine:Toggle name="bv-comfort-view-anchor" class="hs-field" />
                         <engine:VisualElement name="bv-comfort-vignette-strength-row" class="comfort-slider-row" picking-mode="Ignore">
                             <engine:Slider name="bv-comfort-vignette-strength" low-value="0" high-value="1" value="0.3" show-input-field="false" class="hs-field comfort-slider" />
                             <engine:Label name="bv-comfort-vignette-strength-value" class="hs-body hs-figures comfort-slider__value" picking-mode="Ignore" />

@@ -1,34 +1,15 @@
 /*
- * GameplayHud — layout only. A 590×190 strip: health ratio + bar on one row, the vitals
- * state line under it, and the four panel-open buttons sharing the bottom row. Colours,
- * spacing steps and type sizes all resolve from Tokens/Base; the bar fill uses the moss
- * signal token (confirmed/health) rather than introducing a colour.
+ * GameplayHud — layout only. The action bar: four panel-open buttons sharing one row. Colours,
+ * spacing steps and type sizes all resolve from Tokens/Base.
+ *
+ * The health readout's rules used to live here and no longer do. When the HUD split into an
+ * action bar and a stats readout, the markup moved to GameplayStats.uxml but the gh-health-*
+ * rules stayed behind — and because the bootstrapper resolves a screen's sheet by DOCUMENT NAME,
+ * they were never loaded for the document that used them. The health bar had no height and no
+ * fill colour, and nothing reported it. They now live in GameplayStats.uss, next to the document
+ * that owns them, and ScreenStyleSheetReachabilityEditModeTests fails if they ever drift apart
+ * again.
  */
-
-.gh-health-row {
-    flex-direction: row;
-    align-items: center;
-}
-
-.gh-health-ratio {
-    min-width: 130px;
-}
-
-.gh-health-bar {
-    flex-grow: 1;
-    height: 20px;
-    margin-left: var(--hs-space-3);
-}
-
-.gh-health-fill {
-    background-color: var(--hs-moss);
-    height: 100%;
-    width: 0%;
-}
-
-.gh-vitals-state {
-    margin-top: var(--hs-space-1);
-}
 
 .gh-actions {
     flex-direction: row;

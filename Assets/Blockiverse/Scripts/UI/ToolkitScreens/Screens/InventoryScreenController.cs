@@ -129,7 +129,16 @@ namespace Blockiverse.UI
 
             if (survivalSync != null)
             {
-                survivalSync.SelectedHotbarSlotIndex = selectedHotbarSlotIndex;
+                // ADOPT the sync's selection; do not push ours into it.
+                //
+                // This screen used to force-write its own copy here, which was harmless while it
+                // was the only thing that could change the held slot. HotbarStripController now
+                // also writes selection (the support hand's face buttons cycle it), so pushing a
+                // stale copy would silently reset the held item: cycle to slot 5, open the
+                // inventory, and the held slot snaps back to whatever this screen last knew.
+                // The sync is the authority — HotbarStripController reads back from it for the
+                // same reason — so binding must read, not write.
+                selectedHotbarSlotIndex = survivalSync.SelectedHotbarSlotIndex;
                 selectionMirrorHandler = survivalSync.SetSelectedHotbarSlot;
                 SelectionChanged += selectionMirrorHandler;
                 survivalSync.LocalInventoryChanged -= OnLocalInventoryChanged;

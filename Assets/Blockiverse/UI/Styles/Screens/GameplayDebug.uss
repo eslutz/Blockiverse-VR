@@ -1,0 +1,60 @@
+/*
+ * GameplayDebug — layout only. Twelve stacked lines of diagnostic text.
+ *
+ * Deliberately denser and quieter than any player-facing panel: caption type, dim ink, tight
+ * leading. This is a readout an engineer scans, not a surface the game speaks through, and making
+ * it look like the latter would give it a visual weight it has not earned in the corner of
+ * someone's vision for a whole session.
+ *
+ * Left-aligned at the left edge of view, opposite the vitals readout at 0.40 and clear of the
+ * status toast at 0.34 and the mining bar at −0.16.
+ */
+
+.dbg-root {
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-left: var(--hs-space-3);
+    padding-right: var(--hs-space-3);
+    padding-top: var(--hs-space-2);
+    padding-bottom: var(--hs-space-2);
+}
+
+/* 26 px of line box for 20 px caption type: tight, because twelve lines have to fit and this is
+   read by looking directly at it rather than glanceably. hs-figures on each element keeps the
+   digits one width so the columns do not shimmer as numbers change. */
+.dbg-line {
+    font-size: var(--hs-type-caption);
+    color: var(--hs-dim);
+    min-height: 26px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* The body stretches so its twelve lines fill the plate exactly as they did when they were direct
+   children of the root. */
+.dbg-body {
+    flex-grow: 1;
+}
+
+/* Hidden by collapsing the BODY, never by opacity — an overlay hidden by transparency still lays
+   out twelve labels and still costs a measure pass for something nobody can see, every frame, for
+   the whole session.
+
+   The body rather than the root: UiToolkitScreenController.SetVisible writes an inline
+   style.display onto bv-screen-root, and an inline style beats every USS rule in UI Toolkit (there
+   is no !important), so a rule targeting the root would never apply once the HUD is routed
+   visible. */
+.dbg-body--hidden {
+    display: none;
+}
+
+/* The plate itself must not paint while the overlay is off: collapsing only the body would still
+   leave the root's opaque --hs-panel surface and its border sitting in the player's view. This is
+   safe to key on the root because it changes colours, not display — nothing writes those inline. */
+.dbg-root--muted {
+    background-color: rgba(0, 0, 0, 0);
+    border-top-width: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+}

@@ -55,6 +55,10 @@ namespace Blockiverse.Tests.EditMode
             {
             }
 
+            public void CycleHotbarSlot(int delta)
+            {
+            }
+
             public void ResetNewWorldScreen()
             {
             }
@@ -76,6 +80,11 @@ namespace Blockiverse.Tests.EditMode
             public int Hunger { get; set; }
             public int Thirst { get; set; }
             public int Stamina { get; set; }
+
+            // SurvivalVitals.DefaultMax. Defaulted rather than left at zero so a fixture that only
+            // sets the three vitals still produces meters with a sane denominator; a zero max would
+            // make every reading read as empty, which is the same as starving.
+            public int Max { get; set; } = 100;
         }
 
         readonly List<GameObject> objectsToDestroy = new();
@@ -145,7 +154,10 @@ namespace Blockiverse.Tests.EditMode
         // the view the moment they turned. A floor-relative 1.55 read as eye-level-plus-1.55m
         // after the reparent, which is why every value here changed at once.
         [TestCase(typeof(GameplayHudController), 590, 150, -0.40f)]
-        [TestCase(typeof(GameplayStatsController), 460, 190, 0.24f)]
+        [TestCase(typeof(GameplayStatsController), 460, 250, 0.14f)]
+        [TestCase(typeof(HotbarStripController), 1000, 110, -0.265f)]
+        [TestCase(typeof(ViewAnchorController), 64, 64, 0f)]
+        [TestCase(typeof(GameplayDebugController), 520, 360, 0.08f)]
         [TestCase(typeof(MiningProgressController), 400, 90, -0.16f)]
         [TestCase(typeof(StatusToastController), 640, 120, 0.34f)]
         [TestCase(typeof(CreativeHotbarController), 590, 500, -0.50f)]
@@ -174,43 +186,84 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void HealthRatioBarAndStateFollowVitalsTransitions()
+        public void HealthRowFollowsVitalsTransitionsAcrossAllFourChannels()
         {
             GameplayStatsController controller = CreateScreen<GameplayStatsController>();
             VisualElement root = AttachFreshTree(controller);
             Assert.That(controller.IsBound, Is.True);
 
-            Label ratio = root.Q<Label>("bv-health-ratio");
-            Label state = root.Q<Label>("bv-vitals-state");
-            VisualElement fill = root.Q<VisualElement>("bv-health-fill");
+            Label value = root.Q<Label>("bv-vital-health-value");
+            Label marker = root.Q<Label>("bv-vital-health-marker");
+            VisualElement fill = root.Q<VisualElement>("bv-vital-health-fill");
+            VisualElement row = root.Q<VisualElement>("bv-vital-health");
 
             // Negative control: unbound, the readout renders nothing.
-            Assert.That(ratio.text, Is.Empty);
-            Assert.That(state.text, Is.Empty);
+            Assert.That(value.text, Is.Empty);
+            Assert.That(marker.text, Is.Empty);
 
             var vitals = new PlayerVitals(currentHealth: 75);
             controller.Bind(vitals);
 
-            Assert.That(ratio.text, Is.EqualTo("75 / 100"));
+            Assert.That(value.text, Is.EqualTo("75 / 100"));
             Assert.That(FillPercentOf(fill), Is.EqualTo(75f).Within(0.01f));
-            Assert.That(state.text, Is.EqualTo("Stable"));
+            Assert.That(marker.text, Is.Empty, "An OK vital carries no marker.");
+            Assert.That(row.ClassListContains("gs-vital--low"), Is.False);
+            Assert.That(row.ClassListContains("gs-vital--critical"), Is.False);
 
             // HealthChanged drives the refresh — no cadence tick exists in EditMode.
-            vitals.ApplyDamage(55);
+            vitals.ApplyDamage(30);
 
-            Assert.That(ratio.text, Is.EqualTo("20 / 100"));
-            Assert.That(FillPercentOf(fill), Is.EqualTo(20f).Within(0.01f));
-            Assert.That(state.text, Is.EqualTo("Critical"));
+            Assert.That(value.text, Is.EqualTo("45 / 100"));
+            Assert.That(marker.text, Is.Not.Empty, "Below half must carry a marker, not colour alone.");
+            Assert.That(row.ClassListContains("gs-vital--low"), Is.True);
+            Assert.That(fill.ClassListContains("gs-vital__fill--low"), Is.True);
 
-            vitals.ApplyDamage(20);
+            vitals.ApplyDamage(25);
 
-            Assert.That(ratio.text, Is.EqualTo("0 / 100"));
-            Assert.That(FillPercentOf(fill), Is.EqualTo(0f).Within(0.01f));
-            Assert.That(state.text, Is.EqualTo("Down"));
+            Assert.That(value.text, Is.EqualTo("20 / 100"));
+            Assert.That(row.ClassListContains("gs-vital--critical"), Is.True);
+            Assert.That(row.ClassListContains("gs-vital--low"), Is.False,
+                "Low and critical must be mutually exclusive, or two signals contradict each other.");
+            Assert.That(fill.ClassListContains("gs-vital__fill--critical"), Is.True);
+        }
+
+        // The marker exists so a warning is never colour-only. It must differ between the two
+        // warning levels, or it carries no information the colour did not already carry.
+        [Test]
+        public void LowAndCriticalMarkersAreDistinct()
+        {
+            GameplayStatsController controller = CreateScreen<GameplayStatsController>();
+            VisualElement root = AttachFreshTree(controller);
+            Label marker = root.Q<Label>("bv-vital-health-marker");
+
+            var vitals = new PlayerVitals(currentHealth: 45);
+            controller.Bind(vitals);
+            string low = marker.text;
+
+            vitals.ApplyDamage(25);
+            string critical = marker.text;
+
+            Assert.That(low, Is.Not.Empty);
+            Assert.That(critical, Is.Not.Empty);
+            Assert.That(critical, Is.Not.EqualTo(low));
+        }
+
+        [TestCase(100, 100, GameplayStatsController.VitalLevel.Ok)]
+        [TestCase(51, 100, GameplayStatsController.VitalLevel.Ok)]
+        [TestCase(50, 100, GameplayStatsController.VitalLevel.Low)]
+        [TestCase(26, 100, GameplayStatsController.VitalLevel.Low)]
+        [TestCase(25, 100, GameplayStatsController.VitalLevel.Critical)]
+        [TestCase(0, 100, GameplayStatsController.VitalLevel.Critical)]
+        // A max of zero is reachable: Creative has no survival vitals, so an unbound reading is
+        // (0, 0). It must not read as critical, or an absent vital looks like a dying one.
+        [TestCase(0, 0, GameplayStatsController.VitalLevel.Ok)]
+        public void LevelThresholdsAreOnTheBoundary(int current, int max, GameplayStatsController.VitalLevel expected)
+        {
+            Assert.That(GameplayStatsController.LevelFor(current, max), Is.EqualTo(expected));
         }
 
         [Test]
-        public void StateLineIncludesHungerThirstStaminaWhenSurvivalVitalsBound()
+        public void SurvivalVitalsRenderAsTheirOwnMeteredRows()
         {
             GameplayStatsController controller = CreateScreen<GameplayStatsController>();
             VisualElement root = AttachFreshTree(controller);
@@ -218,9 +271,54 @@ namespace Blockiverse.Tests.EditMode
             controller.Bind(new PlayerVitals(currentHealth: 75));
             controller.BindSurvivalVitals(new FakeSurvivalVitals { Hunger = 80, Thirst = 60, Stamina = 40 });
 
-            Assert.That(
-                root.Q<Label>("bv-vitals-state").text,
-                Is.EqualTo("Stable · Hunger 80 · Thirst 60 · Stamina 40"));
+            Assert.That(root.Q<Label>("bv-vital-hunger-value").text, Is.EqualTo("80 / 100"));
+            Assert.That(root.Q<Label>("bv-vital-thirst-value").text, Is.EqualTo("60 / 100"));
+            Assert.That(root.Q<Label>("bv-vital-stamina-value").text, Is.EqualTo("40 / 100"));
+
+            Assert.That(FillPercentOf(root.Q<VisualElement>("bv-vital-stamina-fill")),
+                Is.EqualTo(40f).Within(0.01f));
+
+            // 40/100 is below half, so stamina carries the low signal while hunger does not.
+            Assert.That(root.Q<VisualElement>("bv-vital-stamina").ClassListContains("gs-vital--low"), Is.True);
+            Assert.That(root.Q<VisualElement>("bv-vital-hunger").ClassListContains("gs-vital--low"), Is.False);
+        }
+
+        // Creative has health and nothing else. An unbound meter draws as an empty bar, which reads
+        // as starvation rather than as "this does not apply here".
+        [Test]
+        public void SurvivalOnlyRowsAreHiddenWithoutSurvivalVitals()
+        {
+            GameplayStatsController controller = CreateScreen<GameplayStatsController>();
+            VisualElement root = AttachFreshTree(controller);
+
+            controller.Bind(new PlayerVitals(currentHealth: 75));
+
+            Assert.That(root.Q<VisualElement>("bv-vital-health").ClassListContains("gs-vital--absent"),
+                Is.False, "Health must stay visible in Creative.");
+
+            foreach (string vital in new[] { "hunger", "thirst", "stamina" })
+            {
+                Assert.That(
+                    root.Q<VisualElement>($"bv-vital-{vital}").ClassListContains("gs-vital--absent"),
+                    Is.True,
+                    $"{vital} rendered as an empty meter instead of being hidden.");
+            }
+
+            // POSITIVE CONTROL. Without this the assertions above pass just as well if the class is
+            // hard-coded into the UXML and never removed — "hidden in Creative" and "hidden always"
+            // are indistinguishable from the absence check alone, and the survival HUD would be
+            // three blank rows with nothing failing.
+            controller.BindSurvivalVitals(
+                new FakeSurvivalVitals { Hunger = 80, Thirst = 60, Stamina = 40 });
+
+            foreach (string vital in new[] { "hunger", "thirst", "stamina" })
+            {
+                Assert.That(
+                    root.Q<VisualElement>($"bv-vital-{vital}").ClassListContains("gs-vital--absent"),
+                    Is.False,
+                    $"{vital} stayed hidden after survival vitals were bound — the row is never " +
+                    "shown, in any mode.");
+            }
         }
 
         [Test]
@@ -403,6 +501,67 @@ namespace Blockiverse.Tests.EditMode
             controller.SetStatusText(null);
             Assert.That(controller.CurrentStatusText, Is.Empty);
             Assert.That(DisplayOf(label), Is.EqualTo(DisplayStyle.None));
+        }
+
+        // Asserts the class lands ON THE ELEMENT, not that ClassFor() returns the right string.
+        //
+        // The severity stripe shipped half-built exactly once: ClassFor and the SeverityClasses
+        // array both existed and were both public, but ApplyDisplay never called either, so every
+        // toast rendered with the neutral border and nothing failed. A test written against
+        // ClassFor would have been green throughout. The runtime path is the only thing worth
+        // asserting here.
+        [Test]
+        public void StatusToastPaintsTheSeverityStripeOnTheLabel()
+        {
+            StatusToastController controller = CreateScreen<StatusToastController>();
+            VisualElement root = AttachFreshTree(controller);
+            Label label = root.Q<Label>("bv-toast-label");
+
+            controller.ShowTimedStatus("Saved", StatusToastController.StatusSeverity.Confirmed);
+            Assert.That(label.ClassListContains("hs-status--confirmed"), Is.True,
+                "confirmed message must carry the moss stripe");
+
+            // Escalating swaps the stripe rather than accumulating one.
+            controller.ShowTimedStatus("Denied", StatusToastController.StatusSeverity.Rejected);
+            Assert.That(label.ClassListContains("hs-status--rejected"), Is.True);
+            Assert.That(label.ClassListContains("hs-status--confirmed"), Is.False,
+                "the previous stripe must be removed, not layered under the new one");
+
+            // Info spends none of the four scarce signal colours. Cleared first: while the
+            // rejection is still showing, the priority gate would drop this call outright and the
+            // red stripe staying put would be correct behaviour, not the absence being asserted.
+            controller.SetStatusText(string.Empty);
+            controller.ShowTimedStatus("Note", StatusToastController.StatusSeverity.Info);
+            Assert.That(label.text, Is.EqualTo("Note"), "gate must not have suppressed this");
+            Assert.That(label.ClassListContains("hs-status--rejected"), Is.False);
+
+            // Clearing the text clears the stripe: an empty plate must not keep a coloured edge.
+            controller.ShowTimedStatus("Denied", StatusToastController.StatusSeverity.Rejected);
+            controller.SetStatusText(string.Empty);
+            Assert.That(label.ClassListContains("hs-status--rejected"), Is.False,
+                "a hidden toast must not keep its stripe for the next message to inherit");
+        }
+
+        [Test]
+        public void StatusToastDropsLowerSeverityWhileHeavierMessageShows()
+        {
+            StatusToastController controller = CreateScreen<StatusToastController>();
+            AttachFreshTree(controller);
+
+            controller.ShowTimedStatus("Drowning", StatusToastController.StatusSeverity.Critical);
+            controller.ShowTimedStatus("Inventory full", StatusToastController.StatusSeverity.Refused);
+            Assert.That(controller.CurrentStatusText, Is.EqualTo("Drowning"),
+                "a refusal must not erase a critical message that is still on screen");
+
+            // Equal weight replaces: the newest message of the same severity is the relevant one.
+            controller.ShowTimedStatus("Freezing", StatusToastController.StatusSeverity.Critical);
+            Assert.That(controller.CurrentStatusText, Is.EqualTo("Freezing"));
+
+            // Positive control: with nothing showing, the same low-severity call DOES land — so the
+            // suppression above is the priority gate working, not a dead path.
+            controller.SetStatusText(string.Empty);
+            controller.ShowTimedStatus("Inventory full", StatusToastController.StatusSeverity.Refused);
+            Assert.That(controller.CurrentStatusText, Is.EqualTo("Inventory full"));
         }
 
         // EditMode mirror of CreativeInteractionPlayModeTests.HotbarSelectionUpdatesSelectedBlockLabel.

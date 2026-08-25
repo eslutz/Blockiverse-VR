@@ -59,6 +59,10 @@ namespace Blockiverse.Editor
                 "Toggle label: makes the left controller the dominant hand. Off = right-handed."),
             ("ui.generated.comfort.motion_vignette", "Motion Vignette",
                 "Toggle label: tunnel-vision vignette that narrows the view during locomotion to reduce motion sickness."),
+            ("ui.generated.comfort.view_anchor", "View Anchor",
+                "Toggle label: a small static dot at the centre of vision that gives the eye a fixed "
+                + "reference during continuous locomotion, reducing motion sickness. Not an aiming "
+                + "reticle — this game aims with the controller ray."),
             ("ui.generated.comfort.move_speed", "Move Speed",
                 "Slider label: continuous movement speed in metres per second while gliding."),
             ("ui.generated.comfort.movement_mode", "Movement Mode",
@@ -154,6 +158,37 @@ namespace Blockiverse.Editor
                 "New World world-preset value label; humanize-fallback parity for canonical id 'void_builder'."),
             ("ui.value.canonical.wetland", "Wetland",
                 "New World starting-biome value label; humanize-fallback parity for canonical id 'wetland'."),
+
+            // Gameplay vitals readout. The uGUI HUD wrote these words into one concatenated
+            // sentence, so they never existed as entries of their own; the metered rows need each
+            // as a standalone label (ADR 0010 amendment 2026-08-25).
+            ("ui.screen.vitals.health", "Health",
+                "Gameplay HUD vital label, beside a meter and a number. Noun, not a verb. The label column is about 110 px wide, so a long translation clips rather than wraps."),
+            ("ui.screen.vitals.hunger", "Hunger",
+                "Gameplay HUD vital label. The player's need for food, not their appetite. Same 110 px width constraint as Health."),
+            ("ui.screen.vitals.thirst", "Thirst",
+                "Gameplay HUD vital label. The player's need for water. Same 110 px width constraint."),
+            ("ui.screen.vitals.stamina", "Stamina",
+                "Gameplay HUD vital label. The exertion budget sprinting and harvesting consume. Same 110 px width constraint."),
+            ("ui.screen.vitals.marker.low", "!",
+                "One-character marker beside a gameplay HUD vital that has fallen below half. It exists so the warning does not depend on colour alone. Keep to one or two characters and prefer ASCII - it must render in every locale's font."),
+            // Multiplayer presence subtitles. Hard-coded English in SurvivalFeedbackBridge until
+            // 2026-08-25 — the bridge had no localization access, so there was nowhere to put a key.
+            ("ui.status.multiplayer.player_joined", "Player joined.",
+                "Subtitle shown when another player joins the session. A full sentence with a period, matching the other subtitle lines. 'Player' is any other person in the session, not a role or class."),
+            ("ui.status.multiplayer.player_left", "Player left.",
+                "Subtitle shown when another player leaves the session, whether deliberately or by disconnecting. Full sentence with a period."),
+
+            // Settings row for the diagnostic readout. Two entries rather than one Smart entry with
+            // a state argument, because MenuAction labels resolve through Text(key, fallback) and
+            // carry no arguments — the factory picks the key instead.
+            ("ui.action.settings.debug_overlay_on", "Debug Overlay: On",
+                "Settings row that turns the diagnostic readout OFF when pressed - the label states the CURRENT state, not the action, matching how the other stateful rows in this game read. 'Debug Overlay' is the developer-facing readout of position, biome, weather and frame time."),
+            ("ui.action.settings.debug_overlay_off", "Debug Overlay: Off",
+                "Settings row that turns the diagnostic readout ON when pressed. The label states the CURRENT state, not the action."),
+
+            ("ui.screen.vitals.marker.critical", "!!",
+                "Marker beside a gameplay HUD vital below a quarter - the more urgent partner of the low marker, and it must read as MORE severe than that one. Same one-to-two character ASCII constraint."),
         };
 
         // One batchmode entry for the whole UI Toolkit integration step: table entries first

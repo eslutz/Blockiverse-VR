@@ -69,6 +69,11 @@ namespace Blockiverse.UI
         public const string SettingsOpenComfort = "settings.open_comfort";
         public const string SettingsOpenAudio = "settings.open_audio";
         public const string SettingsOpenControls = "settings.open_controls";
+
+        // Toggles the gameplay diagnostic readout (position, biome, weather, frame time, session).
+        // A settings row rather than a controller binding: it is consulted rarely and every
+        // gameplay input is already spoken for.
+        public const string SettingsToggleDebugOverlay = "settings.toggle_debug_overlay";
         public const string SettingsClose = "settings.close";
         public const string ComfortSettingsClose = "settings_comfort.close";
         public const string AudioSettingsClose = "settings_audio.close";
@@ -166,13 +171,25 @@ namespace Blockiverse.UI
 
         // Settings hub (§6.19, adapted to the VR action-menu layout): comfort, audio, and the
 // controls reference are their own screens/panels.
-        public static readonly IReadOnlyList<MenuAction> Settings = new[]
+        // A factory rather than a static list, because the debug-overlay row shows its own state in
+        // its label. Same shape as Title(...) and PauseMenu(...), which are factories for the same
+        // reason — an action list that reports state has to be rebuilt when the state changes, and
+        // BlockiverseMenuController.RefreshSettingsMenu does exactly that after the toggle.
+        public static IReadOnlyList<MenuAction> Settings(bool debugOverlayEnabled) => new[]
         {
             Localized(SettingsOpenComfort, BlockiverseLocalization.Keys.SettingsComfort, "Comfort"),
             Localized(SettingsOpenAudio, BlockiverseLocalization.Keys.SettingsAudio, "Audio"),
             Localized(SettingsOpenControls, BlockiverseLocalization.Keys.SettingsControls, "Controls"),
+            debugOverlayEnabled
+                ? Localized(SettingsToggleDebugOverlay, DebugOverlayOnKey, "Debug Overlay: On")
+                : Localized(SettingsToggleDebugOverlay, DebugOverlayOffKey, "Debug Overlay: Off"),
             Localized(SettingsClose, BlockiverseLocalization.Keys.SettingsClose, "Close"),
         };
+
+        // Not in BlockiverseLocalization.Keys: that class is the uGUI shim's key list and dies with
+        // it, and these two entries are new with the UI Toolkit settings screen.
+        const string DebugOverlayOnKey = "ui.action.settings.debug_overlay_on";
+        const string DebugOverlayOffKey = "ui.action.settings.debug_overlay_off";
 
         // World Details management actions (§6.5).
         public static readonly IReadOnlyList<MenuAction> WorldDetails = new[]

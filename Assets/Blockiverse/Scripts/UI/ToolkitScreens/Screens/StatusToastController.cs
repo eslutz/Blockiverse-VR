@@ -26,6 +26,44 @@ namespace Blockiverse.UI
         // uGUI serialized default (statusMessageSeconds).
         public const float StatusMessageSeconds = 2.5f;
 
+        // A message the player must not miss outlives an ordinary one, rather than merely being
+        // harder to displace.
+        public const float CriticalMessageSeconds = 5.0f;
+
+        // How a message reads, and how hard it is to displace. Severity and priority are ONE
+        // concept deliberately: two would let a caller ask for a low-priority error, which has no
+        // coherent meaning and would only ever be a bug.
+        //
+        // The four non-info values are the visual language's four signals (ADR 0010 §8) and carry
+        // the same meanings here — moss confirmed, ochre refused-try-differently, oxide
+        // rejected-this-will-not-work. Base.uss already defines a stripe for each, so the styling
+        // costs no new rules.
+        //
+        // Nothing is actually contended today: OnCommandFeedback is the only producer. This exists
+        // because the report asks for prioritised messaging, and because the moment a second
+        // producer appears — pickups, craft results, connection loss — last-write-wins starts
+        // silently erasing whichever message mattered.
+        public enum StatusSeverity
+        {
+            Info = 0,
+            Confirmed = 10,
+            Refused = 20,
+            Rejected = 30,
+            Critical = 40,
+        }
+
+        // Every class this controller can apply, so all of them can be removed before one is
+        // added. Removing only "the previous one" leaves a stale stripe the first time a path
+        // forgets to record what it set.
+        static readonly string[] SeverityClasses =
+        {
+            "hs-status--confirmed",
+            "hs-status--refused",
+            "hs-status--rejected",
+        };
+
+        StatusSeverity activeSeverity = StatusSeverity.Info;
+
         static class Keys
         {
             public const string InventoryFull = "ui.status.survival.inventory_full";
@@ -66,11 +104,40 @@ namespace Blockiverse.UI
             ShowTimedStatus(message);
         }
 
-        public void ShowTimedStatus(string message)
+        // Harvest rejections are Refused: the player can change something — empty a slot, bring a
+        // better tool — and try again. That is what separates ochre from oxide in this palette.
+        public void ShowTimedStatus(string message) =>
+            ShowTimedStatus(message, StatusSeverity.Refused);
+
+        public void ShowTimedStatus(string message, StatusSeverity severity)
         {
+            // Equal severity replaces: the newest message of the same weight is the relevant one.
+            // Lower is dropped while something heavier is still on screen.
+            bool showing = statusVisibleUntil > 0f && !string.IsNullOrEmpty(pendingText);
+
+            if (showing && severity < activeSeverity)
+                return;
+
+            activeSeverity = severity;
             SetStatusText(message);
-            statusVisibleUntil = Time.unscaledTime + Mathf.Max(0.1f, StatusMessageSeconds);
+
+            float seconds = severity == StatusSeverity.Critical
+                ? CriticalMessageSeconds
+                : StatusMessageSeconds;
+
+            statusVisibleUntil = Time.unscaledTime + Mathf.Max(0.1f, seconds);
         }
+
+        // Info deliberately has no stripe — the plate's neutral surface already says "nothing
+        // happened", and one of four scarce signal colours should not be spent saying it.
+        public static string ClassFor(StatusSeverity severity) => severity switch
+        {
+            StatusSeverity.Confirmed => "hs-status--confirmed",
+            StatusSeverity.Refused => "hs-status--refused",
+            StatusSeverity.Rejected => "hs-status--rejected",
+            StatusSeverity.Critical => "hs-status--rejected",
+            _ => null,
+        };
 
         public void SetStatusText(string message)
         {
@@ -110,6 +177,7 @@ namespace Blockiverse.UI
             UnsubscribeSync();
             // Toasts are transient; a stale rejection must not greet the player on return.
             statusVisibleUntil = 0f;
+            activeSeverity = StatusSeverity.Info;
             SetStatusText(string.Empty);
         }
 
@@ -124,6 +192,11 @@ namespace Blockiverse.UI
                 return;
 
             statusVisibleUntil = 0f;
+            // Drop back to Info as the message clears. Nothing is showing, so the priority gate in
+            // ShowTimedStatus does not consult this — but leaving it pinned at Critical means the
+            // day someone adds a producer that checks severity outside that gate, it reads a
+            // severity for a message that expired minutes ago.
+            activeSeverity = StatusSeverity.Info;
             SetStatusText(string.Empty);
         }
 
@@ -133,9 +206,23 @@ namespace Blockiverse.UI
                 return;
 
             toastLabel.text = pendingText;
-            toastLabel.style.display = string.IsNullOrEmpty(pendingText)
-                ? DisplayStyle.None
-                : DisplayStyle.Flex;
+
+            bool empty = string.IsNullOrEmpty(pendingText);
+
+            toastLabel.style.display = empty ? DisplayStyle.None : DisplayStyle.Flex;
+
+            // Clear all of them, then add at most one. Removing only the previously-applied class
+            // would leave a stale stripe behind the first time a path forgets to record what it set.
+            foreach (string severityClass in SeverityClasses)
+                toastLabel.RemoveFromClassList(severityClass);
+
+            if (empty)
+                return;
+
+            string active = ClassFor(activeSeverity);
+
+            if (!string.IsNullOrEmpty(active))
+                toastLabel.AddToClassList(active);
         }
 
         void SubscribeSync()

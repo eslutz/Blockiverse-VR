@@ -92,6 +92,26 @@ namespace Blockiverse.WorldGen
             }
         }
 
+        // The inverse of TryGetBiomeIndex. Added for the gameplay debug readout, which has an INDEX
+        // from BiomeIndexAt and needs the canonical id — canonical ids being this project's UI,
+        // persistence and wire vocabulary.
+        //
+        // A switch over the same constants rather than a table, so adding a biome fails to compile
+        // in one place instead of silently returning null in another. Null (not a placeholder) for
+        // AnyBiomeIndex: a world with no biomes is a real state — flat creative and void-builder
+        // presets — and the caller decides how to say so.
+        public static string CanonicalIdForBiomeIndex(int biomeIndex) => biomeIndex switch
+        {
+            MeadowBiomeIndex => "meadow",
+            PinewildBiomeIndex => "pinewild",
+            WetlandBiomeIndex => "wetland",
+            DrybrushBiomeIndex => "drybrush",
+            DunesBiomeIndex => "dunes",
+            TundraBiomeIndex => "tundra",
+            HighlandsBiomeIndex => "highlands",
+            _ => null,
+        };
+
         public static bool IsTundraBiomeIndex(int biomeIndex) => biomeIndex == TundraBiomeIndex;
 
         internal TerrainBiome BiomeAt(int x, int z) => Classify(x, z, SurfaceHeight(x, z));

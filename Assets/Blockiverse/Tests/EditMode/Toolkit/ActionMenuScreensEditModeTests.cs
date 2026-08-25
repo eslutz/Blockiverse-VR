@@ -54,6 +54,10 @@ namespace Blockiverse.Tests.EditMode
             {
             }
 
+            public void CycleHotbarSlot(int delta)
+            {
+            }
+
             public void ResetNewWorldScreen()
             {
             }
@@ -295,12 +299,16 @@ namespace Blockiverse.Tests.EditMode
             VisualElement root = AttachFreshTree(controller);
             controller.ConfigureHost(host);
 
-            controller.SetActionMenu("Settings", MenuActions.Settings);
+            // Settings became a factory when the debug-overlay row started reporting its own state
+            // in its label; the list is captured once here so the assertions compare against the
+            // same instance the screen was given.
+            IReadOnlyList<MenuAction> actions = MenuActions.Settings(debugOverlayEnabled: false);
+            controller.SetActionMenu("Settings", actions);
 
             List<Button> buttons = root.Query<Button>().ToList();
-            Assert.That(buttons, Has.Count.EqualTo(MenuActions.Settings.Count));
-            for (int i = 0; i < MenuActions.Settings.Count; i++)
-                Assert.That(buttons[i].text, Is.EqualTo(MenuActions.Settings[i].Label));
+            Assert.That(buttons, Has.Count.EqualTo(actions.Count));
+            for (int i = 0; i < actions.Count; i++)
+                Assert.That(buttons[i].text, Is.EqualTo(actions[i].Label));
 
             controller.PressAction(MenuActions.SettingsOpenComfort);
 

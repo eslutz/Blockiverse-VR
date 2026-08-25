@@ -111,6 +111,10 @@ namespace Blockiverse.VR
                 {
                     comfortSettings.VignetteEnabled = PlayerPrefs.GetInt(
                         KeyPrefix + "VignetteEnabled", comfortSettings.VignetteEnabled ? 1 : 0) != 0;
+                    comfortSettings.ViewAnchorEnabled = PlayerPrefs.GetInt(
+                        KeyPrefix + "ViewAnchorEnabled", comfortSettings.ViewAnchorEnabled ? 1 : 0) != 0;
+                    comfortSettings.DebugOverlayEnabled = PlayerPrefs.GetInt(
+                        KeyPrefix + "DebugOverlayEnabled", comfortSettings.DebugOverlayEnabled ? 1 : 0) != 0;
                     comfortSettings.VignetteStrength = PlayerPrefs.GetFloat(
                         KeyPrefix + "VignetteStrength", comfortSettings.VignetteStrength);
                 }
@@ -166,6 +170,8 @@ namespace Blockiverse.VR
                 PlayerPrefs.SetFloat(KeyPrefix + "SnapTurnDegrees", comfortSettings.SnapTurnDegrees);
                 PlayerPrefs.SetFloat(KeyPrefix + "UiScale", comfortSettings.UiScale);
                 PlayerPrefs.SetInt(KeyPrefix + "VignetteEnabled", comfortSettings.VignetteEnabled ? 1 : 0);
+                PlayerPrefs.SetInt(KeyPrefix + "ViewAnchorEnabled", comfortSettings.ViewAnchorEnabled ? 1 : 0);
+                PlayerPrefs.SetInt(KeyPrefix + "DebugOverlayEnabled", comfortSettings.DebugOverlayEnabled ? 1 : 0);
                 PlayerPrefs.SetFloat(KeyPrefix + "VignetteStrength", comfortSettings.VignetteStrength);
                 PlayerPrefs.SetInt(KeyPrefix + "VignettePrefsVersion", VignettePrefsVersion);
             }
@@ -212,6 +218,8 @@ namespace Blockiverse.VR
                     hash = hash * 31 + comfortSettings.SnapTurnDegrees.GetHashCode();
                     hash = hash * 31 + comfortSettings.UiScale.GetHashCode();
                     hash = hash * 31 + (comfortSettings.VignetteEnabled ? 1 : 0);
+                    hash = hash * 31 + (comfortSettings.ViewAnchorEnabled ? 1 : 0);
+                    hash = hash * 31 + (comfortSettings.DebugOverlayEnabled ? 1 : 0);
                     hash = hash * 31 + comfortSettings.VignetteStrength.GetHashCode();
                 }
 

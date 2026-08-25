@@ -424,6 +424,10 @@ namespace Blockiverse.Tests.EditMode
             {
             }
 
+            public void CycleHotbarSlot(int delta)
+            {
+            }
+
             public void ResetNewWorldScreen()
             {
             }

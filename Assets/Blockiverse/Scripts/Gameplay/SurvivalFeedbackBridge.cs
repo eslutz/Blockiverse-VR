@@ -2,6 +2,7 @@ using Blockiverse.Networking;
 using Blockiverse.Survival;
 using Blockiverse.Voxel;
 using UnityEngine;
+using UnityEngine.Localization.Settings;
 
 namespace Blockiverse.Gameplay
 {
@@ -371,18 +372,82 @@ namespace Blockiverse.Gameplay
         void OnClientConnected(ulong clientId)
         {
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.MultiplayerJoin);
-            ShowToast("Player joined.");
+            ShowToast(SubtitleKeys.PlayerJoined);
         }
 
         void OnClientDisconnected(ulong clientId)
         {
             audioCuePlayer?.PlayCue(BlockiverseAudioCue.MultiplayerLeave);
-            ShowToast("Player left.");
+            ShowToast(SubtitleKeys.PlayerLeft);
         }
 
-        void ShowToast(string message)
+        // Takes a table KEY, not a string. Every subtitle this bridge produced was hard-coded
+        // English until 2026-08-25 — four of them — because Blockiverse.Gameplay had no
+        // localization access at all, so there was nowhere to put a key even if someone had wanted
+        // to. The package reference was added alongside this change; it breaks no project layering,
+        // since this assembly already references TextMeshPro and uGUI.
+        void ShowToast(string key)
         {
-            toastPanel?.ShowToast(message);
+            toastPanel?.ShowToast(Localize(key));
+        }
+
+        // Deliberately mirrors UiText rather than calling it: UiText lives in
+        // Blockiverse.UI.Toolkit, which sits ABOVE this assembly, and referencing it from gameplay
+        // code would invert the layering to save fifteen lines.
+        //
+        // The proper fix is to move subtitle DISPLAY out of Blockiverse.Gameplay entirely — the
+        // bridge would raise an event and a UI-layer screen would render it, the way every other
+        // player-facing string already works. That is a refactor of the subtitle plumbing rather
+        // than a localization fix, so it is recorded here instead of attempted in passing.
+        static UnityEngine.Localization.Tables.StringTable cachedSubtitleTable;
+        static bool subtitleLocaleHookInstalled;
+
+        static string Localize(string key)
+        {
+            if (string.IsNullOrEmpty(key))
+                return string.Empty;
+
+            UnityEngine.Localization.Tables.StringTable table = ResolveSubtitleTable();
+            string localized = table?.GetEntry(key)?.GetLocalizedString();
+
+            // Falls back to the key rather than throwing. A missing entry then shows as the raw
+            // key, which is loud enough to notice and harmless enough to ship past.
+            return string.IsNullOrEmpty(localized) ? key : localized;
+        }
+
+        // The bare GetLocalizedString(table, key) this used to call resolves only once a locale
+        // SELECTION PASS has run, and that pass runs only in Play mode — so every context outside
+        // it (EditMode tests, editor tooling) got the raw key back and the fallback above quietly
+        // made that look intentional. UiText documents both requirements; this now actually
+        // mirrors them instead of only claiming to.
+        static UnityEngine.Localization.Tables.StringTable ResolveSubtitleTable()
+        {
+            if (cachedSubtitleTable != null)
+                return cachedSubtitleTable;
+
+            LocalizationSettings.InitializationOperation.WaitForCompletion();
+
+            UnityEngine.Localization.Locale locale =
+                LocalizationSettings.SelectedLocale
+                ?? LocalizationSettings.ProjectLocale
+                ?? LocalizationSettings.AvailableLocales?.GetLocale("en");
+
+            if (locale == null)
+                return null;
+
+            cachedSubtitleTable = LocalizationSettings.StringDatabase
+                .GetTableAsync(SubtitleKeys.TableName, locale)
+                .WaitForCompletion();
+
+            // Without this the cache outlives the locale and subtitles keep speaking the old
+            // language after a switch, which is worse than the un-cached resolve it replaced.
+            if (!subtitleLocaleHookInstalled)
+            {
+                LocalizationSettings.SelectedLocaleChanged += _ => cachedSubtitleTable = null;
+                subtitleLocaleHookInstalled = true;
+            }
+
+            return cachedSubtitleTable;
         }
 
         static string DescribeHarvestRejection(SurvivalCommandResult result)
@@ -390,10 +455,21 @@ namespace Blockiverse.Gameplay
             if (result.HarvestFailureReason == BlockHarvestFailureReason.InventoryFull ||
                 result.FailureReason == SurvivalCommandFailureReason.InventoryFull)
             {
-                return "Inventory full.";
+                return SubtitleKeys.InventoryFull;
             }
 
-            return "This tool is not strong enough.";
+            return SubtitleKeys.ToolTooWeak;
+        }
+
+        // The harvest keys are the SAME entries the gameplay HUD's status toast uses, so the
+        // subtitle and the on-screen message cannot drift apart in wording.
+        static class SubtitleKeys
+        {
+            public const string TableName = "UI";
+            public const string InventoryFull = "ui.status.survival.inventory_full";
+            public const string ToolTooWeak = "ui.status.survival.tool_too_weak";
+            public const string PlayerJoined = "ui.status.multiplayer.player_joined";
+            public const string PlayerLeft = "ui.status.multiplayer.player_left";
         }
 
         void OnLocalPlayerDamaged(HealthChangeResult result)
