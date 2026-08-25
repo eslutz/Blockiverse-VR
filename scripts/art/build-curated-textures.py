@@ -9,17 +9,23 @@ without creating missing atlas tiles.
 
     python3 scripts/art/build-curated-textures.py
     python3 scripts/art/build-curated-textures.py --check
+    python3 scripts/art/build-curated-textures.py --include-candidates
     python3 scripts/art/build-curated-textures.py --staging /path/to/staging
 
-Requires ffmpeg for adopted-source transforms. Candidate/researching entries do
-not affect shipping output until their manifest status is changed to `adopted`.
+`--include-candidates` is audition-only: it builds direct candidate entries into
+the experimental atlas without promoting them to adopted in the manifest.
+
+Requires ffmpeg for selected third-party-source transforms. Researching/rejected
+entries never affect output.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -34,6 +40,7 @@ CURATED_ROOT = PROJECT_ROOT / "Assets/Blockiverse/Art/Textures/Blocks/TextureSet
 CURATED_SOURCE_DIR = CURATED_ROOT / "Source"
 STATUS_PATH = CURATED_ROOT / "curated-status.json"
 STAGING_DIR_NAME = "Blockiverse-VR-texture-staging"
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def load_art_generator():
@@ -79,13 +86,52 @@ def all_source_names() -> list[str]:
     return names
 
 
+def selected_entries(manifest: dict, include_candidates: bool) -> dict[str, dict]:
+    statuses = {"adopted"}
+    if include_candidates:
+        statuses.add("candidate")
+    return {entry["id"]: entry for entry in manifest["pilot"] if entry["status"] in statuses}
+
+
 def adopted_entries(manifest: dict) -> dict[str, dict]:
     return {entry["id"]: entry for entry in manifest["pilot"] if entry["status"] == "adopted"}
+
+
+def candidate_entries(manifest: dict) -> dict[str, dict]:
+    return {entry["id"]: entry for entry in manifest["pilot"] if entry["status"] == "candidate"}
 
 
 def resolve_source(manifest: dict, entry: dict, staging: Path) -> Path:
     pack = manifest["packs"][entry["pack"]]
     return staging / pack["stagingPath"] / entry["sourceFile"]
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_pinned_pack_hash(manifest: dict, entry: dict, staging: Path) -> str | None:
+    if entry["status"] != "adopted":
+        return None
+
+    pack_id = entry["pack"]
+    pack = manifest["packs"][pack_id]
+    expected = (pack.get("sha256") or "").lower()
+    if not SHA256_RE.fullmatch(expected):
+        return f"{entry['id']}: adopted pack {pack_id} has no valid pinned sha256"
+
+    raw_path = staging / "raw" / f"{pack_id}.zip"
+    if not raw_path.is_file():
+        return f"{entry['id']}: pinned pack archive is missing: {raw_path}"
+
+    actual = sha256(raw_path)
+    if actual != expected:
+        return f"{entry['id']}: pack {pack_id} sha256 mismatch; expected {expected}, found {actual}"
+    return None
 
 
 def run_ffmpeg(source: Path, destination: Path, transform: dict) -> None:
@@ -134,17 +180,23 @@ def write_json_with_meta(path: Path, value: dict) -> None:
     )
 
 
-def verify_sources(manifest: dict, staging: Path) -> list[tuple[str, Path]]:
-    missing: list[tuple[str, Path]] = []
-    for texture_id, entry in adopted_entries(manifest).items():
+def verify_sources(manifest: dict, staging: Path, include_candidates: bool) -> list[str]:
+    errors: list[str] = []
+    for texture_id, entry in selected_entries(manifest, include_candidates).items():
         source = resolve_source(manifest, entry, staging)
         if not source.is_file():
-            missing.append((texture_id, source))
-    return missing
+            errors.append(f"{texture_id}: source is missing: {source}")
+            continue
+        hash_error = verify_pinned_pack_hash(manifest, entry, staging)
+        if hash_error:
+            errors.append(hash_error)
+    return errors
 
 
-def build(manifest: dict, staging: Path) -> None:
+def build(manifest: dict, staging: Path, include_candidates: bool) -> None:
+    selected = selected_entries(manifest, include_candidates)
     adopted = adopted_entries(manifest)
+    candidates = candidate_entries(manifest) if include_candidates else {}
     names = all_source_names()
     if len(names) != 100:
         raise RuntimeError(f"Expected 100 block source textures, found {len(names)}.")
@@ -155,7 +207,7 @@ def build(manifest: dict, staging: Path) -> None:
 
     for name in names:
         destination = CURATED_SOURCE_DIR / f"{name}.png"
-        entry = adopted.get(name)
+        entry = selected.get(name)
         if entry is None:
             source = ENHANCED_SOURCE_DIR / f"{name}.png"
             if not source.is_file():
@@ -164,26 +216,32 @@ def build(manifest: dict, staging: Path) -> None:
         else:
             if entry["strategy"] != "direct":
                 raise RuntimeError(
-                    f"{name}: adopted strategy '{entry['strategy']}' is not buildable yet; "
-                    "add deterministic composite support before adoption."
+                    f"{name}: selected strategy '{entry['strategy']}' is not buildable yet; "
+                    "add deterministic composite support before adoption/candidate preview."
                 )
             source = resolve_source(manifest, entry, staging)
             if not source.is_file():
-                raise FileNotFoundError(f"Missing adopted source for {name}: {source}")
+                raise FileNotFoundError(f"Missing selected source for {name}: {source}")
             run_ffmpeg(source, destination, entry["transform"])
 
         ART.write_texture_meta(relative(destination), sprite=False, max_size=manifest["tilePixels"])
 
     ART.write_texture_set_atlas(manifest["setId"])
 
+    selected_ids = sorted(selected)
     adopted_ids = sorted(adopted)
+    candidate_ids = sorted(set(candidates) & set(selected))
     status = {
         "setId": manifest["setId"],
+        "mode": "candidate-preview" if include_candidates else "adopted",
         "sourceCount": len(names),
+        "selectedCount": len(selected_ids),
         "adoptedCount": len(adopted_ids),
-        "fallbackCount": len(names) - len(adopted_ids),
+        "candidatePreviewCount": len(candidate_ids),
+        "fallbackCount": len(names) - len(selected_ids),
         "adopted": adopted_ids,
-        "fallbackPolicy": "All non-adopted source tiles copy from enhanced; enhanced remains the project default.",
+        "candidatePreview": candidate_ids,
+        "fallbackPolicy": "All non-selected source tiles copy from enhanced; enhanced remains the project default.",
     }
     write_json_with_meta(STATUS_PATH, status)
 
@@ -191,25 +249,32 @@ def build(manifest: dict, staging: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--staging", type=Path, default=default_staging(), help="Directory holding extracted source packs.")
-    parser.add_argument("--check", action="store_true", help="Verify adopted source files resolve, then exit.")
+    parser.add_argument("--check", action="store_true", help="Verify selected source files resolve, then exit.")
+    parser.add_argument(
+        "--include-candidates",
+        action="store_true",
+        help="Audition direct candidate entries without promoting them to adopted.",
+    )
     args = parser.parse_args()
 
     manifest = load_manifest()
     staging = args.staging.expanduser().resolve()
-    missing = verify_sources(manifest, staging)
-    if missing:
-        for texture_id, path in missing:
-            print(f"missing {texture_id}: {path}")
+    errors = verify_sources(manifest, staging, args.include_candidates)
+    if errors:
+        for error in errors:
+            print(error)
         raise SystemExit(1)
 
+    selected = selected_entries(manifest, args.include_candidates)
     if args.check:
-        print(f"curated_v1: {len(adopted_entries(manifest))} adopted source(s) resolve under {staging}")
+        mode = "adopted + candidate" if args.include_candidates else "adopted"
+        print(f"curated_v1: {len(selected)} {mode} source(s) resolve under {staging}")
         return
 
-    if adopted_entries(manifest) and not shutil.which("ffmpeg"):
-        raise SystemExit("ffmpeg is required to build adopted curated textures")
+    if selected and not shutil.which("ffmpeg"):
+        raise SystemExit("ffmpeg is required to build selected curated textures")
 
-    build(manifest, staging)
+    build(manifest, staging, args.include_candidates)
     print(CURATED_ROOT)
 
 
