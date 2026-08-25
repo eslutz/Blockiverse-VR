@@ -1,0 +1,72 @@
+name: Curated Texture Preview
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/art/curated-texture-manifest.json'
+      - 'scripts/art/build-curated-textures.py'
+      - 'scripts/art/fetch-curated-texture-sources.py'
+      - 'scripts/art/validate-curated-textures.py'
+      - 'docs/art/curated-texture-pilot.md'
+      - '.github/workflows/curated-texture-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-preview:
+    name: Build candidate atlas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - name: Pull Git LFS assets
+        run: git lfs pull
+
+      - name: Validate curated manifest and scripts
+        run: |
+          python3 -m py_compile \
+            scripts/art/build-curated-textures.py \
+            scripts/art/fetch-curated-texture-sources.py \
+            scripts/art/validate-curated-textures.py
+          python3 scripts/art/validate-curated-textures.py
+
+      - name: Ensure ffmpeg is available
+        run: |
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version | head -n 1
+
+      - name: Fetch verified CC0 source packs
+        run: >-
+          python3 scripts/art/fetch-curated-texture-sources.py
+          --staging "$RUNNER_TEMP/Blockiverse-VR-texture-staging"
+
+      - name: Verify candidate source resolution
+        run: >-
+          python3 scripts/art/build-curated-textures.py
+          --check
+          --include-candidates
+          --staging "$RUNNER_TEMP/Blockiverse-VR-texture-staging"
+
+      - name: Build candidate preview atlas
+        run: >-
+          python3 scripts/art/build-curated-textures.py
+          --include-candidates
+          --staging "$RUNNER_TEMP/Blockiverse-VR-texture-staging"
+
+      - name: Upload candidate preview
+        uses: actions/upload-artifact@v7
+        with:
+          name: curated-texture-candidate-preview
+          path: |
+            Assets/Blockiverse/Art/Textures/Blocks/TextureSets/curated_v1
+            ${{ runner.temp }}/Blockiverse-VR-texture-staging/SOURCES.json
+          if-no-files-found: error
