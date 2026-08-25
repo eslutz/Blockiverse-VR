@@ -103,6 +103,34 @@ Local validation is optimized for behavior:
 - `scripts/unity/build-development-apk.sh` produces a development APK for smoke installation.
 - Release-signed APKs are produced by `.github/workflows/quest-alpha.yml` only, using GitHub Actions secrets and the `meta-alpha` environment.
 
+### `run-tests.sh` exits 0 when the run did not happen
+
+**Its exit code does not tell you whether the tests passed, or whether they ran at all.** Measured
+independently by two sessions on 2026-08-25, across six runs between them:
+
+- A **compile error** runs no tests and exits 0.
+- An **EditMode failure** skips PlayMode entirely and exits 0.
+- A **segfault** (`EXIT=139`) is likewise reported as a clean exit.
+
+The script also does **not** clear `TestResults/Unity/*.xml`, so the *previous* run's results are
+still sitting there afterwards. A build break is therefore indistinguishable from "a completed run
+with some failures" — one session read six stale failures as real and reasoned about them before the
+file mtimes gave it away.
+
+Always:
+
+```sh
+rm -f TestResults/Unity/EditMode.xml TestResults/Unity/PlayMode.xml
+scripts/unity/run-tests.sh > gate.txt 2>&1
+grep -o "error CS[0-9]*: .*" gate.txt | sort -u     # compile FIRST; empty means it built
+```
+
+Then read each XML **with its mtime**, and treat a missing file as "did not run" rather than
+inferring anything from the exit code. Deleting first converts a silent lie into an obvious absence.
+
+The same caveat applies to anything gating on that exit code, CI included: it would read a build
+break as success.
+
 ## Required GitHub Configuration
 
 Repository secrets:

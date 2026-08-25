@@ -79,7 +79,8 @@ dependency. Both are retained verbatim (ADR 0010 §4).
 | `WorldDetailsScreen` | `world_details` | `WorldDetailsScreen.uxml` |
 | `WorldLoadingScreen` | `world_loading` | `WorldLoadingScreen.uxml` |
 | `ControllerMappingScreen` | `controller_mapping` | `ControllerMappingScreen.uxml` |
-| `GameplayHudScreen` | `gameplay_hud` | `GameplayHud.uxml` (HUD host) |
+| `GameplayHudScreen` | `gameplay_hud` | `GameplayHud.uxml` (wrist menu) + the HUD family |
+| `GameplayScreensScreen` | `gameplay_screens` | `GameplayScreensScreen.uxml` (pause fallback hub) |
 | `PauseScreen` | `pause_menu` | `PauseScreen.uxml` |
 | `SettingsScreen` | `settings` | `SettingsHubScreen.uxml` |
 | `ComfortSettingsScreen` | `settings_comfort` | `ComfortSettingsScreen.uxml` |

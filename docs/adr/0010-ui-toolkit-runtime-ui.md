@@ -381,6 +381,50 @@ from USS and were never asserted.
 some other screen's sheet. A class defined in no sheet at all is allowed — those are state
 markers toggled from C#.
 
+### A fourth placement profile: `Wrist` (2026-08-25)
+
+`UiToolkitPlacementProfile` gains `Wrist` alongside `Menu`, `Hud` and `Overlay`. A wrist panel is
+parented to the **support hand** — the one that does not aim, resolved from the `DominantHand`
+comfort setting — and is shown only while the player turns that wrist toward their face.
+
+**Why.** Live simulator validation and Eric independently reported the persistent HUD as clumped in
+front of the view. The always-visible action bar (inventory / crafting / shared crate / blocks) was
+590x150 pinned across the lower-centre for the whole session, directly beneath the hotbar; the
+validation session's words were that the two "read as a continuous block, not two separable things",
+and that nothing in an hour of play made them want to look at it. The FPV report is explicit that
+those entry points "belong in routed screens", not in permanent chrome. The rest of the HUD was
+recomposed at the same time: vitals to lower-left (the report's own recommendation, and close to the
+opposite corner from where they had been), hotbar narrowed and dropped, debug overlay moved right.
+
+**What the profile costs.** Three things a head-anchored panel never has to handle:
+
+1. **The anchor moves and can change hands.** `AttachHudPanels` latches and runs once from `Start`,
+   which is correct for the head. Handedness is a live setting, so `ReattachWristPanels()` exists and
+   is called when `DominantHand` changes — otherwise the panel stays on the hand now holding the
+   aiming ray, where the player cannot point at it.
+2. **The collider must follow the gesture**, not just the route. An interactive panel strapped to a
+   moving hand would otherwise sweep a trigger volume through everything the dominant hand aims at.
+   `UiToolkitScreenController.AcceptsInputNow` is the subclass gate for this.
+3. **Facing is measured against `-forward`, not `forward`.** This project renders a world-space panel
+   readable when its forward points AWAY from the viewer — `BlockiversePanelPlacement` poses panels
+   in front of the player with `LookRotation(away)`, and `AttachHudPanel` parents HUD panels at +Z in
+   front of the head. The readable-face normal is therefore `-forward`. The first implementation
+   dotted against `+forward`, which asks whether the player is looking at the panel's BACK: the menu
+   could never open, and the shared crate and block catalog have no other entry point anywhere in the
+   codebase. Nothing failed, because no test referenced the gesture.
+
+**Reachability is a hard constraint, not a nicety.** These screens had exactly one entry point, and a
+gesture-gated panel depends on a tracked controller. The gesture therefore fails OPEN when it cannot
+measure a head, and the pause menu carries a single `Screens` row opening
+`GameplayScreensScreen` — a hub with all four destinations, offered unconditionally so the guaranteed
+route can never offer less than the route it stands in for. A hub rather than one pause row per
+screen, so future destinations cost a row there instead of lengthening the pause menu.
+
+**Open:** the wrist pose (`HudLocalY` 0.06, `HudLocalZ` -0.10, 50 deg pitch) is reasoned, not
+measured, and is authored against the GRIP pose — the anchor is driven by
+`devicePosition`/`deviceRotation`, not the aim ray, and on Quest hardware those differ by a large
+angle. Only a headset can settle it.
+
 ### Two screen-authoring rules, both learned from defects that shipped past a green suite
 
 Found by an adversarial review of the HUD work on 2026-08-25, after the changes were written and
