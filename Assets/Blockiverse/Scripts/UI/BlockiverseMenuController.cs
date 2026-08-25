@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using Blockiverse.Networking;
+using Blockiverse.UI.Toolkit;
 using Blockiverse.Voxel;
 using UnityEngine;
 
@@ -199,6 +200,14 @@ namespace Blockiverse.UI
         // Rebuilt rather than pushed once, because the debug-overlay row reports its own state in
         // its label. Called again immediately after the toggle so the row shows what just happened
         // — without it the setting flips and the button keeps claiming the old value.
+        void RefreshGameplayScreensMenu()
+        {
+            frontend?.SetActionMenu(
+                MenuActions.GameplayScreensScreen,
+                UiText.Get(MenuActions.ScreensTitleKey),
+                MenuActions.GameplayScreens());
+        }
+
         void RefreshSettingsMenu()
         {
             string title = BlockiverseLocalization.Text(BlockiverseLocalization.Keys.TitleSettings);
@@ -449,6 +458,36 @@ namespace Blockiverse.UI
                     // to that value instead of nudging from the live clock.
                     frontend?.RefreshCreativeEnvironmentControls();
                     router.PushScreen(new ScreenRoute(MenuActions.CreativeToolsScreen, pauseGame: true));
+                    break;
+                // The reliable route into every gameplay screen. The wrist menu is the primary
+                // one, but it needs a tracked support controller; pause is on a dedicated button
+                // and always answers.
+                case MenuActions.PauseOpenScreens:
+                    RefreshGameplayScreensMenu();
+                    router.PushScreen(new ScreenRoute(MenuActions.GameplayScreensScreen, pauseGame: true));
+                    break;
+
+                // Popping the hub first so the destination REPLACES it rather than stacking under
+                // it — otherwise closing inventory would drop the player back into the hub, then
+                // pause, instead of back into the world.
+                case MenuActions.ScreensOpenInventory:
+                    router.PopScreen();
+                    OpenInventoryScreen();
+                    break;
+                case MenuActions.ScreensOpenCrafting:
+                    router.PopScreen();
+                    OpenCraftingScreen();
+                    break;
+                case MenuActions.ScreensOpenCrate:
+                    router.PopScreen();
+                    router.PushScreen(new ScreenRoute(MenuActions.StationCrateScreen));
+                    break;
+                case MenuActions.ScreensOpenCatalog:
+                    router.PopScreen();
+                    OpenCatalogScreen();
+                    break;
+                case MenuActions.ScreensClose:
+                    router.PopScreen();
                     break;
                 case MenuActions.PauseSettings:
                     router.PushScreen(new ScreenRoute(MenuActions.SettingsScreen, pauseGame: true));

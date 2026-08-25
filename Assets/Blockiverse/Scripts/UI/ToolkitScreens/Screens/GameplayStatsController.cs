@@ -36,8 +36,25 @@ namespace Blockiverse.UI
     //
     // NonInteractive: nothing here is clickable, so it generates no collider and cannot intercept
     // the XRI ray.
+    //
+    // ── Placement: lower-LEFT, per the FPV report ────────────────────────────
+    //
+    // The report's composition table says "Vitals | Lower-left or lower-peripheral cluster". This
+    // panel was originally at X +0.40 / Y +0.14 — 20 deg RIGHT of centre and 7 deg ABOVE eye level,
+    // which is close to the opposite corner from what the report asks for. Live validation in the
+    // simulator flagged the whole persistent HUD as clumped in front of the view, and Eric
+    // confirmed it; this was the clearest single contradiction.
+    //
+    // Now 16-35 deg left, 2-15 deg below: out of the central cone the report wants left as world,
+    // and far enough from the hotbar band (15-19 deg below) to clear it by 4 mm.
+    //
+    // The 460x250 SIZE is deliberately unchanged. A smaller box was the obvious way to fit it
+    // further left, but live validation confirmed the vitals ratio renders on one line at this size
+    // with the widened 130 px value box, under both daylight and a night+snow transition. Shrinking
+    // it would risk re-breaking the wrapping defect that widening just fixed, for no gain the extra
+    // horizontal offset does not already give.
     [UiToolkitScreen(MenuActions.GameplayHudScreen, "Assets/Blockiverse/UI/Documents/GameplayStats.uxml",
-        460, 250, UiToolkitPlacementProfile.Hud, HudLocalX = 0.40f, HudLocalY = 0.14f, HudLocalZ = 1.10f, NonInteractive = true)]
+        460, 250, UiToolkitPlacementProfile.Hud, HudLocalX = -0.55f, HudLocalY = -0.165f, HudLocalZ = 1.10f, NonInteractive = true)]
     public sealed class GameplayStatsController : UiToolkitScreenController
     {
         public const float VitalsRefreshIntervalSeconds = 0.5f;

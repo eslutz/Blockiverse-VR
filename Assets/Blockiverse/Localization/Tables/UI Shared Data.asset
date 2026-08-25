@@ -1575,6 +1575,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 5195086366521688065
+  - m_Id: 937072348094464
+    m_Key: ui.generated.comfort.view_anchor
+    m_Metadata:
+      m_Items:
+      - rid: 5195086370520956928
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
@@ -2923,3 +2928,10 @@ MonoBehaviour:
       data:
         m_CommentText: Subtitle shown when another player leaves the session, whether
           deliberately or by disconnecting. Full sentence with a period.
+    - rid: 5195086370520956928
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: "Toggle label: a small static dot at the centre of vision
+          that gives the eye a fixed reference during continuous locomotion, reducing
+          motion sickness. Not an aiming reticle \u2014 this game aims with the controller
+          ray."

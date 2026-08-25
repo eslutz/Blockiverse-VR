@@ -1,24 +1,49 @@
 /*
- * GameplayHud — layout only. The action bar: four panel-open buttons sharing one row. Colours,
- * spacing steps and type sizes all resolve from Tokens/Base.
+ * GameplayHud — layout only. The wrist menu: four panel-open buttons in a single column on a panel
+ * strapped to the support forearm. Colours, spacing steps and type sizes resolve from Tokens/Base.
  *
- * The health readout's rules used to live here and no longer do. When the HUD split into an
- * action bar and a stats readout, the markup moved to GameplayStats.uxml but the gh-health-*
- * rules stayed behind — and because the bootstrapper resolves a screen's sheet by DOCUMENT NAME,
- * they were never loaded for the document that used them. The health bar had no height and no
- * fill colour, and nothing reported it. They now live in GameplayStats.uss, next to the document
- * that owns them, and ScreenStyleSheetReachabilityEditModeTests fails if they ever drift apart
- * again.
+ * THIS FILE'S NAME IS LOAD-BEARING. The bootstrapper resolves a screen's own sheet by DOCUMENT
+ * NAME, and the per-screen sheet is optional by design — so a document whose sheet is missing
+ * renders unstyled and reports itself healthy. The health readout's rules used to live here after
+ * its markup had already moved to GameplayStats.uxml, which meant the health bar had no height and
+ * no fill colour and nothing reported it. They now live in GameplayStats.uss next to the document
+ * that owns them, and ScreenStyleSheetReachabilityEditModeTests fails if they drift apart again.
+ *
+ * ── One column, not a 2x2 grid ──────────────────────────────────────────────
+ *
+ * A grid was the first attempt and does not fit. At 240 px the panel's content box is 192 px
+ * (.hs-screen takes 24 px of padding a side); two buttons per row with 5 px margins leaves 86 px
+ * each, and .hs-button's own 22 px of horizontal padding leaves 42 px of text at a 28 px font.
+ * "Inventory" needs roughly 130 px, so every label would have wrapped or clipped.
+ *
+ * One column at 300 px wide gives 242 px per button and 198 px of text — clear of the longest
+ * label ("Shared crate", ~165 px) — and 350 px tall holds four 64 px controls plus margins.
  */
 
 .gh-actions {
-    flex-direction: row;
-    margin-top: var(--hs-space-1);
+    flex-direction: column;
+    flex-grow: 1;
+    justify-content: center;
 }
 
+/* Full width of the content box; 5 px top and bottom puts 10 mm between adjacent targets, inside
+   the FPV report's 8-12 mm minimum for adjacent hit targets. Live validation flagged the old row
+   as possibly violating this between "Crafting" and "Shared crate", so it is explicit here rather
+   than incidental. */
 .gh-action {
-    flex-grow: 1;
-    flex-basis: 0;
-    margin-left: var(--hs-space-1);
-    margin-right: var(--hs-space-1);
+    margin-left: 5px;
+    margin-right: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+/* Collapsed unless the player turns their wrist toward their face.
+ *
+ * Applied to the ACTIONS container, never to bv-screen-root: UiToolkitScreenController.SetVisible
+ * writes an inline style.display onto the root, and a UI Toolkit inline style outranks every USS
+ * rule, so a display rule there would be silently discarded and the menu would ride the player's
+ * wrist permanently open. The root's paint is suppressed separately with hs-screen--unpainted so
+ * no empty plate is left strapped to the forearm. */
+.gh-actions--collapsed {
+    display: none;
 }

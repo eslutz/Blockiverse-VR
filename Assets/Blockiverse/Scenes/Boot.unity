@@ -1507,6 +1507,7 @@ Transform:
   - {fileID: 1204590295}
   - {fileID: 1681681488}
   - {fileID: 185075566}
+  - {fileID: 1671889529}
   m_Father: {fileID: 806172798}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &667404328
@@ -2201,10 +2202,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c9a0382f9fcbf46718fae6eb9a5d2786, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Blockiverse.UI::Blockiverse.UI.WorldSpaceUiPlacementController
-  distanceMeters: 1.15
+  distanceMeters: 0.95
   horizontalOffsetMeters: 0
-  verticalOffsetMeters: -0.3
-  pitchDegrees: 12
+  verticalOffsetMeters: -0.38
+  pitchDegrees: 10
   placementMode: 0
   followYawThresholdDegrees: 30
   followDistanceThresholdMeters: 1.5
@@ -2228,7 +2229,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 0
   serializedVersion: 3
-  m_Size: {x: 5.9, y: 1.5, z: 0.01}
+  m_Size: {x: 3, y: 3.5, z: 0.01}
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &1153730849
 MonoBehaviour:
@@ -2248,8 +2249,8 @@ MonoBehaviour:
   m_SortingOrder: 0
   m_Position: 0
   m_WorldSpaceSizeMode: 1
-  m_WorldSpaceWidth: 590
-  m_WorldSpaceHeight: 150
+  m_WorldSpaceWidth: 300
+  m_WorldSpaceHeight: 350
   m_PivotReferenceSize: 0
   m_Pivot: 0
   m_WorldSpaceCollider: {fileID: 0}
@@ -2458,8 +2459,8 @@ MonoBehaviour:
   m_SortingOrder: 0
   m_Position: 0
   m_WorldSpaceSizeMode: 1
-  m_WorldSpaceWidth: 1000
-  m_WorldSpaceHeight: 130
+  m_WorldSpaceWidth: 760
+  m_WorldSpaceHeight: 92
   m_PivotReferenceSize: 0
   m_Pivot: 0
   m_WorldSpaceCollider: {fileID: 0}
@@ -3646,6 +3647,121 @@ MonoBehaviour:
   m_WorldSpaceSizeMode: 1
   m_WorldSpaceWidth: 1000
   m_WorldSpaceHeight: 760
+  m_PivotReferenceSize: 0
+  m_Pivot: 0
+  m_WorldSpaceCollider: {fileID: 0}
+--- !u!1 &1671889528
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1671889529}
+  - component: {fileID: 1671889533}
+  - component: {fileID: 1671889532}
+  - component: {fileID: 1671889531}
+  - component: {fileID: 1671889530}
+  m_Layer: 10
+  m_Name: GameplayScreensScreen Panel
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1671889529
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1671889528}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 1.4, z: 1.2}
+  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 667404327}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1671889530
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1671889528}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a37ab4acbe7e482f907230a7f6676fb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.UI::Blockiverse.UI.GameplayScreensScreenController
+  styleSheets:
+  - {fileID: 7433441132597879392, guid: 05e997701b3f24862ada139efdf827e0, type: 3}
+  - {fileID: 7433441132597879392, guid: 857a11421cf3c413591f35cbadb264e3, type: 3}
+  panelCollider: {fileID: 1671889532}
+--- !u!114 &1671889531
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1671889528}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c9a0382f9fcbf46718fae6eb9a5d2786, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Blockiverse.UI::Blockiverse.UI.WorldSpaceUiPlacementController
+  distanceMeters: 0.95
+  horizontalOffsetMeters: 0
+  verticalOffsetMeters: -0.38
+  pitchDegrees: 10
+  placementMode: 0
+  followYawThresholdDegrees: 30
+  followDistanceThresholdMeters: 1.5
+  followSmoothingSeconds: 0.35
+--- !u!65 &1671889532
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1671889528}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 0
+  serializedVersion: 3
+  m_Size: {x: 5.7, y: 4.96, z: 0.01}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &1671889533
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1671889528}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 19102, guid: 0000000000000000e000000000000000, type: 0}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.dll::UnityEngine.UIElements.UIDocument
+  m_PanelSettings: {fileID: 11400000, guid: 67cac956e86524662aa16562fb19b74f, type: 2}
+  m_ParentUI: {fileID: 0}
+  sourceAsset: {fileID: 9197481963319205126, guid: 9e5b34b438d4b49e2aa0836413a13605, type: 3}
+  m_SortingOrder: 0
+  m_Position: 0
+  m_WorldSpaceSizeMode: 1
+  m_WorldSpaceWidth: 570
+  m_WorldSpaceHeight: 496
   m_PivotReferenceSize: 0
   m_Pivot: 0
   m_WorldSpaceCollider: {fileID: 0}

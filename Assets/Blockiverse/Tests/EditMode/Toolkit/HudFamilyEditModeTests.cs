@@ -145,19 +145,24 @@ namespace Blockiverse.Tests.EditMode
             return width.value.value;
         }
 
-        // The action bar sits LOW and the stats readout sits top-right; they used to be one panel
-        // at the Hud profile default (dead centre, 1.30 eye height), which is what Eric reported as
-        // the HUD blocking his view. These numbers are the split, not a tuning nudge.
+        // These numbers are a composition, not tuning nudges — change one and check the whole set
+        // against HudPanelOverlapEditModeTests, which computes every pair.
+        //
+        // Revised 2026-08-25 after live simulator validation: Eric reported the persistent HUD as
+        // clumped in front of the view, and the FPV report agrees ("central vision should remain
+        // mostly world"; "vitals lower-left or lower-peripheral"). The vitals readout had been at
+        // X +0.40 / Y +0.14 — right of centre and ABOVE eye level, near the opposite corner from
+        // what the report asks for — and is now lower-left; the hotbar narrowed from 1000 to 760
+        // and dropped; the debug overlay moved right to vacate the lower-left slot.
         // HudLocalY is HEAD-relative: 0 is eye level, negative is below it. These were
         // floor-relative until the HUD was reparented from Camera Offset to the head — panels
         // followed where the player stood but not where they looked, so anything off-centre left
         // the view the moment they turned. A floor-relative 1.55 read as eye-level-plus-1.55m
         // after the reparent, which is why every value here changed at once.
-        [TestCase(typeof(GameplayHudController), 590, 150, -0.40f)]
-        [TestCase(typeof(GameplayStatsController), 460, 250, 0.14f)]
-        [TestCase(typeof(HotbarStripController), 1000, 110, -0.265f)]
+        [TestCase(typeof(GameplayStatsController), 460, 250, -0.165f)]
+        [TestCase(typeof(HotbarStripController), 760, 92, -0.340f)]
         [TestCase(typeof(ViewAnchorController), 64, 64, 0f)]
-        [TestCase(typeof(GameplayDebugController), 520, 360, 0.08f)]
+        [TestCase(typeof(GameplayDebugController), 520, 360, -0.02f)]
         [TestCase(typeof(MiningProgressController), 400, 90, -0.16f)]
         [TestCase(typeof(StatusToastController), 640, 120, 0.34f)]
         [TestCase(typeof(CreativeHotbarController), 590, 500, -0.50f)]
@@ -183,6 +188,37 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(
                 typeof(IUiToolkitQuickBlockMenu).IsAssignableFrom(controllerType),
                 Is.EqualTo(controllerType == typeof(CreativeHotbarController)));
+        }
+
+        // The action menu is NO LONGER part of the head-anchored family. It moved to the support
+        // wrist on 2026-08-25 because a permanent bar across the lower-centre of view was the
+        // substance of the crowding complaint, and the FPV report puts inventory/crafting entry
+        // points in routed screens rather than in chrome.
+        //
+        // Asserted separately rather than deleted: this panel is the ONLY route into inventory and
+        // crafting, so its placement contract is worth pinning explicitly, and a silent revert to
+        // the Hud profile would put the bar straight back in front of the player.
+        [Test]
+        public void ActionMenuIsWristAnchoredAndStillShareTheGameplayRoute()
+        {
+            var attribute = (UiToolkitScreenAttribute)Attribute.GetCustomAttribute(
+                typeof(GameplayHudController), typeof(UiToolkitScreenAttribute));
+
+            Assert.That(attribute, Is.Not.Null);
+            Assert.That(attribute.PlacementProfile, Is.EqualTo(UiToolkitPlacementProfile.Wrist),
+                "The action menu must not go back onto the head-anchored HUD.");
+            Assert.That(attribute.ScreenId, Is.EqualTo(MenuActions.GameplayHudScreen),
+                "It still appears and disappears with the gameplay route.");
+
+            // Interactive by necessity — it is the only way into inventory and crafting, so unlike
+            // every other panel in this family it must keep a collider for the ray to hit.
+            Assert.That(attribute.NonInteractive, Is.False);
+
+            // A forearm panel, not a 59 cm bar. Height is the looser bound because the buttons
+            // stack: four 64 px controls plus margins and the screen's own padding need 350.
+            // WristMenuEditModeTests pins the sizing against the labels themselves.
+            Assert.That(attribute.WidthPixels, Is.LessThanOrEqualTo(320));
+            Assert.That(attribute.HeightPixels, Is.LessThanOrEqualTo(400));
         }
 
         [Test]

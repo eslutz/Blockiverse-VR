@@ -37,13 +37,23 @@ namespace Blockiverse.UI
     // Per-slot last-value gates, matching InventoryScreenController's SlotRenderState. Text
     // assignment allocates in retained mode and this panel is visible for the entire session, so
     // an ungated refresh is a permanent per-frame cost rather than a one-off.
-    // 110 px tall, not 130, and centred at −0.265: the strip slots into the 120 mm gap between the
-    // action bar (top edge −0.325) and the mining bar (bottom edge −0.205), with 5 mm clearance
-    // each side. At 130 it was 10 mm taller than the gap and overlapped the mining bar — the exact
-    // failure HudFamilyEditModeTests warns about, which shows in a headset and not in the editor.
-    // 110 still holds an 84 px slot plus 13 px of padding.
+    // ── Placement: 760x92 at Y −0.340 ────────────────────────────────────────
+    //
+    // Narrower and lower than it was. At 1000 px it spanned ±24 deg of the player's view, and with
+    // the action bar stacked directly beneath it the two read — in live validation — as "a
+    // continuous block, not two separable things". That block was the substance of the crowding
+    // Eric raised. 760 px is ±19 deg, and the action bar has left the HUD entirely for the wrist
+    // menu, so the strip no longer has to fit a gap between two other panels.
+    //
+    // 64 px slots rather than 84: ten slots plus margins is what sets the width, so the slot size
+    // IS the width decision. 64 px is 64 mm at the project's scale — still a comfortable glance
+    // target at 1.10 m.
+    //
+    // Dropped to Y −0.340 (15-19 deg below eye level) now that nothing sits under it. It is the one
+    // persistent panel the report explicitly wants, so it stays centred and low rather than moving
+    // to a side.
     [UiToolkitScreen(MenuActions.GameplayHudScreen, "Assets/Blockiverse/UI/Documents/HotbarStrip.uxml",
-        1000, 110, UiToolkitPlacementProfile.Hud, HudLocalY = -0.265f, NonInteractive = true)]
+        760, 92, UiToolkitPlacementProfile.Hud, HudLocalY = -0.340f, NonInteractive = true)]
     public sealed class HotbarStripController : UiToolkitScreenController
     {
         // Inventory.DefaultHotbarSlotCount. The save format, the wire protocol and

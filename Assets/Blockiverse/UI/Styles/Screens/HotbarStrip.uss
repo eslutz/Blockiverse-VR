@@ -48,11 +48,16 @@
 
 /* A slot is a recess by default. An empty inset square reads as part of a grid, which is what
    keeps ten of them countable; filling one is what makes it read as occupied. */
+/* 64 px, down from 84. Ten slots plus margins set the panel width, so the slot size IS the width
+   decision: at 84 the strip spanned +/-24 deg of view and, with the action bar stacked under it,
+   read as one continuous block of chrome. 64 px + 4 px margins each side gives 10 x 72 = 720 px of
+   slots inside a 760 px panel (+/-19 deg), and 64 mm is still a comfortable glance target at
+   1.10 m. */
 .hb-slot {
-    width: 84px;
-    height: 84px;
-    margin-left: 5px;
-    margin-right: 5px;
+    width: 64px;
+    height: 64px;
+    margin-left: 4px;
+    margin-right: 4px;
     background-color: var(--hs-chip);
     border-top-width: 2px;
     border-left-width: 2px;

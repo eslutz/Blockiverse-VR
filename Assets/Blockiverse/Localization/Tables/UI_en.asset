@@ -1309,6 +1309,10 @@ MonoBehaviour:
     m_Localized: Player left.
     m_Metadata:
       m_Items: []
+  - m_Id: 937072348094464
+    m_Localized: View Anchor
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

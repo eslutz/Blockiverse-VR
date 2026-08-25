@@ -82,6 +82,21 @@ namespace Blockiverse.UI
         // Routed visibility. acceptsInputNow is false while a modal owns the input target,
         // and always false for the world-loading overlay; the collider tracks it so a
         // visible-but-input-blocked screen cannot swallow rays meant for the modal above it.
+        // Re-applies the collider from routed input acceptance AND the subclass's own gate.
+        //
+        // A wrist-anchored panel accepts input only while the player has actually turned that wrist
+        // toward their face; the rest of the time it must not sit in the world as an invisible
+        // trigger volume strapped to a moving hand, sweeping through everything the dominant hand
+        // is trying to point at. The route cannot express that, and SetVisible alone is not called
+        // often enough to track a gesture, so subclasses call this when their gate flips.
+        protected virtual bool AcceptsInputNow => true;
+
+        protected void RefreshInputCollider()
+        {
+            if (panelCollider != null)
+                panelCollider.enabled = acceptsInput && AcceptsInputNow;
+        }
+
         public void SetVisible(bool value, bool acceptsInputNow)
         {
             bool wasVisible = visible;
@@ -91,8 +106,7 @@ namespace Blockiverse.UI
             if (screenRoot != null)
                 screenRoot.style.display = value ? DisplayStyle.Flex : DisplayStyle.None;
 
-            if (panelCollider != null)
-                panelCollider.enabled = acceptsInput;
+            RefreshInputCollider();
 
             if (value && !wasVisible)
                 OnShown();

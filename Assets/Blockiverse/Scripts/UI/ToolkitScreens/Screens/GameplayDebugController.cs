@@ -45,12 +45,21 @@ namespace Blockiverse.UI
     //
     // This also keeps the screen off BlockiverseLocalization, which the migrated screens in this
     // assembly deliberately avoid.
-    // Left edge of view, mirroring the vitals readout on the right. Y is 0.08, not 0.12: at 0.12 the
-    // panel's top edge reached 0.30 and clipped the status toast's bottom edge at 0.28. The lower
-    // value clears the toast by 20 mm and the mining bar by 15 mm.
+    // ── Placement: right side ────────────────────────────────────────────────
+    //
+    // Moved from the left (X -0.42) when the vitals readout took the lower-left slot the FPV report
+    // reserves for it. This panel is 520x360 — the largest in the HUD family — and both panels on
+    // the left collided by 400 x 70 mm whenever the overlay was switched on.
+    //
+    // X +0.48 rather than +0.42: at +0.42 its left edge reached 0.16 and overlapped the mining bar
+    // (which extends to 0.20) by 40 mm. Y -0.02 keeps it 120 mm clear of the status toast above and
+    // 94 mm clear of the hotbar band below.
+    //
+    // Off by default, but the clearances still have to hold: an off-by-default panel is co-visible
+    // with everything else the moment a player switches it on.
     [UiToolkitScreen(MenuActions.GameplayHudScreen, "Assets/Blockiverse/UI/Documents/GameplayDebug.uxml",
         520, 360, UiToolkitPlacementProfile.Hud,
-        HudLocalX = -0.42f, HudLocalY = 0.08f, HudLocalZ = 1.10f, NonInteractive = true)]
+        HudLocalX = 0.48f, HudLocalY = -0.02f, HudLocalZ = 1.10f, NonInteractive = true)]
     public sealed class GameplayDebugController : UiToolkitScreenController
     {
         // Fast enough to feel live, slow enough that the readout is legible rather than a blur —

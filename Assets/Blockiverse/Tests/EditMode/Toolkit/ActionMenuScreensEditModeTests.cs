@@ -371,7 +371,15 @@ namespace Blockiverse.Tests.EditMode
             VisualElement root = AttachFreshTree(controller);
 
             Assert.That(root.Q<Label>("bv-title").text, Is.EqualTo("Paused"));
-            Assert.That(root.Query<Button>().ToList(), Has.Count.EqualTo(7));
+
+            // 8, not 7: ONE "Screens" row was added on 2026-08-25, opening the hub that carries
+            // the guaranteed route into inventory, crafting, the shared crate and the block
+            // catalog. The wrist menu is the primary route but needs a tracked support
+            // controller; pause is on a dedicated button that always answers.
+            //
+            // One row rather than one per destination — that is the point of the hub, and this
+            // number is what keeps the pause menu from growing every time a screen is added.
+            Assert.That(root.Query<Button>().ToList(), Has.Count.EqualTo(8));
         }
 
         [Test]

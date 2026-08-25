@@ -39,6 +39,10 @@ namespace Blockiverse.Editor
                 "LAN multiplayer screen: button that joins the LAN session at the entered address (verb, imperative). The uGUI panel hard-coded this label unlocalized."),
             ("ui.action.lan.stop", "Stop",
                 "LAN multiplayer screen: button that stops the current hosted or joined LAN session (verb, imperative). The uGUI panel hard-coded this label unlocalized."),
+            ("ui.action.pause.screens", "Screens",
+                "Pause-menu row and hub title: opens the list of gameplay screens (inventory, "
+                + "crafting, shared crate, blocks). The guaranteed route to them when the wrist "
+                + "menu is unavailable."),
             ("ui.generated.audio_feedback.classic_block_sounds", "Classic Block Sounds",
                 "Easter-egg toggle label on the audio settings screen. Swaps block break/place cues back to the original synthesized sounds; 'Classic' as in retro/original."),
             ("ui.generated.audio_feedback.haptics", "Haptics",

@@ -52,6 +52,9 @@ namespace Blockiverse.UI
             Critical = 40,
         }
 
+        // Base.uss — zeroes the root's background and borders without touching display.
+        const string UnpaintedClass = "hs-screen--unpainted";
+
         // Every class this controller can apply, so all of them can be removed before one is
         // added. Removing only "the previous one" leaves a stale stripe the first time a path
         // forgets to record what it set.
@@ -210,6 +213,11 @@ namespace Blockiverse.UI
             bool empty = string.IsNullOrEmpty(pendingText);
 
             toastLabel.style.display = empty ? DisplayStyle.None : DisplayStyle.Flex;
+
+            // An empty toast must not leave its opaque plate sitting in the player's view. Paint is
+            // suppressed rather than display, because SetVisible owns display on this element via
+            // an inline style that no USS rule can override.
+            Root?.EnableInClassList(UnpaintedClass, empty);
 
             // Clear all of them, then add at most one. Removing only the previously-applied class
             // would leave a stale stripe behind the first time a path forgets to record what it set.

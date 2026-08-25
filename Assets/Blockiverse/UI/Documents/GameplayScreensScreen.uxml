@@ -1,0 +1,22 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Gameplay screens hub (screen id gameplay_screens). Title and the action list are pushed at
+        runtime through IUiToolkitActionMenuScreen.SetActionMenu — no static text, no localization
+        bindings, no status line. Buttons are created by GameplayScreensScreenController.
+
+        This is the GUARANTEED route into inventory, crafting, the shared crate and the block
+        catalog. The wrist menu is the primary one, but it is anchored to the support hand and only
+        appears when the player turns that wrist toward their face — if that controller is off or
+        untracked there would otherwise be no way in at all. Pause is bound to a dedicated button,
+        so this always answers.
+
+        One hub rather than one pause row per screen: the pause menu stays short, and adding a
+        destination costs a row here instead of there.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-title" class="hs-screen__title" picking-mode="Ignore" />
+        </engine:VisualElement>
+        <engine:ScrollView name="bv-actions" class="hs-screen__content hs-action-list" mode="Vertical" />
+    </engine:VisualElement>
+</engine:UXML>

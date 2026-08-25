@@ -15,6 +15,9 @@ namespace Blockiverse.UI
         public const string ControllerMappingScreen = "controller_mapping";
         public const string GameplayHudScreen = "gameplay_hud";
         public const string PauseScreen = "pause_menu";
+
+        // The routed hub behind the pause menu's single "Screens" row. See GameplayScreens().
+        public const string GameplayScreensScreen = "gameplay_screens";
         public const string SettingsScreen = "settings";
         public const string ComfortSettingsScreen = "settings_comfort";
         public const string AudioSettingsScreen = "settings_audio";
@@ -48,6 +51,27 @@ namespace Blockiverse.UI
         public const string PauseToggleMode = "pause.toggle_survival_creative";
         public const string PauseCreativeTools = "pause.open_creative_tools";
         public const string PauseSettings = "pause.open_settings";
+
+        // ONE pause row, opening a hub that holds every gameplay screen.
+        //
+        // Those screens had exactly one entry point — the always-visible action bar — and that bar
+        // has moved to the support wrist, where it appears only when the player turns their wrist
+        // toward their face. That is the right default, but it depends on the support controller
+        // being tracked; if it is off, lost, or dropped, a player would have no way to reach their
+        // own inventory and no way to discover why. Pause is bound to a dedicated button on the
+        // gameplay map, so it always answers.
+        //
+        // A hub rather than one pause row per destination: four rows would have crowded the pause
+        // menu and every future screen would crowd it further. Behind one row the list can grow
+        // without the pause menu growing at all.
+        public const string PauseOpenScreens = "pause.open_screens";
+
+        // ── Gameplay screens hub ─────────────────────────────────────────────
+        public const string ScreensOpenInventory = "gameplay_screens.open_inventory";
+        public const string ScreensOpenCrafting = "gameplay_screens.open_crafting";
+        public const string ScreensOpenCrate = "gameplay_screens.open_crate";
+        public const string ScreensOpenCatalog = "gameplay_screens.open_catalog";
+        public const string ScreensClose = "gameplay_screens.close";
         public const string PauseReturnToTitle = "pause.return_to_title_requested";
         public const string PauseQuit = "pause.quit_requested";
         public const string CreativeToolsClose = "creative_tools.close";
@@ -112,11 +136,13 @@ namespace Blockiverse.UI
 
         public static IReadOnlyList<MenuAction> PauseMenu(bool canToggleMode, bool canOpenCreativeTools, bool canQuit = true)
         {
-            var actions = new List<MenuAction>(7)
+            var actions = new List<MenuAction>(8)
             {
                 Localized(PauseResume, BlockiverseLocalization.Keys.PauseResume, "Resume"),
                 Localized(PauseSaveGame, BlockiverseLocalization.Keys.PauseSaveGame, "Save Game"),
             };
+            actions.Add(Localized(PauseOpenScreens, ScreensTitleKey, "Screens"));
+
             if (canToggleMode)
                 actions.Add(Localized(PauseToggleMode, BlockiverseLocalization.Keys.PauseToggleMode, "Switch Survival/Creative"));
             if (canOpenCreativeTools)
@@ -175,6 +201,30 @@ namespace Blockiverse.UI
         // its label. Same shape as Title(...) and PauseMenu(...), which are factories for the same
         // reason — an action list that reports state has to be rebuilt when the state changes, and
         // BlockiverseMenuController.RefreshSettingsMenu does exactly that after the toggle.
+        // Every gameplay screen, behind the pause menu's single Screens row.
+        //
+        // This is the GUARANTEED route: the wrist menu is the primary one and needs a tracked
+        // support controller, while pause is on a dedicated button that always answers. Labels are
+        // the ones the wrist menu already carries rather than parallel wording for the same
+        // destinations.
+        //
+        // Adding a screen here costs one row in this list and nothing in the pause menu.
+        // All four, unconditionally — deliberately identical to the wrist menu's contents.
+        //
+        // This hub exists to be that menu's fallback, so gating rows differently would mean the
+        // guaranteed route offered LESS than the route it stands in for, which is the one thing a
+        // fallback must never do. The wrist menu shows all four in every mode; so does this.
+        public static IReadOnlyList<MenuAction> GameplayScreens() => new[]
+        {
+            Localized(ScreensOpenInventory, "ui.generated.survival.inventory", "Inventory"),
+            Localized(ScreensOpenCrafting, "ui.generated.survival.crafting", "Crafting"),
+            Localized(ScreensOpenCrate, "ui.status.crate.shared", "Shared crate"),
+            Localized(ScreensOpenCatalog, "ui.generated.blocks.title", "Blocks"),
+            Localized(ScreensClose, BlockiverseLocalization.Keys.SettingsClose, "Close"),
+        };
+
+        public const string ScreensTitleKey = "ui.action.pause.screens";
+
         public static IReadOnlyList<MenuAction> Settings(bool debugOverlayEnabled) => new[]
         {
             Localized(SettingsOpenComfort, BlockiverseLocalization.Keys.SettingsComfort, "Comfort"),

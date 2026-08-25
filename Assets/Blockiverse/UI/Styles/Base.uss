@@ -156,6 +156,27 @@
     display: none;
 }
 
+/* Suppresses a HUD panel's PAINT without touching its display.
+ *
+ * A transient HUD panel (status toast, mining bar) collapses its content when it has nothing to
+ * say — but .hs-screen paints an opaque --hs-panel surface with a border, so collapsing only the
+ * content left an empty dark card sitting in the player's view for the entire session. Live
+ * inspection found two of them stacked in the lower-centre view, and they were a real part of the
+ * FOV crowding, not a rendering artifact.
+ *
+ * It cannot be fixed by collapsing bv-screen-root: UiToolkitScreenController.SetVisible writes an
+ * INLINE style.display onto that element, and a UI Toolkit inline style outranks every USS rule
+ * (there is no !important). Display on the root is therefore not ours to control. Colour is —
+ * nothing writes background or border inline — so an empty panel goes transparent instead of
+ * collapsing, which costs one already-laid-out element and paints nothing. */
+.hs-screen--unpainted {
+    background-color: rgba(0, 0, 0, 0);
+    border-top-width: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+}
+
 /* ── Fields ─────────────────────────────────────────────────────────────── */
 
 .hs-field {

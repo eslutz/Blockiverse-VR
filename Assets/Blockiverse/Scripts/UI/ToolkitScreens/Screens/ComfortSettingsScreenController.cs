@@ -382,9 +382,24 @@ namespace Blockiverse.UI
                 settings.ContinuousTurnSpeed = smoothTurnSpeedSlider.value;
 
             if (leftHandToggle != null)
+            {
+                BlockiverseControllerRole previousHand = settings.DominantHand;
+
                 settings.DominantHand = leftHandToggle.value
                     ? BlockiverseControllerRole.Left
                     : BlockiverseControllerRole.Right;
+
+                // The wrist menu is parented to the SUPPORT hand, which is the opposite of this
+                // one. Swapping handedness moves the aiming ray to the other controller, so a menu
+                // left on the old hand becomes unpointable — and it is the primary route into
+                // inventory. Nothing else re-parents it: the host attaches rig panels once at Start.
+                if (settings.DominantHand != previousHand)
+                {
+                    BlockiverseSceneLookup
+                        .Find<UiToolkitMenuHost>(FindObjectsInactive.Include)
+                        ?.ReattachWristPanels();
+                }
+            }
 
             if (toggleToMineToggle != null)
                 settings.ToggleToMineEnabled = toggleToMineToggle.value;
