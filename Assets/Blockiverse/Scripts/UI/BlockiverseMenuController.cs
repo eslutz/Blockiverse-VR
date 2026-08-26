@@ -580,6 +580,9 @@ namespace Blockiverse.UI
                 case MenuActions.SettingsOpenControls:
                     router.PushScreen(new ScreenRoute(MenuActions.ControlsScreen, pauseGame: true));
                     break;
+                case MenuActions.SettingsOpenTextures:
+                    router.PushScreen(new ScreenRoute(MenuActions.TexturesSettingsScreen, pauseGame: true));
+                    break;
                 case MenuActions.SettingsToggleDebugOverlay:
                     ToggleDebugOverlay();
                     break;
@@ -595,7 +598,15 @@ namespace Blockiverse.UI
                 case MenuActions.AudioSettingsClose:
                 case MenuActions.ControlsClose:
                 case MenuActions.CreativeToolsClose:
+                case MenuActions.TexturesSettingsClose:
                     router.PopScreen();
+                    break;
+
+                case MenuActions.TexturesSettingsSelect:
+                    // No screen transition -- the selection applies to the live world in place.
+                    // BlockiverseWorldSessionController.HandleAction reads the chosen token back
+                    // from BlockiverseTexturePackPreferences, so no payload travels with the id.
+                    ActionRequested?.Invoke(actionId);
                     break;
 
                 case MenuActions.DeathRespawnBedroll:

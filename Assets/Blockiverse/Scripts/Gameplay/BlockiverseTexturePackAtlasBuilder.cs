@@ -77,18 +77,21 @@ namespace Blockiverse.Gameplay
                     continue;
                 }
 
-                int targetSize = BlockVisualAtlas.TilePixels * scale;
-                if (targetSize % tileSize != 0)
+                // The format requires every tile to be EXACTLY packTilePixels square, not merely
+                // a size that happens to divide evenly into the atlas target. Checking only
+                // divisibility let a 32px tile through a pack that declared 16px (target 32,
+                // 32 % 32 == 0) and a 32px tile through one that declared 64px (target 64,
+                // 64 % 32 == 0) -- both silently mis-scaled instead of being skipped.
+                if (tileSize != packTilePixels)
                 {
-                    // Integer upscale only. A fractional resample would blur pixel art, so a tile
-                    // that does not divide evenly is skipped rather than quietly degraded.
                     BlockiverseLog.Warning(
                         BlockiverseLogCategory.Assets,
                         $"Skipping tile '{tileName}' in texture pack '{packId}': {tileSize}px does not "
-                        + $"scale to {targetSize}px by a whole number.");
+                        + $"match the pack's declared {packTilePixels}px.");
                     continue;
                 }
 
+                int targetSize = BlockVisualAtlas.TilePixels * scale;
                 Color32[] scaled = tileSize == targetSize
                     ? tile
                     : UpscaleNearest(tile, tileSize, tileSize, targetSize / tileSize);

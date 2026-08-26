@@ -256,6 +256,42 @@ namespace Blockiverse.Tests.EditMode
         // ── scanning ────────────────────────────────────────────────────────
 
         [Test]
+        public void ACaseMismatchedFolderStillResolvesOnACaseSensitiveFilesystem()
+        {
+            // THE regression test. Installed() lowercases every pack id, and pack ids are
+            // documented as case-insensitive -- so a folder literally named with uppercase
+            // characters must still resolve. Path.Combine(PackRoot, "my_pack") does NOT find a
+            // folder named "My_Pack" on a case-sensitive filesystem (Android's ext4 among them),
+            // so reconstructing the path from the lowercased id alone would make a pack that
+            // scanning just found immediately report itself missing the moment it is selected.
+            WritePack("My_Pack", ManifestJson(packId: "My_Pack", displayName: "Mixed Case"));
+
+            IReadOnlyList<BlockiverseTexturePackInfo> installed = BlockiverseTexturePackLibrary.Installed();
+            Assert.That(installed.Count, Is.EqualTo(1));
+            Assert.That(installed[0].Token, Is.EqualTo("pack:my_pack"), "Installed() should still report the lowercased token.");
+
+            BlockiverseTextureResolution resolution = BlockiverseTexturePackLibrary.Resolve(installed[0].Token);
+            Assert.That(resolution.Status, Is.EqualTo(BlockiverseTextureSelectionStatus.PackInstalled),
+                "A pack found by Installed() resolved as missing when selected -- the folder lookup did not match its actual case.");
+        }
+
+        [Test]
+        public void ACaseMismatchedFolderStillServesItsManifestAndTiles()
+        {
+            WritePack("My_Pack", ManifestJson(packId: "My_Pack"), "meadow_turf");
+
+            BlockiverseTexturePackManifest manifest = BlockiverseTexturePackLibrary.TryGetManifest("my_pack");
+            Assert.That(manifest, Is.Not.Null, "TryGetManifest did not find the mismatched-case folder.");
+
+            Assert.That(BlockiverseTexturePackLibrary.ListTileNames("my_pack"), Is.EquivalentTo(new[] { "meadow_turf" }),
+                "ListTileNames did not find the mismatched-case folder's blocks/ directory.");
+
+            Assert.That(BlockiverseTexturePackLibrary.TryReadTileBytes("my_pack", "meadow_turf", out byte[] bytes), Is.True,
+                "TryReadTileBytes did not find the mismatched-case folder's tile.");
+            Assert.That(bytes, Is.Not.Null.And.Not.Empty);
+        }
+
+        [Test]
         public void InstalledListsValidPacksAndOmitsBrokenOnes()
         {
             WritePack("alpha_pack", ManifestJson(packId: "alpha_pack", displayName: "Alpha"));

@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using Blockiverse.Core;
 using Blockiverse.Gameplay;
 using NUnit.Framework;
 using UnityEngine;
@@ -13,6 +17,126 @@ namespace Blockiverse.Tests.EditMode
     // something that renders perfectly happily and is simply wrong.
     public sealed class TexturePackAtlasCompositorEditModeTests
     {
+        // ── Compose() integration: pack root + a fake that skips only the GPU-dependent half ──
+
+        string packRoot;
+        CapturingLogSink logSink;
+
+        [SetUp]
+        public void SetUp()
+        {
+            packRoot = Path.Combine(Path.GetTempPath(), "blockiverse-compositor-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(packRoot);
+            BlockiverseTexturePackLibrary.SetPackRootForTesting(packRoot);
+
+            logSink = new CapturingLogSink();
+            BlockiverseLog.SetSinkForTesting(logSink);
+
+            // BlockiverseLog.Info is gated behind DevelopmentInfoEnabled, which defaults OFF under
+            // batchmode -- exactly how EditMode tests run -- so the compositor's summary line
+            // ("N tile(s) applied") is silently swallowed unless this is forced on. TearDown's
+            // existing ResetSinkForTesting() already restores the computed default afterwards.
+            BlockiverseLog.DevelopmentInfoEnabled = true;
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            BlockiverseLog.ResetSinkForTesting();
+            BlockiverseTexturePackLibrary.ResetPackRootForTesting();
+
+            if (!string.IsNullOrEmpty(packRoot) && Directory.Exists(packRoot))
+                Directory.Delete(packRoot, recursive: true);
+        }
+
+        // PNG decode (Texture2D.LoadImage) works headlessly, so only ReadAtlas -- which needs
+        // Graphics.Blit / RenderTexture, unavailable under -nographics -- is faked. TryDecodeTile
+        // delegates to the real implementation, so Compose() exercises real PNG parsing end to end.
+        sealed class FakeBaseAtlasPixelSource : IBlockiverseAtlasPixelSource
+        {
+            readonly BlockiverseAtlasPixelSource real = new();
+
+            public Color32[] ReadAtlas(Texture2D atlas)
+            {
+                var pixels = new Color32[BlockVisualAtlas.AtlasWidthPixels * BlockVisualAtlas.AtlasHeightPixels];
+                for (int i = 0; i < pixels.Length; i++)
+                    pixels[i] = new Color32(9, 9, 9, 255);
+                return pixels;
+            }
+
+            public bool TryDecodeTile(byte[] pngBytes, out Color32[] pixels, out int size) =>
+                real.TryDecodeTile(pngBytes, out pixels, out size);
+        }
+
+        void WriteTile(string packId, string tileName, int size)
+        {
+            string blocks = Path.Combine(packRoot, packId, BlockiverseTexturePackLibrary.TileDirectoryName);
+            Directory.CreateDirectory(blocks);
+            File.WriteAllBytes(Path.Combine(blocks, tileName + ".png"), EncodeSolidPng(size, size));
+        }
+
+        [TestCase(16, 32, TestName = "declared 16px, tile is 32px")]
+        [TestCase(64, 32, TestName = "declared 64px, tile is 32px")]
+        public void ComposeSkipsATileWhoseSizeDoesNotExactlyMatchTheDeclaredPackSize(int packTilePixels, int actualTileSize)
+        {
+            // THE regression test. Both cases divide evenly into their atlas target (32px declared
+            // 16 -> target 32, 32 % 32 == 0; declared 64 -> target 64, 64 % 32 == 0) and an earlier
+            // version accepted them on divisibility alone -- silently rendering a pack whose files
+            // do not match what its own manifest declares, which the format spec forbids.
+            WriteTile("mismatched", "meadow_turf", actualTileSize);
+
+            Texture2D composed = BlockiverseTexturePackAtlasBuilder.Compose(
+                new Texture2D(2, 2), "mismatched", new List<string> { "meadow_turf" },
+                packTilePixels, new FakeBaseAtlasPixelSource());
+
+            Assert.That(composed, Is.Not.Null);
+            Assert.That(
+                logSink.Messages.Exists(m => m.Contains("does not match the pack's declared")),
+                $"A {actualTileSize}px tile against a {packTilePixels}px pack was accepted instead of skipped. "
+                + $"Messages: {string.Join(" | ", logSink.Messages)}");
+            Assert.That(logSink.Messages.Exists(m => m.Contains("0 tile(s)")),
+                "The mismatched tile was counted as applied.");
+        }
+
+        [Test]
+        public void ComposeAppliesATileWhoseSizeExactlyMatchesTheDeclaredPackSize()
+        {
+            WriteTile("matched", "meadow_turf", 32);
+
+            Texture2D composed = BlockiverseTexturePackAtlasBuilder.Compose(
+                new Texture2D(2, 2), "matched", new List<string> { "meadow_turf" },
+                packTilePixels: 32, new FakeBaseAtlasPixelSource());
+
+            Assert.That(composed, Is.Not.Null);
+            Assert.That(logSink.Messages.Exists(m => m.Contains("does not match the pack's declared")), Is.False);
+            Assert.That(logSink.Messages.Exists(m => m.Contains("1 tile(s)")),
+                $"An exactly-matching tile was not applied. Messages: {string.Join(" | ", logSink.Messages)}");
+        }
+
+        sealed class CapturingLogSink : IBlockiverseLogSink
+        {
+            public List<string> Messages { get; } = new();
+            public void Log(BlockiverseLogEntry entry) => Messages.Add(entry.Message ?? string.Empty);
+        }
+
+        static byte[] EncodeSolidPng(int width, int height)
+        {
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, mipChain: false);
+            try
+            {
+                var pixels = new Color32[width * height];
+                for (int i = 0; i < pixels.Length; i++)
+                    pixels[i] = new Color32(200, 50, 50, 255);
+                texture.SetPixels32(pixels);
+                texture.Apply(updateMipmaps: false);
+                return texture.EncodeToPNG();
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
+
         static Color32[] Solid(int size, byte r, byte g, byte b, byte a = 255)
         {
             var pixels = new Color32[size * size];

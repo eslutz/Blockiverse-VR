@@ -182,8 +182,7 @@ namespace Blockiverse.Core
             if (!BlockiverseTextureSelection.TryGetPackId(normalized, out string packId))
                 return BlockiverseTextureResolution.BuiltIn(normalized);
 
-            string directory = Path.Combine(PackRoot, packId);
-            if (!SafeDirectoryExists(directory))
+            if (!TryFindPackDirectory(packId, out string directory))
                 return BlockiverseTextureResolution.PackMissing(normalized, packId);
 
             return TryReadManifest(packId, directory, out BlockiverseTexturePackManifest _, out string error)
@@ -194,13 +193,63 @@ namespace Blockiverse.Core
         /// <summary>The validated manifest for an installed pack, or null.</summary>
         public static BlockiverseTexturePackManifest TryGetManifest(string packId)
         {
-            if (!BlockiverseTextureSelection.IsValidPackId(packId))
+            if (!BlockiverseTextureSelection.IsValidPackId(packId) || !TryFindPackDirectory(packId, out string directory))
                 return null;
 
-            string directory = Path.Combine(PackRoot, packId);
             return TryReadManifest(packId, directory, out BlockiverseTexturePackManifest manifest, out string _)
                 ? manifest
                 : null;
+        }
+
+        /// <summary>
+        /// Finds the pack's actual on-disk directory, matching <paramref name="packId"/>
+        /// case-INSENSITIVELY against the folder name -- exactly as manifest validation already
+        /// requires (<see cref="BlockiverseTexturePackManifest.TryValidate"/> compares the two
+        /// case-insensitively too).
+        ///
+        /// This matters because <see cref="Installed"/> stores every pack id lowercased, but on a
+        /// case-SENSITIVE filesystem (Android's ext4) a folder named e.g. <c>My_Pack</c> does not
+        /// exist at the literal path <c>PackRoot/my_pack</c>. Reconstructing the path from the
+        /// lowercased id alone would make a pack that scanning just found immediately resolve as
+        /// missing the moment it is selected.
+        ///
+        /// The fast path costs nothing extra for the common case where the folder is already
+        /// lowercase (a straight Directory.Exists); only a mismatched-case folder pays for the
+        /// directory listing below.
+        /// </summary>
+        static bool TryFindPackDirectory(string packId, out string directory)
+        {
+            directory = Path.Combine(PackRoot, packId);
+            if (SafeDirectoryExists(directory))
+                return true;
+
+            string root = PackRoot;
+            if (!SafeDirectoryExists(root))
+            {
+                directory = null;
+                return false;
+            }
+
+            try
+            {
+                foreach (string candidate in Directory.GetDirectories(root))
+                {
+                    if (string.Equals(Path.GetFileName(candidate), packId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        directory = candidate;
+                        return true;
+                    }
+                }
+            }
+            catch (Exception exception) when (IsExpectedIoFailure(exception))
+            {
+                BlockiverseLog.Warning(
+                    BlockiverseLogCategory.Assets,
+                    $"Could not search for texture pack '{packId}': {exception.Message}");
+            }
+
+            directory = null;
+            return false;
         }
 
         /// <summary>
@@ -214,7 +263,10 @@ namespace Blockiverse.Core
             if (!BlockiverseTextureSelection.IsValidPackId(packId))
                 return names;
 
-            string tileDirectory = Path.Combine(PackRoot, packId, TileDirectoryName);
+            if (!TryFindPackDirectory(packId, out string packDirectory))
+                return names;
+
+            string tileDirectory = Path.Combine(packDirectory, TileDirectoryName);
             if (!SafeDirectoryExists(tileDirectory))
                 return names;
 
@@ -258,7 +310,10 @@ namespace Blockiverse.Core
             if (!BlockiverseTextureSelection.IsValidPackId(packId) || !IsSafeTileName(tileName))
                 return false;
 
-            string path = Path.Combine(PackRoot, packId, TileDirectoryName, tileName + TileFileExtension);
+            if (!TryFindPackDirectory(packId, out string packDirectory))
+                return false;
+
+            string path = Path.Combine(packDirectory, TileDirectoryName, tileName + TileFileExtension);
 
             try
             {
