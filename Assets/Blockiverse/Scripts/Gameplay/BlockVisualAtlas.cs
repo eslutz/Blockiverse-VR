@@ -12,7 +12,18 @@ namespace Blockiverse.Gameplay
 {
     public static class BlockVisualAtlas
     {
-        public const int Columns = 12;
+        // 16x10 = 160 slots for 97 used. Mirrors ATLAS_COLUMNS/ATLAS_ROWS in
+        // scripts/art/generate-art-assets.py; the two must agree or every UV rect addresses the
+        // wrong pixels.
+        //
+        // COLUMNS IS 16 SO A TILE INDEX IS ITS OWN COORDINATE IN HEX: index = row << 4 | column,
+        // so 0x63 is row 6, column 3. That is why the tables below are written as hex -- in
+        // decimal the same tile is 99, which reads as nothing and hides a wrong row.
+        //
+        // GROW BY ROWS, NEVER COLUMNS. Appending rows leaves every existing index and every
+        // existing pixel exactly where it was; changing Columns reflows the whole atlas. Width is
+        // fixed at 16*48 = 768, so height may reach the importer's 1024 ceiling at 21 rows.
+        public const int Columns = 16;
         public const int Rows = 10;
         public const int TilePixels = 32;
         public const int TilePaddingPixels = 8;
@@ -64,103 +75,103 @@ namespace Blockiverse.Gameplay
 
         static readonly Dictionary<int, int> TileIndexByBlockId = new()
         {
-            { BlockRegistry.MeadowTurf.Value,        0 },
-            { BlockRegistry.LooseLoam.Value,          1 },
-            { BlockRegistry.Graystone.Value,          2 },
-            { BlockRegistry.BranchwoodLog.Value,      3 },
-            { BlockRegistry.Leafmoss.Value,           4 },
-            { BlockRegistry.LumenQuartzCluster.Value, 5 },
-            { BlockRegistry.EmbercoalSeam.Value,      6 },
-            { BlockRegistry.RosycopperBloom.Value,    7 },
-            { BlockRegistry.RustcoreOre.Value,        8 },
-            { BlockRegistry.BuildTable.Value,         9 },
-            { BlockRegistry.Glowwick.Value,           10 },
-            { BlockRegistry.StorageCrate.Value,       11 },
-            { BlockRegistry.Worldroot.Value,          12 },
-            { BlockRegistry.Deepmantle.Value,         13 },
-            { BlockRegistry.DarkSlate.Value,          14 },
-            { BlockRegistry.WarmGranite.Value,        15 },
-            { BlockRegistry.WhiteLimestone.Value,     16 },
-            { BlockRegistry.BlackBasalt.Value,        17 },
-            { BlockRegistry.DryTurf.Value,            18 },
-            { BlockRegistry.SnowcapTurf.Value,        19 },
-            { BlockRegistry.Rootsoil.Value,           20 },
-            { BlockRegistry.Claybed.Value,            21 },
-            { BlockRegistry.RiverSilt.Value,          22 },
-            { BlockRegistry.PaleSand.Value,           23 },
-            { BlockRegistry.ShingleGravel.Value,      24 },
-            { BlockRegistry.Snowpack.Value,           25 },
-            { BlockRegistry.Frostglass.Value,         26 },
-            { BlockRegistry.Thornbrush.Value,         27 },
-            { BlockRegistry.Reedgrass.Value,          28 },
-            { BlockRegistry.WorkPlank.Value,          29 },
-            { BlockRegistry.CutstoneBlock.Value,      30 },
-            { BlockRegistry.FiredBrickBlock.Value,    31 },
-            { BlockRegistry.ClearpaneGlass.Value,     32 },
-            { BlockRegistry.SurfacePebbles.Value,     33 },
-            { BlockRegistry.FlintyShingle.Value,      34 },
-            { BlockRegistry.PaletinThread.Value,      35 },
-            { BlockRegistry.SunmetalFleck.Value,      36 },
-            { BlockRegistry.NiterstonePocket.Value,   37 },
-            { BlockRegistry.BrightsaltCrust.Value,    38 },
-            { BlockRegistry.ShellgritBed.Value,       39 },
-            { BlockRegistry.ResinKnot.Value,          40 },
-            { BlockRegistry.Berrybush.Value,          41 },
-            { BlockRegistry.GrainStalk.Value,         42 },
-            { BlockRegistry.UmbraliteNode.Value,      43 },
-            { BlockRegistry.StaropalGeode.Value,      44 },
-            { BlockRegistry.Campfire.Value,           45 },
-            { BlockRegistry.ClayKiln.Value,           46 },
-            { BlockRegistry.BellowsForge.Value,       47 },
-            { BlockRegistry.PrepBoard.Value,          48 },
-            { BlockRegistry.MendBench.Value,          49 },
-            { BlockRegistry.LumenLamp.Value,          50 },
-            { BlockRegistry.SparkFlare.Value,         51 },
-            { BlockRegistry.TendedSoil.Value,          52 },
-            { BlockRegistry.GrainStalk_S1.Value,      53 },
-            { BlockRegistry.GrainStalk_S2.Value,      54 },
-            { BlockRegistry.Berrybush_S1.Value,       55 },
-            { BlockRegistry.Berrybush_S2.Value,       56 },
-            { BlockRegistry.Reedgrass_S1.Value,       57 },
-            { BlockRegistry.Sapling.Value,            58 },
-            { BlockRegistry.Sapling_S1.Value,         59 },
-            { BlockRegistry.Sapling_S2.Value,         60 },
-            { BlockRegistry.GrainStalk_S3.Value,      61 },
-            { BlockRegistry.GrainStalk_S4.Value,      62 },
-            { BlockRegistry.Berrybush_S3.Value,       63 },
-            { BlockRegistry.Berrybush_S4.Value,       64 },
-            { BlockRegistry.Berrybush_S5.Value,       65 },
-            { BlockRegistry.Reedgrass_S2.Value,       66 },
-            { BlockRegistry.Reedgrass_S3.Value,       67 },
-            { BlockRegistry.SmoothBranchwood.Value,   68 },
-            { BlockRegistry.ReedBasket.Value,          69 },
-            { BlockRegistry.ToolRack.Value,            70 },
-            { BlockRegistry.PantryJar.Value,           71 },
-            { BlockRegistry.DeepLocker.Value,          72 },
-            { BlockRegistry.Freshwater.Value,          73 },
-            { BlockRegistry.Brine.Value,               74 },
-            { BlockRegistry.Emberflow.Value,           75 },
-            { BlockRegistry.Bedroll.Value,             76 },
-            { BlockRegistry.MirrorPane.Value,          77 },
+            { BlockRegistry.MeadowTurf.Value,         0x00 },
+            { BlockRegistry.LooseLoam.Value,          0x01 },
+            { BlockRegistry.Graystone.Value,          0x02 },
+            { BlockRegistry.BranchwoodLog.Value,      0x03 },
+            { BlockRegistry.Leafmoss.Value,           0x04 },
+            { BlockRegistry.LumenQuartzCluster.Value, 0x05 },
+            { BlockRegistry.EmbercoalSeam.Value,      0x06 },
+            { BlockRegistry.RosycopperBloom.Value,    0x07 },
+            { BlockRegistry.RustcoreOre.Value,        0x08 },
+            { BlockRegistry.BuildTable.Value,         0x09 },
+            { BlockRegistry.Glowwick.Value,           0x0A },
+            { BlockRegistry.StorageCrate.Value,       0x0B },
+            { BlockRegistry.Worldroot.Value,          0x0C },
+            { BlockRegistry.Deepmantle.Value,         0x0D },
+            { BlockRegistry.DarkSlate.Value,          0x0E },
+            { BlockRegistry.WarmGranite.Value,        0x0F },
+            { BlockRegistry.WhiteLimestone.Value,     0x10 },
+            { BlockRegistry.BlackBasalt.Value,        0x11 },
+            { BlockRegistry.DryTurf.Value,            0x12 },
+            { BlockRegistry.SnowcapTurf.Value,        0x13 },
+            { BlockRegistry.Rootsoil.Value,           0x14 },
+            { BlockRegistry.Claybed.Value,            0x15 },
+            { BlockRegistry.RiverSilt.Value,          0x16 },
+            { BlockRegistry.PaleSand.Value,           0x17 },
+            { BlockRegistry.ShingleGravel.Value,      0x18 },
+            { BlockRegistry.Snowpack.Value,           0x19 },
+            { BlockRegistry.Frostglass.Value,         0x1A },
+            { BlockRegistry.Thornbrush.Value,         0x1B },
+            { BlockRegistry.Reedgrass.Value,          0x1C },
+            { BlockRegistry.WorkPlank.Value,          0x1D },
+            { BlockRegistry.CutstoneBlock.Value,      0x1E },
+            { BlockRegistry.FiredBrickBlock.Value,    0x1F },
+            { BlockRegistry.ClearpaneGlass.Value,     0x20 },
+            { BlockRegistry.SurfacePebbles.Value,     0x21 },
+            { BlockRegistry.FlintyShingle.Value,      0x22 },
+            { BlockRegistry.PaletinThread.Value,      0x23 },
+            { BlockRegistry.SunmetalFleck.Value,      0x24 },
+            { BlockRegistry.NiterstonePocket.Value,   0x25 },
+            { BlockRegistry.BrightsaltCrust.Value,    0x26 },
+            { BlockRegistry.ShellgritBed.Value,       0x27 },
+            { BlockRegistry.ResinKnot.Value,          0x28 },
+            { BlockRegistry.Berrybush.Value,          0x29 },
+            { BlockRegistry.GrainStalk.Value,         0x2A },
+            { BlockRegistry.UmbraliteNode.Value,      0x2B },
+            { BlockRegistry.StaropalGeode.Value,      0x2C },
+            { BlockRegistry.Campfire.Value,           0x2D },
+            { BlockRegistry.ClayKiln.Value,           0x2E },
+            { BlockRegistry.BellowsForge.Value,       0x2F },
+            { BlockRegistry.PrepBoard.Value,          0x30 },
+            { BlockRegistry.MendBench.Value,          0x31 },
+            { BlockRegistry.LumenLamp.Value,          0x32 },
+            { BlockRegistry.SparkFlare.Value,         0x33 },
+            { BlockRegistry.TendedSoil.Value,         0x34 },
+            { BlockRegistry.GrainStalk_S1.Value,      0x35 },
+            { BlockRegistry.GrainStalk_S2.Value,      0x36 },
+            { BlockRegistry.Berrybush_S1.Value,       0x37 },
+            { BlockRegistry.Berrybush_S2.Value,       0x38 },
+            { BlockRegistry.Reedgrass_S1.Value,       0x39 },
+            { BlockRegistry.Sapling.Value,            0x3A },
+            { BlockRegistry.Sapling_S1.Value,         0x3B },
+            { BlockRegistry.Sapling_S2.Value,         0x3C },
+            { BlockRegistry.GrainStalk_S3.Value,      0x3D },
+            { BlockRegistry.GrainStalk_S4.Value,      0x3E },
+            { BlockRegistry.Berrybush_S3.Value,       0x3F },
+            { BlockRegistry.Berrybush_S4.Value,       0x40 },
+            { BlockRegistry.Berrybush_S5.Value,       0x41 },
+            { BlockRegistry.Reedgrass_S2.Value,       0x42 },
+            { BlockRegistry.Reedgrass_S3.Value,       0x43 },
+            { BlockRegistry.SmoothBranchwood.Value,   0x44 },
+            { BlockRegistry.ReedBasket.Value,         0x45 },
+            { BlockRegistry.ToolRack.Value,           0x46 },
+            { BlockRegistry.PantryJar.Value,          0x47 },
+            { BlockRegistry.DeepLocker.Value,         0x48 },
+            { BlockRegistry.Freshwater.Value,         0x49 },
+            { BlockRegistry.Brine.Value,              0x4A },
+            { BlockRegistry.Emberflow.Value,          0x4B },
+            { BlockRegistry.Bedroll.Value,            0x4C },
+            { BlockRegistry.MirrorPane.Value,         0x4D },
             // Vegetation additions. Indices mirror the BLOCKS list in generate-art-assets.py; the
             // two lists are hand-maintained mirrors of each other, so they drift silently.
-            { BlockRegistry.DrygrassTuft.Value,        78 },
-            { BlockRegistry.MeadowTuft.Value,          79 },
-            { BlockRegistry.WildflowerCluster.Value,   80 },
-            { BlockRegistry.DuneSage.Value,            81 },
-            { BlockRegistry.SaltReed.Value,            82 },
-            { BlockRegistry.FrostFern.Value,           83 },
-            { BlockRegistry.WindrootShrub.Value,       84 },
-            { BlockRegistry.HangingReed.Value,         85 },
-            { BlockRegistry.MossCarpet.Value,          86 },
-            { BlockRegistry.SnowLichen.Value,          87 },
-            { BlockRegistry.FallenLeaves.Value,        88 },
-            { BlockRegistry.CharredLog.Value,          89 },
-            { BlockRegistry.SnowBlock.Value,           90 },
+            { BlockRegistry.DrygrassTuft.Value,       0x4E },
+            { BlockRegistry.MeadowTuft.Value,         0x4F },
+            { BlockRegistry.WildflowerCluster.Value,  0x50 },
+            { BlockRegistry.DuneSage.Value,           0x51 },
+            { BlockRegistry.SaltReed.Value,           0x52 },
+            { BlockRegistry.FrostFern.Value,          0x53 },
+            { BlockRegistry.WindrootShrub.Value,      0x54 },
+            { BlockRegistry.HangingReed.Value,        0x55 },
+            { BlockRegistry.MossCarpet.Value,         0x56 },
+            { BlockRegistry.SnowLichen.Value,         0x57 },
+            { BlockRegistry.FallenLeaves.Value,       0x58 },
+            { BlockRegistry.CharredLog.Value,         0x59 },
+            { BlockRegistry.SnowBlock.Value,          0x5A },
             // Flowing cells render with their family's source tile.
-            { BlockRegistry.FreshwaterFlow.Value,      73 },
-            { BlockRegistry.BrineFlow.Value,           74 },
-            { BlockRegistry.EmberflowFlow.Value,       75 },
+            { BlockRegistry.FreshwaterFlow.Value,     0x49 },
+            { BlockRegistry.BrineFlow.Value,          0x4A },
+            { BlockRegistry.EmberflowFlow.Value,      0x4B },
         };
 
         // Per-face tile overrides (vegetation ruleset §4a.5). Without these a turf block samples
@@ -189,14 +200,14 @@ namespace Blockiverse.Gameplay
         {
             // Turf: grass on top (the block's own tile), dirt-with-fringe on the sides, plain loam
             // underneath — reusing loose_loam's tile rather than authoring a fourth.
-            { BlockRegistry.MeadowTurf.Value,   new BlockFaceTiles(side: 91, bottom: 1) },
-            { BlockRegistry.DryTurf.Value,      new BlockFaceTiles(side: 92, bottom: 1) },
-            { BlockRegistry.SnowcapTurf.Value,  new BlockFaceTiles(side: 93, bottom: 1) },
-            { BlockRegistry.Rootsoil.Value,     new BlockFaceTiles(side: 94, bottom: 1) },
+            { BlockRegistry.MeadowTurf.Value,   new BlockFaceTiles(side: 0x5B, bottom: 0x01) },
+            { BlockRegistry.DryTurf.Value,      new BlockFaceTiles(side: 0x5C, bottom: 0x01) },
+            { BlockRegistry.SnowcapTurf.Value,  new BlockFaceTiles(side: 0x5D, bottom: 0x01) },
+            { BlockRegistry.Rootsoil.Value,     new BlockFaceTiles(side: 0x5E, bottom: 0x01) },
 
             // Logs: bark around the sides, end grain on both cut ends. Bottom and top share it.
-            { BlockRegistry.BranchwoodLog.Value,    new BlockFaceTiles(side: -1, bottom: 95) },
-            { BlockRegistry.SmoothBranchwood.Value, new BlockFaceTiles(side: -1, bottom: 96) },
+            { BlockRegistry.BranchwoodLog.Value,    new BlockFaceTiles(side: -1, bottom: 0x5F) },
+            { BlockRegistry.SmoothBranchwood.Value, new BlockFaceTiles(side: -1, bottom: 0x60) },
         };
 
         // Face-aware overload. `faceIndex` is a ChunkMeshBuilder face index; -1 means "no
@@ -206,7 +217,7 @@ namespace Blockiverse.Gameplay
         //
         // NO LONGER LOAD-BEARING, and the reason is worth keeping. The deck used to be tinted by
         // this texel, on the assumption that one measured pixel is white in the atlas. Measured
-        // across all four generated texture sets at texel (302, 345) of 576x480:
+        // across all four generated texture sets at texel (302, 345), when the atlas was 576x480:
         //
         //   enhanced (248,255,255)  ai (248,255,255)  ai_simplified (248,255,255)
         //   original (194,204,209)  <-- 20% dark and blue
@@ -217,6 +228,11 @@ namespace Blockiverse.Gameplay
         // makes the atlas irrelevant to the sky rather than making this one texel a shared
         // dependency of four independently generated art sets. Pinned by
         // BlockiverseHorizonSkirtEditModeTests.TheSkyVariantNeverSamplesTheAtlas.
+        //
+        // The grid is now 16x10, so BOTH the pixel and the UV this resolves to have moved: the
+        // texel that used to sit at (302, 345) of a 12-column atlas belongs to a different tile
+        // entirely at 16 columns. Harmless only because nothing samples it. If the sky ever
+        // samples the atlas again, re-measure -- do not trust the four values above.
         public static readonly Rect WhiteTexelUv = new(
             (302.0f + 0.5f) / AtlasWidthPixels,
             1.0f - ((345.0f + 0.5f) / AtlasHeightPixels),

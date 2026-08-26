@@ -361,7 +361,7 @@ it, so the rule is now explicit.
 | Field above | Bit | Status |
 |---|---|---|
 | `LeafmossState.persistent` | `BlockState.Persistent` | **Live.** Set by the mutation gate on any player-placed block whose definition declares `DecaysWithoutSupport` (today: leafmoss only). Exempts it from leaf decay, so a hand-built hedge does not rot. |
-| `BranchwoodLogState.treeVariant` / `LeafmossState.leafVariant` | — | **Not declared.** Needs per-species leaf and log tiles; all seven species currently share one leaf tile and one log tile. The 12×10 atlas has the free slots for it. |
+| `BranchwoodLogState.treeVariant` / `LeafmossState.leafVariant` | — | **Not declared.** Needs per-species leaf and log tiles; all seven species currently share one leaf tile and one log tile. The 16×10 atlas has the free slots for it (97 of 160 used). |
 | `BranchwoodLogState.axis` | — | **Not declared.** Needs horizontal log placement, which no tool produces yet. |
 | `BranchwoodLogState.stripped` / `natural` | — | **Not declared.** `smooth_branchwood` is a distinct block rather than a log state, and nothing reads `natural`. |
 | `LeafmossState.decayDistance` | — | **Not declared.** Decay searches for a nearby log per sweep instead of caching a distance; the cached form is an optimisation with no observable difference. |
