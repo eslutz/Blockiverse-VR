@@ -43,6 +43,7 @@ namespace Blockiverse.WorldGen
             // every structure footprint and guarantees the complete plant catalog remains visible.
             PlaceSurface(world, 64, 50, BlockRegistry.MeadowTuft);
             PlaceSurface(world, 66, 50, BlockRegistry.WildflowerCluster);
+            PrepareSpawnCourtyard(world);
             return world;
         }
 
@@ -231,6 +232,20 @@ namespace Blockiverse.WorldGen
                 var placement = placements[i];
                 int surfaceY = StructureService.FindSurfaceY(world, placement.x, placement.z);
                 StructureService.TryPlaceStructureAt(world, placement.id, placement.x, surfaceY, placement.z, settings.Seed);
+            }
+        }
+
+        static void PrepareSpawnCourtyard(VoxelWorld world)
+        {
+            // The player and fixed title menu occupy this small central courtyard. Terrain ripple
+            // and the river are allowed everywhere else, but a raised column directly along +Z
+            // puts the headset inside a dirt wall before the player can see or use the menu.
+            for (int x = 62; x <= 66; x++)
+            for (int z = 62; z <= 68; z++)
+            {
+                world.SetBlock(new BlockPosition(x, SurfaceY, z), BlockRegistry.MeadowTurf, trackChange: false);
+                for (int y = SurfaceY + 1; y < world.Bounds.Height; y++)
+                    world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Air, trackChange: false);
             }
         }
 

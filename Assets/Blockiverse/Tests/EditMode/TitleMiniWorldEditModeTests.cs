@@ -41,5 +41,27 @@ namespace Blockiverse.Tests.EditMode
             })
                 Assert.That(blocks, Does.Contain(resource), $"Missing title-world resource: {resource}.");
         }
+
+        [Test]
+        public void TitleSpawnCourtyardKeepsTheFixedMenuSightlineClear()
+        {
+            GeneratedCreativeWorld generated = WorldSaveGeneration.GenerateTitleWorld();
+
+            Assert.That(generated.Settings.SpawnPosition, Is.EqualTo(new BlockPosition(64, 65, 64)));
+
+            // The fixed title menu sits directly ahead along +Z. Keep a small, level courtyard
+            // around that route so the player's eyes cannot start inside a terrain ripple, river,
+            // plant, or structure even though the surrounding showcase remains varied.
+            for (int x = 62; x <= 66; x++)
+            for (int z = 62; z <= 68; z++)
+            {
+                Assert.That(generated.World.GetBlock(new BlockPosition(x, 64, z)),
+                    Is.EqualTo(BlockRegistry.MeadowTurf), $"Expected a level title courtyard floor at ({x},64,{z}).");
+
+                for (int y = 65; y <= 68; y++)
+                    Assert.That(generated.World.GetBlock(new BlockPosition(x, y, z)),
+                        Is.EqualTo(BlockRegistry.Air), $"Expected a clear title-menu sightline at ({x},{y},{z}).");
+            }
+        }
     }
 }
