@@ -7,7 +7,12 @@ namespace Blockiverse.Core
     {
         bool LocomotionSuppressed { get; set; }
         UnityEvent MenuPressed { get; }
-        UnityEvent QuickMenuPressed { get; }
+
+        // Support grip. Opens the gameplay-screens hub (Inventory/Crafting/Shared Crate/Blocks) —
+        // the same reliable, tracking-independent fallback the wrist menu's gesture needs. Formerly
+        // toggled the Creative quick block menu, retired once the catalog screen covered the same
+        // job from the wrist menu.
+        UnityEvent ScreensPressed { get; }
         UnityEvent BreakPressed { get; }
 
         // Hotbar slot cycling, bound to the support hand's two face buttons — the only gameplay

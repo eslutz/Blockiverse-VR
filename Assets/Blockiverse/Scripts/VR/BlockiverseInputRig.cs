@@ -78,7 +78,7 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseControllerHaptics rightControllerHaptics;
         [SerializeField] BlockiverseFoveatedRenderingController foveatedRenderingController;
         [SerializeField] UnityEvent menuPressed = new();
-        [SerializeField] UnityEvent quickMenuPressed = new();
+        [SerializeField] UnityEvent screensPressed = new();
         [SerializeField] UnityEvent hotbarNextPressed = new();
         [SerializeField] UnityEvent hotbarPreviousPressed = new();
         [SerializeField] UnityEvent breakPressed = new();
@@ -93,7 +93,7 @@ namespace Blockiverse.VR
         // poll avoids five string-keyed FindActionMap/FindAction lookups every frame.
         InputActionAsset cachedActionAsset;
         InputAction cachedMenuAction;
-        InputAction cachedQuickMenuAction;
+        InputAction cachedScreensAction;
         InputAction cachedHotbarNextAction;
         InputAction cachedHotbarPreviousAction;
         InputAction cachedBreakAction;
@@ -139,7 +139,7 @@ namespace Blockiverse.VR
 
         public InputActionAsset InputActions => inputActions;
         public UnityEvent MenuPressed => menuPressed;
-        public UnityEvent QuickMenuPressed => quickMenuPressed;
+        public UnityEvent ScreensPressed => screensPressed;
         public UnityEvent HotbarNextPressed => hotbarNextPressed;
         public UnityEvent HotbarPreviousPressed => hotbarPreviousPressed;
         public UnityEvent BreakPressed => breakPressed;
@@ -535,7 +535,7 @@ namespace Blockiverse.VR
             ApplyComfortSettingsToProviders();
             UpdateTurnProviderEnabledState();
             UpdateMenu();
-            UpdateQuickMenu();
+            UpdateScreensPressed();
             UpdateHotbar();
             UpdateCreativeBindings();
         }
@@ -572,7 +572,11 @@ namespace Blockiverse.VR
             string supportMap = GetControllerMapName(OppositeHand(dominantHand));
 
             TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, out cachedMenuAction);
-            TryFindAction(supportMap, BlockiverseInputActionNames.Activate, out cachedQuickMenuAction);
+            // Support grip. Formerly the Creative quick block menu's toggle; that panel duplicated
+            // the catalog screen already reachable from the wrist menu, so it was removed and this
+            // binding now opens the same gameplay-screens hub the wrist gesture does — a reliable,
+            // tracking-independent way in if the gesture can't be read.
+            TryFindAction(supportMap, BlockiverseInputActionNames.Activate, out cachedScreensAction);
             // The support hand's two face buttons: the only gameplay inputs the shipped
             // controller mapping leaves unclaimed, so the hotbar gets them without taking a
             // binding away from anything the player already relies on. Secondary is 'next'
@@ -702,10 +706,10 @@ namespace Blockiverse.VR
                 menuPressed?.Invoke();
         }
 
-        void UpdateQuickMenu()
+        void UpdateScreensPressed()
         {
-            if (cachedQuickMenuAction != null && cachedQuickMenuAction.WasPressedThisFrame())
-                quickMenuPressed?.Invoke();
+            if (cachedScreensAction != null && cachedScreensAction.WasPressedThisFrame())
+                screensPressed?.Invoke();
         }
 
         // Gated on AllowWorldInput so a menu or modal that owns the ray cannot also be cycling

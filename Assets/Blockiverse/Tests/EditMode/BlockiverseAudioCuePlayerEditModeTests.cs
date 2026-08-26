@@ -177,10 +177,9 @@ namespace Blockiverse.Tests.EditMode
         }
 
         // The scene hotbar (Blockiverse.Gameplay's CreativeHotbar) survives the uGUI cutover —
-        // CreativeHotbarController mirrors Toolkit selection into it — and it owns these three
-        // cues itself. What went with the uGUI presenter is the haptic tick that used to ride
-        // alongside show/hide; the Toolkit quick menu plays its own through
-        // CreativeHotbarController.SetQuickMenuVisible, which no test covers.
+        // the Toolkit catalog screen mirrors selection into it now, reached from the wrist menu
+        // and the support grip's screens hub — and it owns these three cues itself. What went
+        // with the uGUI presenter is the haptic tick that used to ride alongside show/hide.
         [Test]
         public void CreativeHotbarShowSelectionAndHidePlayInventoryFeedback()
         {

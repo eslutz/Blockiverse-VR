@@ -22,8 +22,6 @@ namespace Blockiverse.Tests.EditMode
             public readonly List<WorldSaveSummary> ShownDetails = new();
             public readonly List<Pose> TitlePoses = new();
             public int CreativeRefreshCount;
-            public int QuickMenuToggleCount;
-            public int QuickMenuHideCount;
             public int NewWorldResetCount;
             public NewWorldConfig NewWorldConfigToReturn = new();
             public WorldSaveSummary? LoadSaveToReturn;
@@ -45,9 +43,6 @@ namespace Blockiverse.Tests.EditMode
 
             public void RefreshCreativeEnvironmentControls() => CreativeRefreshCount++;
 
-            public void ToggleQuickBlockMenu() => QuickMenuToggleCount++;
-
-            public void HideQuickBlockMenu() => QuickMenuHideCount++;
             public int HotbarCycleDelta { get; private set; }
             public int HotbarCycleCount { get; private set; }
 

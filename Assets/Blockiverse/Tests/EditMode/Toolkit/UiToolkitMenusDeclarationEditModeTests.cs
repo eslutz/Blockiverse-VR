@@ -35,7 +35,10 @@ namespace Blockiverse.Tests.EditMode
         };
 
         // Positive control for the whole suite: with zero declarations every other test here
-        // passes by vacuum. The migration matrix declares 26 documents across 23 screen ids.
+        // passes by vacuum. The migration matrix declares 25 documents across 23 screen ids
+        // (CreativeHotbarController, the Creative quick block menu, was retired 2026-08-26: it
+        // duplicated the catalog screen already reachable from the wrist menu and the support
+        // grip's screens hub).
         [Test]
         public void TheFullScreenCatalogIsDeclared()
         {

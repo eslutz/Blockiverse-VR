@@ -21,12 +21,6 @@ namespace Blockiverse.Tests.EditMode.Toolkit
     // It caught two on the run that introduced it: the hotbar strip was 10 mm taller than the gap
     // between the action bar and the mining bar, and the debug readout's top edge clipped the
     // status toast by 20 mm.
-    //
-    // ── The quick block menu is excluded ─────────────────────────────────────
-    //
-    // CreativeHotbarController carries IUiToolkitQuickBlockMenu, which the host uses to exclude it
-    // from routed visibility: it is opened on demand and is not co-visible with the rest. It
-    // deliberately overlaps the action bar, because it replaces it while open.
     public sealed class HudPanelOverlapEditModeTests
     {
         // The project convention: 1000 document pixels is 1.00 m at 100 pixels-per-unit and 0.1
@@ -64,10 +58,6 @@ namespace Blockiverse.Tests.EditMode.Toolkit
                     type, typeof(UiToolkitScreenAttribute));
 
                 if (attribute == null || attribute.PlacementProfile != UiToolkitPlacementProfile.Hud)
-                    continue;
-
-                // Opened on demand, not co-visible; it replaces the action bar while showing.
-                if (typeof(IUiToolkitQuickBlockMenu).IsAssignableFrom(type))
                     continue;
 
                 yield return new Panel(type.Name, attribute);

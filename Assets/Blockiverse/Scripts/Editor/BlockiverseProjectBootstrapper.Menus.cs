@@ -56,12 +56,12 @@ namespace Blockiverse.Editor
         const string SubtitleToastName = "Multiplayer Toast";
         static readonly Vector2 SubtitleToastSize = new(760.0f, 96.0f);
 
-        // The Block Menu. Its uGUI catalog browser is gone — the UI Toolkit catalog screen and
-        // CreativeHotbarController own block picking now — but this stays because it is the only
-        // generator of the scene CreativeHotbar, which is gameplay state rather than menu state:
-        // Scenes.cs resolves it by the literal path "Camera Offset/Block Menu" and feeds it to
-        // BlockiverseWorldPresentation, which is how a placed block is chosen, and
-        // CreativeHotbarController mirrors every Toolkit selection back into it.
+        // The Block Menu. Its uGUI catalog browser is gone — the UI Toolkit catalog screen owns
+        // block picking now, reachable from the wrist menu and the support grip's screens hub —
+        // but this stays because it is the only generator of the scene CreativeHotbar, which is
+        // gameplay state rather than menu state: Scenes.cs resolves it by the literal path
+        // "Camera Offset/Block Menu" and feeds it to BlockiverseWorldPresentation, which is how a
+        // placed block is chosen, and the catalog screen mirrors every selection back into it.
         static void EnsureBlockMenuPlaceholder(GameObject rig, BlockiverseInputRig inputRig)
         {
             Transform cameraOffset = rig.transform.Find("Camera Offset");
@@ -170,11 +170,11 @@ namespace Blockiverse.Editor
             if (inputRig != null)
             {
                 RemovePersistentListeners(
-                    inputRig.QuickMenuPressed,
+                    inputRig.ScreensPressed,
                     menu,
                     nameof(CreativeHotbar.ToggleVisible));
                 RemovePersistentListeners(
-                    inputRig.QuickMenuPressed,
+                    inputRig.ScreensPressed,
                     presenter,
                     nameof(BlockiverseWorldSpacePanelPresenter.ToggleVisible));
                 EditorUtility.SetDirty(inputRig);

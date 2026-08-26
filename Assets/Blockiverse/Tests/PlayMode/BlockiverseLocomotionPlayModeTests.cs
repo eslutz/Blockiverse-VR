@@ -605,11 +605,11 @@ namespace Blockiverse.Tests.PlayMode
 
                 int breakPresses = 0;
                 int placePresses = 0;
-                int quickMenuPresses = 0;
+                int screensPresses = 0;
                 int blockTogglePresses = 0;
                 inputRig.BreakPressed.AddListener(() => breakPresses++);
                 inputRig.PlacePressed.AddListener(() => placePresses++);
-                inputRig.QuickMenuPressed.AddListener(() => quickMenuPresses++);
+                inputRig.ScreensPressed.AddListener(() => screensPresses++);
                 inputRig.BlockEditingTogglePressed.AddListener(() => blockTogglePresses++);
 
                 yield return null;
@@ -682,7 +682,7 @@ namespace Blockiverse.Tests.PlayMode
 
                 Press(gamepad.rightShoulder);
                 yield return null;
-                Assert.That(quickMenuPresses, Is.EqualTo(1));
+                Assert.That(screensPresses, Is.EqualTo(1));
                 Release(gamepad.rightShoulder);
                 yield return null;
 

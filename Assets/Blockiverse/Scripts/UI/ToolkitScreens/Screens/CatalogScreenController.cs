@@ -18,8 +18,8 @@ namespace Blockiverse.UI
     // same consumer the uGUI panel feeds, and the source CreativeInteractionController reads for
     // placement. Cue split: category/page/close play the click here, but ENTRY PICKS DO NOT — the
     // hotbar plays UiSelect inside SelectBlock, and a cue here too double-plays the same clip in
-    // the same frame (~+6 dB louder than every other click). CreativeHotbarController solved the
-    // identical collision with playAudio:!mirrored; here the hotbar's cue is simply the only one.
+    // the same frame (~+6 dB louder than every other click); the hotbar's cue is simply the only
+    // one, so this screen stays silent on the pick itself.
     [UiToolkitScreen(MenuActions.CatalogScreen, "Assets/Blockiverse/UI/Documents/CatalogScreen.uxml",
         1000, 760, UiToolkitPlacementProfile.Menu)]
     public sealed class CatalogScreenController : UiToolkitScreenController

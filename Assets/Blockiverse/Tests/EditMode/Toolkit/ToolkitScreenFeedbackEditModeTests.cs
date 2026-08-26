@@ -143,8 +143,8 @@ namespace Blockiverse.Tests.EditMode
                 "InventoryScreenController.cs",
                 "CrateScreenController.cs",
                 "CraftingScreenController.cs",
-                "CreativeHotbarController.cs",
                 "GameplayHudController.cs",
+                "GameplayScreensScreenController.cs",
                 "LanMultiplayerScreenController.cs",
             };
 

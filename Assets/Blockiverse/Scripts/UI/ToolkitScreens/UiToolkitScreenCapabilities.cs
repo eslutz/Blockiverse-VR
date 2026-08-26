@@ -49,12 +49,4 @@ namespace Blockiverse.UI
     {
         void RefreshEnvironmentControls();
     }
-
-    // The quick block menu (creative hotbar overlay). Not a routed screen: it is toggled by
-    // the quick-menu hardware button while the gameplay HUD is the routed screen.
-    public interface IUiToolkitQuickBlockMenu
-    {
-        bool IsQuickMenuVisible { get; }
-        void SetQuickMenuVisible(bool visible);
-    }
 }

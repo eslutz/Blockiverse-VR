@@ -3011,7 +3011,7 @@ MonoBehaviour:
   menuPressed:
     m_PersistentCalls:
       m_Calls: []
-  quickMenuPressed:
+  screensPressed:
     m_PersistentCalls:
       m_Calls: []
   hotbarNextPressed:

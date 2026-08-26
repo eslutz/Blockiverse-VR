@@ -30,8 +30,6 @@ namespace Blockiverse.Tests.EditMode.Toolkit
             public void ShowWorldDetails(WorldSaveSummary save) { }
             public void SetTitleMenuPose(Pose pose) { }
             public void RefreshCreativeEnvironmentControls() { }
-            public void ToggleQuickBlockMenu() { }
-            public void HideQuickBlockMenu() { }
             public void CycleHotbarSlot(int delta) { }
             public void ResetNewWorldScreen() { }
             public NewWorldConfig PendingNewWorldConfig => null;
@@ -62,8 +60,6 @@ namespace Blockiverse.Tests.EditMode.Toolkit
             public void ShowWorldDetails(WorldSaveSummary save) { }
             public void SetTitleMenuPose(Pose pose) { }
             public void RefreshCreativeEnvironmentControls() { }
-            public void ToggleQuickBlockMenu() { }
-            public void HideQuickBlockMenu() { }
             public void CycleHotbarSlot(int delta) { }
             public void ResetNewWorldScreen() { }
             public NewWorldConfig PendingNewWorldConfig => null;
@@ -372,6 +368,41 @@ namespace Blockiverse.Tests.EditMode.Toolkit
             Assert.That(secondRow.Label, Does.Contain("On"),
                 "opening Settings must rebuild the row from the current setting, not replay the " +
                 "stale push from before the setting finished loading");
+        }
+
+        // The support grip's dispatch (formerly the Creative quick block menu's toggle, retired
+        // once the catalog screen covered the same job from the wrist menu / this hub). This is
+        // the ONE call site for OnScreensPressed, so a broken gate here breaks the entire
+        // guaranteed fallback with nothing else to catch it.
+        [Test]
+        public void ScreensPressedOpensTheHubOnlyOverThePlainGameplayRoute()
+        {
+            var rig = new GameObject("Menu Rig");
+            objectsToDestroy.Add(rig);
+            var controller = rig.AddComponent<BlockiverseMenuController>();
+
+            var frontend = new RecordingFrontend();
+            controller.RegisterFrontend(frontend);
+
+            MethodInfo onScreensPressed = typeof(BlockiverseMenuController)
+                .GetMethod("OnScreensPressed", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(onScreensPressed, Is.Not.Null,
+                "OnScreensPressed is the seam the support grip's input event calls.");
+
+            // Registration leaves the router at the title screen — the grip must be a no-op there,
+            // or every title/menu screen would suddenly answer to a gameplay-only button.
+            onScreensPressed.Invoke(controller, null);
+            Assert.That(frontend.Pushed.ContainsKey(MenuActions.GameplayScreensScreen), Is.False,
+                "positive control: the grip must not open the hub off the gameplay route");
+
+            controller.Router.ClearToRoot(new ScreenRoute(MenuActions.GameplayHudScreen));
+            onScreensPressed.Invoke(controller, null);
+
+            Assert.That(frontend.Pushed.ContainsKey(MenuActions.GameplayScreensScreen), Is.True,
+                "pressing the grip over the plain gameplay HUD must open the screens hub");
+            Assert.That(controller.Router.ActiveScreen.ScreenId,
+                Is.EqualTo(MenuActions.GameplayScreensScreen),
+                "the grip must actually PUSH the route, not just refresh the frontend's label");
         }
     }
 }

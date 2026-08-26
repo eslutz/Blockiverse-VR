@@ -46,14 +46,6 @@ namespace Blockiverse.Tests.EditMode
             {
             }
 
-            public void ToggleQuickBlockMenu()
-            {
-            }
-
-            public void HideQuickBlockMenu()
-            {
-            }
-
             public void CycleHotbarSlot(int delta)
             {
             }
@@ -372,14 +364,12 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(root.Q<Label>("bv-title").text, Is.EqualTo("Paused"));
 
-            // 8, not 7: ONE "Screens" row was added on 2026-08-25, opening the hub that carries
-            // the guaranteed route into inventory, crafting, the shared crate and the block
-            // catalog. The wrist menu is the primary route but needs a tracked support
-            // controller; pause is on a dedicated button that always answers.
-            //
-            // One row rather than one per destination — that is the point of the hub, and this
-            // number is what keeps the pause menu from growing every time a screen is added.
-            Assert.That(root.Query<Button>().ToList(), Has.Count.EqualTo(8));
+            // 7. A "Screens" row briefly lived here (2026-08-25) as the guaranteed route into
+            // inventory, crafting, the shared crate and the block catalog, but the support grip
+            // (formerly the Creative quick block menu's toggle) opens the same hub directly and
+            // more reliably — reachable without pausing at all — so the pause row was retired
+            // rather than kept as a second, weaker path to the identical destination.
+            Assert.That(root.Query<Button>().ToList(), Has.Count.EqualTo(7));
         }
 
         [Test]

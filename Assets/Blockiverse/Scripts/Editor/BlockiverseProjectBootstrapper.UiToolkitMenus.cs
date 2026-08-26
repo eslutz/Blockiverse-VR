@@ -75,8 +75,43 @@ namespace Blockiverse.Editor
             host.Configure(FindSceneComponent<BlockiverseMenuController>(scene));
             EditorUtility.SetDirty(host);
 
-            foreach (UiToolkitScreenDeclaration declaration in EnumerateUiToolkitScreenDeclarations())
+            List<UiToolkitScreenDeclaration> declarations = EnumerateUiToolkitScreenDeclarations();
+
+            foreach (UiToolkitScreenDeclaration declaration in declarations)
                 EnsureUiToolkitScreenPanel(hostObject.transform, panelSettings, declaration);
+
+            PruneRetiredScreenPanels(hostObject.transform, declarations);
+        }
+
+        // A retired [UiToolkitScreen] controller (deleted class, or the attribute removed) leaves
+        // its panel GameObject behind forever: EnsureUiToolkitScreenPanel only ensures what IS
+        // declared, so a screen that no longer exists in code keeps serializing a missing
+        // MonoBehaviour and an orphaned UXML/UIDocument reference into every future regen. Prune
+        // any host child whose name doesn't match a current declaration's "<document> Panel".
+        static void PruneRetiredScreenPanels(
+            Transform hostTransform,
+            List<UiToolkitScreenDeclaration> declarations)
+        {
+            var expectedNames = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (UiToolkitScreenDeclaration declaration in declarations)
+            {
+                string documentName = Path.GetFileNameWithoutExtension(declaration.Attribute.DocumentAssetPath);
+                expectedNames.Add(documentName + " Panel");
+            }
+
+            for (int i = hostTransform.childCount - 1; i >= 0; i--)
+            {
+                Transform child = hostTransform.GetChild(i);
+
+                if (expectedNames.Contains(child.name))
+                    continue;
+
+                BlockiverseLog.Info(
+                    BlockiverseLogCategory.Bootstrap,
+                    $"Pruning retired UI Toolkit screen panel '{child.name}' — no declaration claims it.");
+                UnityEngine.Object.DestroyImmediate(child.gameObject);
+            }
         }
 
         public readonly struct UiToolkitScreenDeclaration

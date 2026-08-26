@@ -1579,8 +1579,10 @@ Routed world-space menus place themselves by game state, not per panel:
   player stays within `followDistanceThreshold` (1.5 m), then glide (exponential
   smoothing, `followSmoothing` 0.35 s) to a fresh pose in front of the player. Never
   gaze-locked; navigating within a menu stack keeps the current pose.
-- The gameplay HUD and quick block menu keep their own hand/head attachment and are not
-  routed through this model.
+- The gameplay HUD (including the wrist menu) keeps its own hand/head attachment and is
+  not routed through this model. There is no separate quick block menu: an arbitrary
+  block/tool slot is picked directly on the hotbar strip via ray + trigger, or through
+  the block catalog reachable from the wrist menu.
 
 ### 10.2 Autosave Rules
 

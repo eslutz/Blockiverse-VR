@@ -52,21 +52,19 @@ namespace Blockiverse.UI
         public const string PauseCreativeTools = "pause.open_creative_tools";
         public const string PauseSettings = "pause.open_settings";
 
-        // ONE pause row, opening a hub that holds every gameplay screen.
+        // ── Gameplay screens hub ─────────────────────────────────────────────
         //
         // Those screens had exactly one entry point — the always-visible action bar — and that bar
         // has moved to the support wrist, where it appears only when the player turns their wrist
         // toward their face. That is the right default, but it depends on the support controller
         // being tracked; if it is off, lost, or dropped, a player would have no way to reach their
-        // own inventory and no way to discover why. Pause is bound to a dedicated button on the
-        // gameplay map, so it always answers.
+        // own inventory and no way to discover why. The support grip (formerly the Creative quick
+        // block menu's toggle, retired once the catalog screen covered the same job from here)
+        // opens this same hub directly, so it always answers — no pause needed.
         //
-        // A hub rather than one pause row per destination: four rows would have crowded the pause
-        // menu and every future screen would crowd it further. Behind one row the list can grow
-        // without the pause menu growing at all.
-        public const string PauseOpenScreens = "pause.open_screens";
-
-        // ── Gameplay screens hub ─────────────────────────────────────────────
+        // A hub rather than one binding per destination: the wrist menu and the grip both need to
+        // reach all four, and one route behind one button/gesture is what lets a future screen join
+        // the list without touching either.
         public const string ScreensOpenInventory = "gameplay_screens.open_inventory";
         public const string ScreensOpenCrafting = "gameplay_screens.open_crafting";
         public const string ScreensOpenCrate = "gameplay_screens.open_crate";
@@ -136,12 +134,11 @@ namespace Blockiverse.UI
 
         public static IReadOnlyList<MenuAction> PauseMenu(bool canToggleMode, bool canOpenCreativeTools, bool canQuit = true)
         {
-            var actions = new List<MenuAction>(8)
+            var actions = new List<MenuAction>(7)
             {
                 Localized(PauseResume, BlockiverseLocalization.Keys.PauseResume, "Resume"),
                 Localized(PauseSaveGame, BlockiverseLocalization.Keys.PauseSaveGame, "Save Game"),
             };
-            actions.Add(Localized(PauseOpenScreens, ScreensTitleKey, "Screens"));
 
             if (canToggleMode)
                 actions.Add(Localized(PauseToggleMode, BlockiverseLocalization.Keys.PauseToggleMode, "Switch Survival/Creative"));

@@ -263,7 +263,7 @@ namespace Blockiverse.UI
             if (inputRig != null)
             {
                 inputRig.MenuPressed.RemoveListener(OnMenuPressed);
-                inputRig.QuickMenuPressed.RemoveListener(OnQuickMenuPressed);
+                inputRig.ScreensPressed.RemoveListener(OnScreensPressed);
                 inputRig.HotbarNextPressed.RemoveListener(OnHotbarNextPressed);
                 inputRig.HotbarPreviousPressed.RemoveListener(OnHotbarPreviousPressed);
             }
@@ -300,8 +300,8 @@ namespace Blockiverse.UI
             {
                 inputRig.MenuPressed.RemoveListener(OnMenuPressed);
                 inputRig.MenuPressed.AddListener(OnMenuPressed);
-                inputRig.QuickMenuPressed.RemoveListener(OnQuickMenuPressed);
-                inputRig.QuickMenuPressed.AddListener(OnQuickMenuPressed);
+                inputRig.ScreensPressed.RemoveListener(OnScreensPressed);
+                inputRig.ScreensPressed.AddListener(OnScreensPressed);
                 inputRig.HotbarNextPressed.RemoveListener(OnHotbarNextPressed);
                 inputRig.HotbarNextPressed.AddListener(OnHotbarNextPressed);
                 inputRig.HotbarPreviousPressed.RemoveListener(OnHotbarPreviousPressed);
@@ -459,14 +459,6 @@ namespace Blockiverse.UI
                     frontend?.RefreshCreativeEnvironmentControls();
                     router.PushScreen(new ScreenRoute(MenuActions.CreativeToolsScreen, pauseGame: true));
                     break;
-                // The reliable route into every gameplay screen. The wrist menu is the primary
-                // one, but it needs a tracked support controller; pause is on a dedicated button
-                // and always answers.
-                case MenuActions.PauseOpenScreens:
-                    RefreshGameplayScreensMenu();
-                    router.PushScreen(new ScreenRoute(MenuActions.GameplayScreensScreen, pauseGame: true));
-                    break;
-
                 // Popping the hub first so the destination REPLACES it rather than stacking under
                 // it — otherwise closing inventory would drop the player back into the hub, then
                 // pause, instead of back into the world.
@@ -655,11 +647,8 @@ namespace Blockiverse.UI
                 confirmCallback = null;
 
             // Screen visibility is the host's job — it has its own Router.Changed subscription.
-            // What is left here is the state the router owns (pause, world input, locomotion,
-            // modal bookkeeping) plus the quick menu's route gate, which is a routing rule
-            // rather than a rendering one.
-            if (!CanUseQuickBlockMenu())
-                frontend?.HideQuickBlockMenu();
+            // What is left here is the state the router owns: pause, world input, locomotion,
+            // and modal bookkeeping.
         }
 
         void ApplyLocomotionSuppression()
@@ -692,14 +681,29 @@ namespace Blockiverse.UI
             frontend?.SetTitleMenuPose(pose);
         }
 
-        bool CanUseQuickBlockMenu()
+        // The support grip's availability gate. Formerly the quick block menu's ("usable only
+        // over the gameplay HUD"); the grip now opens the gameplay-screens hub instead, and needs
+        // the exact same guard — don't stack another push while a different screen or modal is
+        // already up.
+        bool CanOpenScreensHub()
         {
             return router != null &&
                 !router.HasModal &&
                 string.Equals(router.ActiveScreen.ScreenId, MenuActions.GameplayHudScreen, StringComparison.Ordinal);
         }
 
-        void OnQuickMenuPressed() => frontend?.ToggleQuickBlockMenu();
+        // Support grip. The reliable, tracking-independent route into every gameplay screen —
+        // the wrist menu's gesture needs the support controller tracked; this needs only the
+        // button. Reuses the exact push RefreshGameplayScreensMenu/PauseOpenScreens used before
+        // that pause row was retired in favour of this always-available one.
+        void OnScreensPressed()
+        {
+            if (!CanOpenScreensHub())
+                return;
+
+            RefreshGameplayScreensMenu();
+            router.PushScreen(new ScreenRoute(MenuActions.GameplayScreensScreen, pauseGame: true));
+        }
 
         // Flips the persisted flag and rebuilds the row so its label reports the new state. The
         // overlay itself polls the setting rather than being pushed to, so nothing else is needed
