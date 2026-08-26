@@ -79,6 +79,8 @@ namespace Blockiverse.VR
         [SerializeField] BlockiverseFoveatedRenderingController foveatedRenderingController;
         [SerializeField] UnityEvent menuPressed = new();
         [SerializeField] UnityEvent quickMenuPressed = new();
+        [SerializeField] UnityEvent hotbarNextPressed = new();
+        [SerializeField] UnityEvent hotbarPreviousPressed = new();
         [SerializeField] UnityEvent breakPressed = new();
         [SerializeField] UnityEvent breakReleased = new();
         [SerializeField] UnityEvent placePressed = new();
@@ -92,6 +94,8 @@ namespace Blockiverse.VR
         InputActionAsset cachedActionAsset;
         InputAction cachedMenuAction;
         InputAction cachedQuickMenuAction;
+        InputAction cachedHotbarNextAction;
+        InputAction cachedHotbarPreviousAction;
         InputAction cachedBreakAction;
         InputAction cachedPlaceAction;
         InputAction cachedBlockEditingToggleAction;
@@ -136,6 +140,8 @@ namespace Blockiverse.VR
         public InputActionAsset InputActions => inputActions;
         public UnityEvent MenuPressed => menuPressed;
         public UnityEvent QuickMenuPressed => quickMenuPressed;
+        public UnityEvent HotbarNextPressed => hotbarNextPressed;
+        public UnityEvent HotbarPreviousPressed => hotbarPreviousPressed;
         public UnityEvent BreakPressed => breakPressed;
         public UnityEvent BreakReleased => breakReleased;
         // Live held-state of the break input (hold-to-mine polls this as a release safety net).
@@ -530,6 +536,7 @@ namespace Blockiverse.VR
             UpdateTurnProviderEnabledState();
             UpdateMenu();
             UpdateQuickMenu();
+            UpdateHotbar();
             UpdateCreativeBindings();
         }
 
@@ -566,6 +573,13 @@ namespace Blockiverse.VR
 
             TryFindAction(BlockiverseInputActionNames.GameplayMap, BlockiverseInputActionNames.Menu, out cachedMenuAction);
             TryFindAction(supportMap, BlockiverseInputActionNames.Activate, out cachedQuickMenuAction);
+            // The support hand's two face buttons: the only gameplay inputs the shipped
+            // controller mapping leaves unclaimed, so the hotbar gets them without taking a
+            // binding away from anything the player already relies on. Secondary is 'next'
+            // because it sits further from the thumb's rest position, matching the way the
+            // dominant hand's secondary carries the less-used half of its pair.
+            TryFindAction(supportMap, BlockiverseInputActionNames.SecondaryButton, out cachedHotbarNextAction);
+            TryFindAction(supportMap, BlockiverseInputActionNames.PrimaryButton, out cachedHotbarPreviousAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.Select, out cachedBreakAction);
             TryFindAction(dominantMap, BlockiverseInputActionNames.Activate, out cachedPlaceAction);
             // Its own action now, rather than the raw Secondary Button passthrough: B/Y carries
@@ -692,6 +706,20 @@ namespace Blockiverse.VR
         {
             if (cachedQuickMenuAction != null && cachedQuickMenuAction.WasPressedThisFrame())
                 quickMenuPressed?.Invoke();
+        }
+
+        // Gated on AllowWorldInput so a menu or modal that owns the ray cannot also be cycling
+        // the held item behind it — the same gate the place binding uses below.
+        void UpdateHotbar()
+        {
+            if (!BlockiverseRuntimeState.AllowWorldInput)
+                return;
+
+            if (cachedHotbarNextAction != null && cachedHotbarNextAction.WasPressedThisFrame())
+                hotbarNextPressed?.Invoke();
+
+            if (cachedHotbarPreviousAction != null && cachedHotbarPreviousAction.WasPressedThisFrame())
+                hotbarPreviousPressed?.Invoke();
         }
 
         void UpdateCreativeBindings()

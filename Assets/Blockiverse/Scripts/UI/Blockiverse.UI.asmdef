@@ -9,6 +9,7 @@
     "Blockiverse.Networking",
     "Blockiverse.WorldRuntime",
     "Blockiverse.Voxel",
+    "Blockiverse.WorldGen",
     "UnityEngine.UI",
     "Unity.TextMeshPro",
     "Unity.Netcode.Runtime",

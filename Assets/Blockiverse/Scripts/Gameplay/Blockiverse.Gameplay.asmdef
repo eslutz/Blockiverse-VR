@@ -14,7 +14,9 @@
     "Unity.Netcode.Runtime",
     "Unity.TextMeshPro",
     "Unity.XR.Interaction.Toolkit",
-    "UnityEngine.UI"
+    "UnityEngine.UI",
+    "Unity.Localization",
+    "Unity.ResourceManager"
   ],
   "includePlatforms": [],
   "excludePlatforms": [

@@ -17,6 +17,17 @@ namespace Blockiverse.UI
 
         // World-loading overlay: placed like Menu but never accepts input.
         Overlay = 2,
+
+        // Wrist-anchored transient panel: parented to the SUPPORT hand (the one that does not
+        // aim), so the dominant hand's ray can reach it. Shown only while the player turns that
+        // wrist toward their face — the "check your watch" gesture — and collapsed the rest of the
+        // time.
+        //
+        // Exists because the FPV report is explicit that inventory-and-crafting entry points
+        // "belong in routed screens", not in permanent chrome, and live validation confirmed the
+        // old always-on action bar read as visual weight nobody looked at. HudLocal* and the
+        // rotation fields below are interpreted relative to the hand anchor rather than the head.
+        Wrist = 3,
     }
 
     // Declares a UI Toolkit screen controller to the generation and hosting layers. The
@@ -55,7 +66,8 @@ namespace Blockiverse.UI
 
         public UiToolkitPlacementProfile PlacementProfile { get; }
 
-        // Hud-profile panels are parented under the rig's Camera Offset at this local pose
+        // Hud- and Wrist-profile panels are parented at this local pose relative to their ANCHOR
+        // (the head for Hud, the support hand for Wrist)
         // (metres / degrees) instead of being world-placed — the uGUI HUD behaves the same
         // way: rig-relative, never recentered. Ignored for other profiles. Defaults put a
         // panel 1.15 m forward at chest-to-eye height with a 12° downward tilt.
@@ -63,6 +75,12 @@ namespace Blockiverse.UI
         public float HudLocalY { get; set; } = 0f;   // eye level: HudLocal* are HEAD-relative
         public float HudLocalZ { get; set; } = 1.15f;
         public float HudPitchDegrees { get; set; } = 12f;
+
+        // Anchor-local yaw and roll. The HUD family needs neither (a panel that faces the player
+        // head-on wants pitch only), but a wrist panel does: it has to lie along the forearm and
+        // tilt toward the face rather than sit axis-aligned in front of the hand.
+        public float HudYawDegrees { get; set; }
+        public float HudRollDegrees { get; set; }
 
         // A panel whose every element is picking-mode Ignore gets NO collider at all: the
         // HUD-family strips share the routed gameplay screen, and an enabled trigger collider

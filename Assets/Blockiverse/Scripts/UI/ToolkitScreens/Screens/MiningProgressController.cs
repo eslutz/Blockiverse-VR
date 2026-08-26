@@ -126,6 +126,14 @@ namespace Blockiverse.UI
             if (miningBody != null)
                 miningBody.style.display = showingMiningProgress ? DisplayStyle.Flex : DisplayStyle.None;
 
+            // The plate must not paint while there is no mining to report. Collapsing only the body
+            // left an empty opaque card in the lower-centre view for the whole session — found by
+            // live inspection, and a real contributor to the FOV crowding.
+            //
+            // Paint, not display: SetVisible writes an inline style.display onto this same root and
+            // an inline style outranks every USS rule, so display here is not ours to set.
+            Root?.EnableInClassList("hs-screen--unpainted", !showingMiningProgress);
+
             if (!showingMiningProgress)
                 return;
 

@@ -1,0 +1,148 @@
+/*
+ * HotbarStrip — layout only. Colours, spacing steps and type sizes resolve from Tokens/Base.
+ *
+ * Sized in ANGULAR terms, which is the report's central sizing argument: a pixel count says
+ * nothing about legibility in a headset unless the physical size and viewing distance are known.
+ * The project convention makes that conversion trivial — 100 pixels-per-unit at 0.1 panel scale
+ * means 1 px is 1 mm — so at the Hud profile's 1.15 m:
+ *
+ *     84 px  = 84 mm  ≈ 4.2°   one slot
+ *     10 px  = 10 mm  ≈ 0.5°   the gap between two slots
+ *     940 px = 0.94 m ≈ 45°    the whole strip
+ *
+ * 84 px is the report's ~4° floor for a target that has to be told apart from its neighbours at a
+ * glance. The 10 px gap exists so two adjacent slots never read as one block of colour, which is
+ * what makes a strip of ten countable without looking directly at it.
+ *
+ * These are hypotheses derived from the literature, NOT measurements — nothing here has been seen
+ * in a headset. Expect them to move after the first device session; see ADR 0010's 2026-08-25
+ * amendment.
+ */
+
+/* The strip paints nothing itself. A backing plate spanning 0.94 m of the player's lower view for
+   the whole session is exactly the intrusion the report argues against — the slots carry their own
+   surfaces and the gaps stay world. */
+.hb-root {
+    background-color: rgba(0, 0, 0, 0);
+    border-top-width: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    justify-content: center;
+}
+
+/* justify-content on the ROOT is what actually centres the slot band.
+   .hb-strip is a row whose height collapses to its tallest child (84 px), so align-items on it has
+   no free space to distribute and was inert: the band sat flush against the top of the 110 px
+   panel, 13 mm above the centre the placement attribute claims, leaving 26 px of dead space below
+   and less clearance above the mining bar than the layout was designed for. */
+.hb-strip {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+}
+
+/* A slot is a recess by default. An empty inset square reads as part of a grid, which is what
+   keeps ten of them countable; filling one is what makes it read as occupied. */
+/* 64 px, down from 84. Ten slots plus margins set the panel width, so the slot size IS the width
+   decision: at 84 the strip spanned +/-24 deg of view and, with the action bar stacked under it,
+   read as one continuous block of chrome. 64 px + 4 px margins each side gives 10 x 72 = 720 px of
+   slots inside a 760 px panel (+/-19 deg), and 64 mm is still a comfortable glance target at
+   1.10 m. */
+.hb-slot {
+    width: 64px;
+    height: 64px;
+    margin-left: 4px;
+    margin-right: 4px;
+    background-color: var(--hs-chip);
+    border-top-width: 2px;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-bottom-width: 2px;
+    border-top-color: var(--hs-edge-control-dark);
+    border-left-color: var(--hs-edge-control-deep);
+    border-right-color: var(--hs-edge-control-mid);
+    border-bottom-color: var(--hs-edge-control-lit);
+}
+
+/* Occupied inverts the light: the square stops reading as a hole and starts reading as a face. */
+.hb-slot--occupied {
+    background-color: var(--hs-control);
+    border-top-color: var(--hs-edge-control-lit);
+    border-left-color: var(--hs-edge-control-mid);
+    border-right-color: var(--hs-edge-control-dark);
+    border-bottom-color: var(--hs-edge-control-deep);
+}
+
+/* Ember means "you can act here", which is exactly what the held slot means. It is the one place
+   on a persistent HUD surface where ember is allowed to sit permanently.
+
+   4 px rather than a fill change, because the selection has to survive being seen out of the
+   corner of the eye and at an angle — a tint does not, and the whole strip is peripheral. */
+.hb-slot--selected {
+    border-top-width: 4px;
+    border-left-width: 4px;
+    border-right-width: 4px;
+    border-bottom-width: 4px;
+    border-top-color: var(--hs-ember);
+    border-left-color: var(--hs-ember);
+    border-right-color: var(--hs-ember);
+    border-bottom-color: var(--hs-ember);
+}
+
+.hb-slot__icon {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    bottom: 8px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+/* Over its own dark plate. A count drawn straight onto a bright block icon is the "thin text over
+   a complex background" case the glanceable-typography work singles out, and block icons are the
+   busiest backgrounds this game has. */
+.hb-slot__count {
+    position: absolute;
+    right: 2px;
+    bottom: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+    font-size: var(--hs-type-caption);
+    color: var(--hs-ink);
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+    background-color: var(--hs-void);
+}
+
+/* Dim and top-left so it never competes with the count for attention. It answers "which slot is
+   this" only when the player goes looking. */
+.hb-slot__index {
+    position: absolute;
+    left: 4px;
+    top: 0;
+    font-size: var(--hs-type-caption);
+    color: var(--hs-dim);
+}
+
+.hb-slot--selected .hb-slot__index {
+    color: var(--hs-ember-lit);
+}
+
+/* Empty slots keep their index but drop the count entirely — a "0" on eight empty squares is
+   noise, and the recess already says the slot is empty. */
+.hb-slot__count--hidden {
+    display: none;
+}
+
+/* Collapsed in Creative, which has no survival inventory and keeps its own block-label cycler.
+   Keyed on the strip rather than on bv-screen-root: the base class writes an inline style.display
+   onto the root when the router shows the HUD, and a UI Toolkit inline style outranks every USS
+   rule, so a display rule on the root would silently never apply. */
+.hb-strip--hidden {
+    display: none;
+}

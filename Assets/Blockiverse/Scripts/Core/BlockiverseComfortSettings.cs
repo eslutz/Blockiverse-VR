@@ -30,6 +30,21 @@ namespace Blockiverse.Core
         // Comfort-first baseline: the motion tunneling vignette only renders during locomotion, so
         // shipping it on at a low strength reduces nausea without obscuring a static title/menu.
         [SerializeField] bool vignetteEnabled = true;
+
+        // A fixed dot at the centre of view. OFF by default, and it belongs here beside the
+        // vignette rather than with the HUD options because it is the same kind of thing: a
+        // sickness aid, not an aiming affordance. Seok et al. found a first-person visual guide
+        // correlated with reduced VR-sickness measures, and the mechanism is simply that a
+        // stationary reference gives the vestibular system something to hold while the world slides
+        // past. The same work warns a LARGER guide costs presence, which is why this is a dot.
+        //
+        // It is emphatically NOT a reticle: this game aims with the controller ray, so a centre dot
+        // marks nothing. See ADR 0010's 2026-08-25 amendment.
+        [SerializeField] bool viewAnchorEnabled;
+
+        // The diagnostic readout — position, biome, weather, frame time, session role. Off by
+        // default; toggled from the Settings screen.
+        [SerializeField] bool debugOverlayEnabled;
         // Normalized 0–1: 1 = strongest vignette (narrowest aperture), 0 = open. 0.3 keeps
         // the default comfort aid present without making the aperture feel heavy.
         [SerializeField] float vignetteStrength = 0.3f;
@@ -123,6 +138,18 @@ namespace Blockiverse.Core
         {
             get => vignetteEnabled;
             set => vignetteEnabled = value;
+        }
+
+        public bool ViewAnchorEnabled
+        {
+            get => viewAnchorEnabled;
+            set => viewAnchorEnabled = value;
+        }
+
+        public bool DebugOverlayEnabled
+        {
+            get => debugOverlayEnabled;
+            set => debugOverlayEnabled = value;
         }
 
         public BlockiverseControllerRole DominantHand

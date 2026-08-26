@@ -48,6 +48,14 @@ namespace Blockiverse.Tests.EditMode
             public void ToggleQuickBlockMenu() => QuickMenuToggleCount++;
 
             public void HideQuickBlockMenu() => QuickMenuHideCount++;
+            public int HotbarCycleDelta { get; private set; }
+            public int HotbarCycleCount { get; private set; }
+
+            public void CycleHotbarSlot(int delta)
+            {
+                HotbarCycleDelta = delta;
+                HotbarCycleCount++;
+            }
 
             public void ResetNewWorldScreen() => NewWorldResetCount++;
 
@@ -100,6 +108,42 @@ namespace Blockiverse.Tests.EditMode
 
             // The session controller's RefreshSaveList ran and its push was mirrored.
             Assert.That(frontend.SaveLists, Is.Not.Empty);
+        }
+
+        // The hotbar-cycle seam. RecordingFrontend has captured HotbarCycleDelta/HotbarCycleCount
+        // since the seam was added, but nothing read them — the whole path from the support hand's
+        // face buttons to the strip could have been deleted with this suite still green, in the
+        // file whose entire purpose is asserting that seam.
+        [Test]
+        public void HotbarCyclePassesTheDirectionThroughToTheFrontend()
+        {
+            (BlockiverseMenuController controller, RecordingFrontend frontend) = CreateRegistered();
+
+            Assert.That(frontend.HotbarCycleCount, Is.Zero, "positive control: nothing cycled yet");
+
+            InvokePrivate(controller, "OnHotbarNextPressed");
+            Assert.That(frontend.HotbarCycleCount, Is.EqualTo(1));
+            Assert.That(frontend.HotbarCycleDelta, Is.EqualTo(1),
+                "the support hand's forward button must cycle forward");
+
+            // Direction matters and is easy to invert: both handlers are one line apart and differ
+            // only in sign, so a copy-paste leaves the strip cycling one way for both buttons.
+            InvokePrivate(controller, "OnHotbarPreviousPressed");
+            Assert.That(frontend.HotbarCycleCount, Is.EqualTo(2));
+            Assert.That(frontend.HotbarCycleDelta, Is.EqualTo(-1),
+                "the back button cycled forward — the two handlers share a sign");
+        }
+
+        static void InvokePrivate(object target, string methodName)
+        {
+            System.Reflection.MethodInfo method = target.GetType().GetMethod(
+                methodName,
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Public);
+
+            Assert.That(method, Is.Not.Null, $"{target.GetType().Name} has no {methodName}()");
+            method.Invoke(target, null);
         }
 
         [Test]

@@ -28,16 +28,20 @@ namespace Blockiverse.Tests.EditMode
             MenuActions.StationMenuScreen, MenuActions.ConfirmModal, MenuActions.ErrorModal,
             MenuActions.InventoryScreen, MenuActions.CraftingScreen, MenuActions.CatalogScreen,
             MenuActions.StationCrateScreen,
+            // The pause menu's single "Screens" row opens this hub, which carries the guaranteed
+            // route into inventory, crafting, the shared crate and the block catalog now that the
+            // action bar lives on the support wrist.
+            MenuActions.GameplayScreensScreen,
         };
 
         // Positive control for the whole suite: with zero declarations every other test here
-        // passes by vacuum. The migration matrix declares 25 documents across 22 screen ids.
+        // passes by vacuum. The migration matrix declares 26 documents across 23 screen ids.
         [Test]
         public void TheFullScreenCatalogIsDeclared()
         {
             List<BlockiverseProjectBootstrapper.UiToolkitScreenDeclaration> declarations = Declarations;
 
-            Assert.That(declarations.Count, Is.GreaterThanOrEqualTo(22),
+            Assert.That(declarations.Count, Is.GreaterThanOrEqualTo(23),
                 "The screen catalog lost declarations — a controller class or its attribute went missing.");
 
             var declaredIds = new HashSet<string>(
@@ -128,9 +132,16 @@ namespace Blockiverse.Tests.EditMode
                 if (declaration.Attribute.ScreenId != MenuActions.GameplayHudScreen)
                     continue;
 
-                Assert.That(declaration.Attribute.PlacementProfile, Is.EqualTo(UiToolkitPlacementProfile.Hud),
-                    $"{declaration.ControllerType.Name} shares the gameplay_hud id but is not Hud-profile; " +
-                    "it would be world-placed while its siblings ride the rig.");
+                // Hud OR Wrist. Both are RIG-ANCHORED — the point of this assertion is that a
+                // gameplay-route panel must not be world-placed, drifting while its siblings ride
+                // the player. The action menu moved to the support wrist on 2026-08-25, which is
+                // still rig-anchored, just to the hand rather than the head.
+                Assert.That(
+                    declaration.Attribute.PlacementProfile,
+                    Is.EqualTo(UiToolkitPlacementProfile.Hud)
+                        .Or.EqualTo(UiToolkitPlacementProfile.Wrist),
+                    $"{declaration.ControllerType.Name} shares the gameplay_hud id but is neither " +
+                    "Hud- nor Wrist-profile; it would be world-placed while its siblings ride the rig.");
             }
         }
 

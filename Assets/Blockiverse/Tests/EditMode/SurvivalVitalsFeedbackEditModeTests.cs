@@ -109,7 +109,20 @@ namespace Blockiverse.Tests.EditMode
 
             Assert.That(playedCues, Is.EqualTo(new[] { BlockiverseAudioCue.ToolWrong }));
             Assert.That(toastPanel.IsVisible, Is.True);
-            Assert.That(toastLabel.text, Is.EqualTo("Inventory full."));
+
+            // Compared against the TABLE, not a literal. This subtitle was hard-coded English
+            // ("Inventory full.") until the bridge was localized on 2026-08-25; it now resolves the
+            // same entry the gameplay HUD's status toast uses, so the two cannot drift apart in
+            // wording — which also means the trailing period went, because the shared entry never
+            // had one. Asserting the literal again would re-pin a second wording for one concept.
+            // Resolved with a FORCED init and an EXPLICIT locale. The bare
+            // StringDatabase.GetLocalizedString(table, key) that stood here returns null outside
+            // Play mode, because the locale selection pass never runs there — the same hole this
+            // assertion exists to catch in the bridge, reproduced in the check itself.
+            string expected = LocalizedEntry("ui.status.survival.inventory_full");
+
+            Assert.That(expected, Is.Not.Null.And.Not.Empty, "table entry missing — positive control failed");
+            Assert.That(toastLabel.text, Is.EqualTo(expected));
         }
 
         [Test]
@@ -479,6 +492,30 @@ namespace Blockiverse.Tests.EditMode
         static AudioClip CreateClip(string name)
         {
             return AudioClip.Create(name, 16, 1, 44100, false);
+        }
+
+        // EditMode-safe table lookup: force initialization, then pass the locale explicitly. Both
+        // steps are required outside Play mode and neither happens on its own — see UiText, which
+        // documents the same two requirements for the same reason.
+        static string LocalizedEntry(string key)
+        {
+            UnityEngine.Localization.Settings.LocalizationSettings
+                .InitializationOperation.WaitForCompletion();
+
+            UnityEngine.Localization.Locale locale =
+                UnityEngine.Localization.Settings.LocalizationSettings.SelectedLocale
+                ?? UnityEngine.Localization.Settings.LocalizationSettings.ProjectLocale
+                ?? UnityEngine.Localization.Settings.LocalizationSettings
+                    .AvailableLocales?.GetLocale("en");
+
+            Assert.That(locale, Is.Not.Null, "no locale available — cannot resolve the UI table");
+
+            UnityEngine.Localization.Tables.StringTable table =
+                UnityEngine.Localization.Settings.LocalizationSettings.StringDatabase
+                    .GetTableAsync("UI", locale)
+                    .WaitForCompletion();
+
+            return table?.GetEntry(key)?.GetLocalizedString();
         }
 
         static void SetPrivateField(object target, string fieldName, object value)

@@ -24,8 +24,15 @@ namespace Blockiverse.Tests.EditMode
     {
         const string DocumentPath = "Assets/Blockiverse/UI/Documents/ComfortSettingsScreen.uxml";
 
-        // 14 toggles + 6 sliders + close + height reset.
-        const int ExpectedElementCallbackCount = 22;
+        // 16 toggles + 6 sliders + close + height reset.
+        //
+        // Two arrived on 2026-08-25 and for opposite reasons. The view anchor's SETTING existed and
+        // persisted but had no control anywhere, so the comfort dot could never be switched on. The
+        // place-modifier toggle was the reverse: the control existed, rendered and was clickable,
+        // but was never registered for change callbacks — so flipping it and closing lost the value
+        // silently. It counted 15 registered callbacks against 16 controls, which is why this
+        // number moved by two rather than one.
+        const int ExpectedElementCallbackCount = 24;
 
         readonly List<GameObject> objectsToDestroy = new();
 

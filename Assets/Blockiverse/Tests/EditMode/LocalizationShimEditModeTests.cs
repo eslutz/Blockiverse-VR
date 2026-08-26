@@ -130,19 +130,21 @@ namespace Blockiverse.Tests.EditMode
         public void GameplayHudRendersItsRatioThroughTheKey()
         {
             // The readout moved to GameplayStatsController when the HUD split into a top-right
-            // stats panel and a low action bar; the key contract it asserts is unchanged.
+            // stats panel and a low action bar, and became four metered rows rather than a
+            // health bar plus a sentence. The key contract it asserts is unchanged: every
+            // vital's number still renders through ui.value.vitals_ratio.
             GameplayStatsController controller = CreateScreen<GameplayStatsController>();
             VisualElement root = AttachFreshTree(controller);
 
             controller.Bind(new PlayerVitals(currentHealth: 75));
 
             Assert.That(
-                root.Q<Label>("bv-health-ratio").text,
+                root.Q<Label>("bv-vital-health-value").text,
                 Is.EqualTo(UiText.Format(BlockiverseLocalization.Keys.HealthVitalsRatio, 75, 100)),
                 "the HUD is not rendering its ratio through ui.value.vitals_ratio");
             Assert.That(
                 ReadScreenSource("GameplayStatsController.cs"),
-                Does.Contain("UiText.Format(Keys.HealthVitalsRatio"),
+                Does.Contain("UiText.Format(Keys.Ratio"),
                 "the ratio must come from the table entry, not from an interpolated string");
         }
 

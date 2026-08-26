@@ -54,6 +54,10 @@ namespace Blockiverse.Tests.EditMode
             {
             }
 
+            public void CycleHotbarSlot(int delta)
+            {
+            }
+
             public void ResetNewWorldScreen()
             {
             }
@@ -295,12 +299,16 @@ namespace Blockiverse.Tests.EditMode
             VisualElement root = AttachFreshTree(controller);
             controller.ConfigureHost(host);
 
-            controller.SetActionMenu("Settings", MenuActions.Settings);
+            // Settings became a factory when the debug-overlay row started reporting its own state
+            // in its label; the list is captured once here so the assertions compare against the
+            // same instance the screen was given.
+            IReadOnlyList<MenuAction> actions = MenuActions.Settings(debugOverlayEnabled: false);
+            controller.SetActionMenu("Settings", actions);
 
             List<Button> buttons = root.Query<Button>().ToList();
-            Assert.That(buttons, Has.Count.EqualTo(MenuActions.Settings.Count));
-            for (int i = 0; i < MenuActions.Settings.Count; i++)
-                Assert.That(buttons[i].text, Is.EqualTo(MenuActions.Settings[i].Label));
+            Assert.That(buttons, Has.Count.EqualTo(actions.Count));
+            for (int i = 0; i < actions.Count; i++)
+                Assert.That(buttons[i].text, Is.EqualTo(actions[i].Label));
 
             controller.PressAction(MenuActions.SettingsOpenComfort);
 
@@ -363,7 +371,15 @@ namespace Blockiverse.Tests.EditMode
             VisualElement root = AttachFreshTree(controller);
 
             Assert.That(root.Q<Label>("bv-title").text, Is.EqualTo("Paused"));
-            Assert.That(root.Query<Button>().ToList(), Has.Count.EqualTo(7));
+
+            // 8, not 7: ONE "Screens" row was added on 2026-08-25, opening the hub that carries
+            // the guaranteed route into inventory, crafting, the shared crate and the block
+            // catalog. The wrist menu is the primary route but needs a tracked support
+            // controller; pause is on a dedicated button that always answers.
+            //
+            // One row rather than one per destination — that is the point of the hub, and this
+            // number is what keeps the pause menu from growing every time a screen is added.
+            Assert.That(root.Query<Button>().ToList(), Has.Count.EqualTo(8));
         }
 
         [Test]

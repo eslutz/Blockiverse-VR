@@ -3014,6 +3014,12 @@ MonoBehaviour:
   quickMenuPressed:
     m_PersistentCalls:
       m_Calls: []
+  hotbarNextPressed:
+    m_PersistentCalls:
+      m_Calls: []
+  hotbarPreviousPressed:
+    m_PersistentCalls:
+      m_Calls: []
   breakPressed:
     m_PersistentCalls:
       m_Calls: []
@@ -4344,6 +4350,8 @@ MonoBehaviour:
   snapTurnAroundEnabled: 1
   uiScale: 1
   vignetteEnabled: 1
+  viewAnchorEnabled: 0
+  debugOverlayEnabled: 0
   vignetteStrength: 0.3
   dominantHand: 1
   toggleToMineEnabled: 0

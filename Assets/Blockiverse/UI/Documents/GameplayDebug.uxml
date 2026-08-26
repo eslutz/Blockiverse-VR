@@ -1,0 +1,48 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Diagnostic readout (screen id gameplay_hud, Hud placement profile). OFF by default, toggled
+        from the Settings screen.
+
+        Twelve fixed lines, each written whole from C#. No per-line labels in markup and no
+        localization bindings, because the field prefixes ("xyz", "chunk", "fps") are diagnostic
+        identifiers rather than prose — the same reason Minecraft's F3 screen is not translated.
+        The VALUES that are player-facing vocabulary do go through the table: biome and weather
+        names resolve through UiDisplayNames like everywhere else.
+
+        ── Why a fixed line count ───────────────────────────────────────────────
+
+        No ListView, no dynamic children. Twelve labels created once and rewritten in place, each
+        gated on its own last-value, so a readout that updates four times a second costs twelve
+        string comparisons and usually zero assignments. A debug overlay that reports frame time
+        must not be the reason frame time moved.
+
+        Read-only: every element is picking-mode Ignore, so the panel generates no collider and
+        cannot intercept the XRI ray.
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen dbg-root" picking-mode="Ignore">
+      <!--
+        bv-debug-body exists so the controller has a CHILD to collapse.
+
+        Collapsing bv-screen-root itself cannot work: UiToolkitScreenController.SetVisible writes an
+        INLINE style.display onto that exact element when the router shows the HUD, and in UI
+        Toolkit an inline style outranks every stylesheet rule — USS has no !important. A
+        `display: none` class on the root is therefore silently overridden, and the off-by-default
+        overlay would render for every player. Every working HUD screen here collapses a child for
+        the same reason.
+      -->
+      <engine:VisualElement name="bv-debug-body" class="dbg-body" picking-mode="Ignore">
+        <engine:Label name="bv-debug-position" class="dbg-line hs-figures" picking-mode="Ignore" />
+        <engine:Label name="bv-debug-chunk" class="dbg-line hs-figures" picking-mode="Ignore" />
+        <engine:Label name="bv-debug-facing" class="dbg-line hs-figures" picking-mode="Ignore" />
+        <engine:Label name="bv-debug-biome" class="dbg-line" picking-mode="Ignore" />
+        <engine:Label name="bv-debug-target" class="dbg-line" picking-mode="Ignore" />
+        <engine:Label name="bv-debug-time" class="dbg-line hs-figures" picking-mode="Ignore" />
+        <engine:Label name="bv-debug-weather" class="dbg-line" picking-mode="Ignore" />
+        <engine:Label name="bv-debug-climate" class="dbg-line hs-figures" picking-mode="Ignore" />
+        <engine:Label name="bv-debug-place" class="dbg-line" picking-mode="Ignore" />
+        <engine:Label name="bv-debug-session" class="dbg-line" picking-mode="Ignore" />
+        <engine:Label name="bv-debug-perf" class="dbg-line hs-figures" picking-mode="Ignore" />
+        <engine:Label name="bv-debug-world" class="dbg-line hs-figures" picking-mode="Ignore" />
+      </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

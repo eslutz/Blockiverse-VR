@@ -81,8 +81,16 @@ namespace Blockiverse.UI
             // entirely: a mispositioned HUD is recoverable, an absent one is not.
             Transform head = cameraOffset.Find("Main Camera") ?? cameraOffset;
 
+            // The support hand is the one that does NOT aim, so the dominant hand's ray can reach
+            // a panel mounted on it. Handedness is a comfort setting, so this is resolved from the
+            // rig rather than hardcoded to the left.
+            Transform supportHand = ResolveSupportHand(cameraOffset);
+
             foreach (var (_, controller) in screens)
+            {
                 AttachHudPanel(controller, head);
+                AttachWristPanel(controller, supportHand);
+            }
 
             // The quick block menu is excluded from the routed screens list but is still a
             // HUD-family panel and must ride the head at its declared local pose.
@@ -108,6 +116,69 @@ namespace Blockiverse.UI
             panel.localPosition = new Vector3(attribute.HudLocalX, attribute.HudLocalY, attribute.HudLocalZ);
             panel.localRotation = Quaternion.Euler(attribute.HudPitchDegrees, 0f, 0f);
         }
+
+        // Falls back to the head anchor when the support hand is absent. A wrist panel parked at
+        // the head is wrong, but it is REACHABLE — and this panel is the only route into inventory
+        // and crafting, so an unreachable one strands the player with no way to manage items.
+        Transform ResolveSupportHand(Transform cameraOffset)
+        {
+            var settings = BlockiverseSceneLookup.Find<BlockiverseComfortSettings>(
+                FindObjectsInactive.Include);
+
+            BlockiverseControllerRole dominant =
+                settings != null ? settings.DominantHand : BlockiverseControllerRole.Right;
+
+            // The support hand is the opposite of the dominant one: a left-handed player aims with
+            // the left, so their wrist panel goes on the right.
+            string supportName = dominant == BlockiverseControllerRole.Left
+                ? "Right Controller"
+                : "Left Controller";
+            return cameraOffset.Find(supportName) ?? cameraOffset.Find("Main Camera") ?? cameraOffset;
+        }
+
+        void AttachWristPanel(UiToolkitScreenController controller, Transform supportHand)
+        {
+            if (supportHand == null ||
+                !screenAttributes.TryGetValue(controller, out UiToolkitScreenAttribute attribute) ||
+                attribute.PlacementProfile != UiToolkitPlacementProfile.Wrist)
+            {
+                return;
+            }
+
+            Transform panel = controller.transform;
+            panel.SetParent(supportHand, worldPositionStays: false);
+            panel.localPosition = new Vector3(
+                attribute.HudLocalX, attribute.HudLocalY, attribute.HudLocalZ);
+            panel.localRotation = Quaternion.Euler(
+                attribute.HudPitchDegrees, attribute.HudYawDegrees, attribute.HudRollDegrees);
+        }
+
+        // Re-parents wrist panels after the DOMINANT HAND setting changes.
+        //
+        // AttachHudPanels latches on hudPanelsAttached and runs once from Start, which is correct
+        // for head-anchored panels — the head does not change. The support hand does: handedness is
+        // a live comfort setting, and switching it moves the aiming ray to the other controller.
+        // Without this the action menu stays strapped to the hand that now holds the ray, where the
+        // player cannot point at it — and it is the primary route into inventory.
+        public void ReattachWristPanels()
+        {
+            if (!BlockiversePlayerRigAnchor.TryGetRigTransform(out Transform rigTransform))
+                return;
+
+            Transform cameraOffset = rigTransform.Find("Camera Offset");
+
+            if (cameraOffset == null)
+                return;
+
+            Transform supportHand = ResolveSupportHand(cameraOffset);
+
+            foreach (var (_, controller) in screens)
+                AttachWristPanel(controller, supportHand);
+        }
+
+        public bool IsWristProfile(UiToolkitScreenController controller) =>
+            screenAttributes.TryGetValue(controller, out UiToolkitScreenAttribute attribute) &&
+            attribute.PlacementProfile == UiToolkitPlacementProfile.Wrist;
 
         bool IsHudProfile(UiToolkitScreenController controller) =>
             screenAttributes.TryGetValue(controller, out UiToolkitScreenAttribute attribute) &&
@@ -278,8 +349,11 @@ namespace Blockiverse.UI
 
         void ApplyPlacementFor(string screenId, UiToolkitScreenController controller, UiToolkitScreenController anchor)
         {
-            // Rig-attached panels are posed once by AttachHudPanels and never recentered.
-            if (IsHudProfile(controller))
+            // Rig-attached panels are posed once by AttachHudPanels and never recentered. Wrist
+            // panels are parented to the hand for the same reason and must be excluded too, or the
+            // world-placement controller would fight the parenting every frame and drag the panel
+            // off the wrist.
+            if (IsHudProfile(controller) || IsWristProfile(controller))
                 return;
 
             WorldSpaceUiPlacementController placement = controller.GetComponent<WorldSpaceUiPlacementController>();
@@ -415,6 +489,23 @@ namespace Blockiverse.UI
         }
 
         public void HideQuickBlockMenu() => quickBlockMenu?.SetQuickMenuVisible(false);
+
+        // Cycles the held hotbar slot from the support hand's face buttons. Resolved through
+        // FindScreen rather than a cached field for the same reason every other screen verb is:
+        // the strip is one of the panels this host instantiates, and a stale reference after a
+        // regeneration would silently stop the buttons working with nothing to show for it.
+        public void CycleHotbarSlot(int delta)
+        {
+            HotbarStripController strip = FindScreen<HotbarStripController>();
+
+            if (strip == null)
+                return;
+
+            if (delta >= 0)
+                strip.SelectNext();
+            else
+                strip.SelectPrevious();
+        }
 
         public void ResetNewWorldScreen() => FindScreen<IUiToolkitNewWorldScreen>()?.ResetForNewWorld();
 

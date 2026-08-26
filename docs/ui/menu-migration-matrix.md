@@ -28,6 +28,36 @@ Some world-space uGUI deliberately survives and is not an oversight: the boot sp
 carries the scene `CreativeHotbar` that decides which block gets placed. `Blockiverse.UI.asmdef`
 therefore still references `UnityEngine.UI` and `Unity.TextMeshPro`.
 
+### The HUD is migrated, not redesigned (2026-08-25)
+
+Rows 21-24 are cut over and the panels are real, but they are **ports**. The controllers say so
+themselves — `StatusToastController` keeps "`SurvivalHudController`'s `SetStatusText` semantics",
+`GameplayStatsController` is "uGUI: `SurvivalHealthPanel` bound by `SurvivalHudController`". The one
+design change since is the two-panel split, made after Eric reported the centred panel blocked his
+view.
+
+That is worth stating because "the HUD is done" and "the HUD follows the FPV research report" are
+different claims, and only the first is true. The report Eric supplied on 2026-08-24 asks for a
+persistent hotbar strip, vitals as meters rather than a sentence, prioritised transient messages,
+and a small view-referenced comfort cue. None of those shipped in #344. The gap is enumerated in
+[ADR 0010's 2026-08-25 amendment](../adr/0010-ui-toolkit-runtime-ui.md#amendment-2026-08-25-the-hud-against-the-fpv-research-report),
+along with three findings that hold regardless — chief among them that this game aims with the
+**controller**, so a centre-of-view reticle would be actively misleading and must not be added.
+
+### A per-screen stylesheet is reachable only by document name
+
+The bootstrapper loads `Styles/Screens/<documentName>.uss`, and the per-screen sheet is optional by
+design. So splitting a document without moving its rules leaves every one of the new document's
+classes inert, rendering an unstyled panel that reports itself healthy. `e19de17e` did exactly that:
+`GameplayStats.uxml` uses `gh-*`, which live in `GameplayHud.uss`, and `GameplayStats.uss` does not
+exist — its health bar has no height and no fill colour.
+
+`HudFamilyEditModeTests` did not catch it because it asserts `fill.style.width`, the *inline* value
+the controller writes, and inline styles resolve with or without a sheet.
+`ScreenStyleSheetReachabilityEditModeTests` now fails on any class a document uses that is defined
+in another screen's sheet. **When splitting a document, move its USS rules into a sheet named for
+the new document.**
+
 Line references are against `main` at `4251dcca` and will drift; treat them as "look here", not as
 addresses.
 
@@ -49,7 +79,8 @@ dependency. Both are retained verbatim (ADR 0010 §4).
 | `WorldDetailsScreen` | `world_details` | `WorldDetailsScreen.uxml` |
 | `WorldLoadingScreen` | `world_loading` | `WorldLoadingScreen.uxml` |
 | `ControllerMappingScreen` | `controller_mapping` | `ControllerMappingScreen.uxml` |
-| `GameplayHudScreen` | `gameplay_hud` | `GameplayHud.uxml` (HUD host) |
+| `GameplayHudScreen` | `gameplay_hud` | `GameplayHud.uxml` (wrist menu) + the HUD family |
+| `GameplayScreensScreen` | `gameplay_screens` | `GameplayScreensScreen.uxml` (pause fallback hub) |
 | `PauseScreen` | `pause_menu` | `PauseScreen.uxml` |
 | `SettingsScreen` | `settings` | `SettingsHubScreen.uxml` |
 | `ComfortSettingsScreen` | `settings_comfort` | `ComfortSettingsScreen.uxml` |

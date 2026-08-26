@@ -50,6 +50,7 @@ namespace Blockiverse.UI
         const string PlaceModifierToggleKey = "ui.generated.comfort.place_modifier_toggle";
         const string ViewComfortKey = "ui.generated.comfort.view_comfort";
         const string MotionVignetteKey = "ui.generated.comfort.motion_vignette";
+        const string ViewAnchorKey = "ui.generated.comfort.view_anchor";
         const string VignetteStrengthKey = "ui.generated.comfort.vignette_strength";
         const string PlayerViewKey = "ui.generated.comfort.player_view";
         const string ResetHeightKey = "ui.generated.comfort.reset_height";
@@ -79,6 +80,7 @@ namespace Blockiverse.UI
         Toggle crouchToggleToggle;
         Toggle placeModifierToggleToggle;
         Toggle vignetteToggle;
+        Toggle viewAnchorToggle;
         Toggle realPlayerHeightToggle;
         Toggle swimPassiveSinkToggle;
         Toggle swimVignetteToggle;
@@ -148,6 +150,7 @@ namespace Blockiverse.UI
             placeModifierToggleToggle = Require<Toggle>(root, "bv-comfort-place-modifier-toggle", ref allFound);
             crouchToggleToggle = Require<Toggle>(root, "bv-comfort-crouch-toggle", ref allFound);
             vignetteToggle = Require<Toggle>(root, "bv-comfort-vignette", ref allFound);
+            viewAnchorToggle = Require<Toggle>(root, "bv-comfort-view-anchor", ref allFound);
             realPlayerHeightToggle = Require<Toggle>(root, "bv-comfort-real-height", ref allFound);
             swimPassiveSinkToggle = Require<Toggle>(root, "bv-comfort-swim-sink", ref allFound);
             swimVignetteToggle = Require<Toggle>(root, "bv-comfort-swim-vignette", ref allFound);
@@ -198,7 +201,18 @@ namespace Blockiverse.UI
             RegisterToggle(toggleToMineToggle, onToggleChanged);
             RegisterToggle(sprintToggleToggle, onToggleChanged);
             RegisterToggle(crouchToggleToggle, onToggleChanged);
+
+            // Registered 2026-08-25. This toggle shipped resolved, labelled and clickable but
+            // wired to nothing: its value is only written by ApplyOtherControlsWithFeedback, which
+            // fires when some OTHER control changes, and the Close button does not push settings.
+            // A player who opened Comfort, flipped only this, and closed lost the setting silently.
+            // Registered 2026-08-25. This toggle shipped resolved, labelled and clickable but
+            // wired to nothing: its value is only written by ApplyOtherControlsWithFeedback, which
+            // fires when some OTHER control changes, and the Close button does not push settings.
+            // A player who opened Comfort, flipped only this, and closed lost the setting silently.
+            RegisterToggle(placeModifierToggleToggle, onToggleChanged);
             RegisterToggle(vignetteToggle, onToggleChanged);
+            RegisterToggle(viewAnchorToggle, onToggleChanged);
             RegisterToggle(realPlayerHeightToggle, onToggleChanged);
             RegisterToggle(swimPassiveSinkToggle, onToggleChanged);
             RegisterToggle(swimVignetteToggle, onToggleChanged);
@@ -232,7 +246,9 @@ namespace Blockiverse.UI
             UnregisterToggle(toggleToMineToggle, onToggleChanged);
             UnregisterToggle(sprintToggleToggle, onToggleChanged);
             UnregisterToggle(crouchToggleToggle, onToggleChanged);
+            UnregisterToggle(placeModifierToggleToggle, onToggleChanged);
             UnregisterToggle(vignetteToggle, onToggleChanged);
+            UnregisterToggle(viewAnchorToggle, onToggleChanged);
             UnregisterToggle(realPlayerHeightToggle, onToggleChanged);
             UnregisterToggle(swimPassiveSinkToggle, onToggleChanged);
             UnregisterToggle(swimVignetteToggle, onToggleChanged);
@@ -272,6 +288,7 @@ namespace Blockiverse.UI
             sprintToggleToggle = null;
             crouchToggleToggle = null;
             vignetteToggle = null;
+            viewAnchorToggle = null;
             realPlayerHeightToggle = null;
             swimPassiveSinkToggle = null;
             swimVignetteToggle = null;
@@ -376,9 +393,24 @@ namespace Blockiverse.UI
                 settings.ContinuousTurnSpeed = smoothTurnSpeedSlider.value;
 
             if (leftHandToggle != null)
+            {
+                BlockiverseControllerRole previousHand = settings.DominantHand;
+
                 settings.DominantHand = leftHandToggle.value
                     ? BlockiverseControllerRole.Left
                     : BlockiverseControllerRole.Right;
+
+                // The wrist menu is parented to the SUPPORT hand, which is the opposite of this
+                // one. Swapping handedness moves the aiming ray to the other controller, so a menu
+                // left on the old hand becomes unpointable — and it is the primary route into
+                // inventory. Nothing else re-parents it: the host attaches rig panels once at Start.
+                if (settings.DominantHand != previousHand)
+                {
+                    BlockiverseSceneLookup
+                        .Find<UiToolkitMenuHost>(FindObjectsInactive.Include)
+                        ?.ReattachWristPanels();
+                }
+            }
 
             if (toggleToMineToggle != null)
                 settings.ToggleToMineEnabled = toggleToMineToggle.value;
@@ -411,6 +443,9 @@ namespace Blockiverse.UI
 
             if (vignetteToggle != null)
                 settings.VignetteEnabled = vignetteToggle.value;
+
+            if (viewAnchorToggle != null)
+                settings.ViewAnchorEnabled = viewAnchorToggle.value;
 
             if (glideBobToggle != null)
                 settings.GlideStyle = glideBobToggle.value ? GlideStyle.Bobbing : GlideStyle.Smooth;
@@ -446,6 +481,7 @@ namespace Blockiverse.UI
                 swimVignetteToggle?.SetValueWithoutNotify(settings.SwimVignetteBoost);
                 swimClimbOutToggle?.SetValueWithoutNotify(settings.SwimClimbOutEnabled);
                 vignetteToggle?.SetValueWithoutNotify(settings.VignetteEnabled);
+                viewAnchorToggle?.SetValueWithoutNotify(settings.ViewAnchorEnabled);
                 glideBobToggle?.SetValueWithoutNotify(settings.GlideStyle == GlideStyle.Bobbing);
 
                 moveSpeedSlider?.SetValueWithoutNotify(settings.ContinuousMoveSpeed);
@@ -479,6 +515,7 @@ namespace Blockiverse.UI
             SetFieldLabel(placeModifierToggleToggle, PlaceModifierToggleKey);
             SetFieldLabel(crouchToggleToggle, CrouchToggleKey);
             SetFieldLabel(vignetteToggle, MotionVignetteKey);
+            SetFieldLabel(viewAnchorToggle, ViewAnchorKey);
             SetFieldLabel(realPlayerHeightToggle, RealPlayerHeightKey);
             SetFieldLabel(swimPassiveSinkToggle, SwimSinkKey);
             SetFieldLabel(swimVignetteToggle, SwimVignetteKey);

@@ -1269,6 +1269,50 @@ MonoBehaviour:
     m_Localized: Wetland
     m_Metadata:
       m_Items: []
+  - m_Id: 861465144713216
+    m_Localized: Health
+    m_Metadata:
+      m_Items: []
+  - m_Id: 861465169879040
+    m_Localized: Hunger
+    m_Metadata:
+      m_Items: []
+  - m_Id: 861465169879041
+    m_Localized: '!!'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 861465169879042
+    m_Localized: '!'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 861465169879043
+    m_Localized: Stamina
+    m_Metadata:
+      m_Items: []
+  - m_Id: 861465169879044
+    m_Localized: Thirst
+    m_Metadata:
+      m_Items: []
+  - m_Id: 869917040566272
+    m_Localized: 'Debug Overlay: Off'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 869917044760576
+    m_Localized: 'Debug Overlay: On'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 873087372353536
+    m_Localized: Player joined.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 873087376547840
+    m_Localized: Player left.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 937072348094464
+    m_Localized: View Anchor
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

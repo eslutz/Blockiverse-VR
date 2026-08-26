@@ -1,23 +1,84 @@
 <engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
     <!--
-        Gameplay stats readout (screen id gameplay_hud, Hud placement profile).
+        Gameplay vitals readout (screen id gameplay_hud, Hud placement profile).
 
-        Split out of GameplayHud.uxml. Both halves used to share one panel parked dead centre
-        1.15 m in front of the player, which put the health bar and four buttons squarely over
-        the world — Eric's report was that it made things hard to see. A HUD belongs at the edge
-        of vision, so the readout now sits top-right and the action bar sits low; they cannot be
-        in two places while they share a document.
+        Split out of GameplayHud.uxml so the readout and the action bar can sit at opposite edges of
+        vision; they shared one panel parked dead centre, which Eric reported as making things hard
+        to see.
+
+        ── Meters, not a sentence (FPV HUD report) ──────────────────────────────
+
+        This was a health bar plus one caption reading "Stable — 80/60/40". The report asks for
+        vitals a player can read WITHOUT reading: four meters, each carrying its state in more than
+        one channel. Each row is marker + word + number + filled bar, so the level survives being
+        seen peripherally, and survives a player who cannot separate ochre from oxide — which the
+        visual-language ADR notes is hard even for one who can, since both signals are warm.
+
+        The marker is ASCII ("!", "!!") rather than a pictogram. It is the redundant channel that
+        exists so a warning is never colour-only, and it must render in every locale's font.
+
+        In Creative there are no hunger/thirst/stamina vitals at all, and those three rows are
+        HIDDEN rather than drawn empty — an unbound meter reads as "you are starving" rather than
+        "this does not apply here".
+
+        ── This document's styles live in GameplayStats.uss ─────────────────────
+
+        They have to. The bootstrapper resolves a screen's sheet by DOCUMENT NAME, so rules left in
+        GameplayHud.uss after the split were never loaded here and every gh-* class was inert —
+        the health bar had no height and no fill colour. ScreenStyleSheetReachabilityEditModeTests
+        now fails on exactly that mistake.
 
         Read-only: every element is picking-mode Ignore, so this panel generates no collider and
-        cannot intercept the XRI ray (see UiToolkitScreenAttribute.NonInteractive).
+        cannot intercept the XRI ray (UiToolkitScreenAttribute.NonInteractive).
     -->
-    <engine:VisualElement name="bv-screen-root" class="hs-screen">
-        <engine:VisualElement name="bv-health-row" class="gh-health-row" picking-mode="Ignore">
-            <engine:Label name="bv-health-ratio" class="hs-body hs-figures gh-health-ratio" picking-mode="Ignore" />
-            <engine:VisualElement name="bv-health-bar" class="hs-well gh-health-bar" picking-mode="Ignore">
-                <engine:VisualElement name="bv-health-fill" class="gh-health-fill" picking-mode="Ignore" />
+    <engine:VisualElement name="bv-screen-root" class="hs-screen gs-root">
+        <engine:VisualElement name="bv-vital-health" class="gs-vital" picking-mode="Ignore">
+            <engine:Label name="bv-vital-health-marker" class="gs-vital__marker" picking-mode="Ignore" />
+            <engine:Label name="bv-vital-health-label" class="gs-vital__label" picking-mode="Ignore" text="Health">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.screen.vitals.health" />
+                </Bindings>
+            </engine:Label>
+            <engine:Label name="bv-vital-health-value" class="gs-vital__value hs-figures" picking-mode="Ignore" />
+            <engine:VisualElement name="bv-vital-health-meter" class="hs-well gs-vital__meter" picking-mode="Ignore">
+                <engine:VisualElement name="bv-vital-health-fill" class="gs-vital__fill" picking-mode="Ignore" />
             </engine:VisualElement>
         </engine:VisualElement>
-        <engine:Label name="bv-vitals-state" class="hs-caption gh-vitals-state" picking-mode="Ignore" />
+        <engine:VisualElement name="bv-vital-hunger" class="gs-vital" picking-mode="Ignore">
+            <engine:Label name="bv-vital-hunger-marker" class="gs-vital__marker" picking-mode="Ignore" />
+            <engine:Label name="bv-vital-hunger-label" class="gs-vital__label" picking-mode="Ignore" text="Hunger">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.screen.vitals.hunger" />
+                </Bindings>
+            </engine:Label>
+            <engine:Label name="bv-vital-hunger-value" class="gs-vital__value hs-figures" picking-mode="Ignore" />
+            <engine:VisualElement name="bv-vital-hunger-meter" class="hs-well gs-vital__meter" picking-mode="Ignore">
+                <engine:VisualElement name="bv-vital-hunger-fill" class="gs-vital__fill" picking-mode="Ignore" />
+            </engine:VisualElement>
+        </engine:VisualElement>
+        <engine:VisualElement name="bv-vital-thirst" class="gs-vital" picking-mode="Ignore">
+            <engine:Label name="bv-vital-thirst-marker" class="gs-vital__marker" picking-mode="Ignore" />
+            <engine:Label name="bv-vital-thirst-label" class="gs-vital__label" picking-mode="Ignore" text="Thirst">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.screen.vitals.thirst" />
+                </Bindings>
+            </engine:Label>
+            <engine:Label name="bv-vital-thirst-value" class="gs-vital__value hs-figures" picking-mode="Ignore" />
+            <engine:VisualElement name="bv-vital-thirst-meter" class="hs-well gs-vital__meter" picking-mode="Ignore">
+                <engine:VisualElement name="bv-vital-thirst-fill" class="gs-vital__fill" picking-mode="Ignore" />
+            </engine:VisualElement>
+        </engine:VisualElement>
+        <engine:VisualElement name="bv-vital-stamina" class="gs-vital" picking-mode="Ignore">
+            <engine:Label name="bv-vital-stamina-marker" class="gs-vital__marker" picking-mode="Ignore" />
+            <engine:Label name="bv-vital-stamina-label" class="gs-vital__label" picking-mode="Ignore" text="Stamina">
+                <Bindings>
+                    <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.screen.vitals.stamina" />
+                </Bindings>
+            </engine:Label>
+            <engine:Label name="bv-vital-stamina-value" class="gs-vital__value hs-figures" picking-mode="Ignore" />
+            <engine:VisualElement name="bv-vital-stamina-meter" class="hs-well gs-vital__meter" picking-mode="Ignore">
+                <engine:VisualElement name="bv-vital-stamina-fill" class="gs-vital__fill" picking-mode="Ignore" />
+            </engine:VisualElement>
+        </engine:VisualElement>
     </engine:VisualElement>
 </engine:UXML>
