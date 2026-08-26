@@ -620,7 +620,7 @@ namespace Blockiverse.UI
         {
             using ProfilerMarker.AutoScope scope = EnterGeneratedWorldMarker.Auto();
 
-            currentTextureSet = BlockTextureSetIds.Normalize(textureSet);
+            currentTextureSet = BlockiverseTextureSelection.NormalizeToken(textureSet);
             worldManager.SetTextureSet(currentTextureSet);
             worldManager.InitializeGeneratedWorld(
                 generated,
@@ -974,7 +974,7 @@ namespace Blockiverse.UI
             using ProfilerMarker.AutoScope scope = ApplyLoadedWorldMarker.Auto();
 
             WorldSaveData data = result.Data;
-            currentTextureSet = BlockTextureSetIds.Normalize(data.TextureSet);
+            currentTextureSet = BlockiverseTextureSelection.NormalizeToken(data.TextureSet);
             worldManager.SetTextureSet(currentTextureSet);
             worldManager.InitializeGeneratedWorld(
                 generated,
@@ -1022,7 +1022,7 @@ namespace Blockiverse.UI
             currentDifficulty = data.Difficulty ?? string.Empty;
             vitalsRuntime?.ConfigureDifficulty(currentDifficulty);
             currentWorldPreset = data.WorldPreset;
-            currentTextureSet = BlockTextureSetIds.Normalize(data.TextureSet);
+            currentTextureSet = BlockiverseTextureSelection.NormalizeToken(data.TextureSet);
             lastSaveTime = Time.unscaledTime;
             menuController?.EnterGameplay();
             return true;

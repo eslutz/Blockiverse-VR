@@ -166,6 +166,7 @@ type SaveManifest = {
   worldSeed: string;
   worldPreset: "survival_terrain" | "flat_builder";
   environmentPreset: "normal" | "clear_builder" | "storm_test" | "winter_test";
+  textureSet: string;               // texture TOKEN -- see 5.1. Local only, never on the wire.
 
   spawn: Vec3i;
   spawnBiomePreference: string;
@@ -221,6 +222,31 @@ Example:
 ```
 
 ---
+
+### 5.1 Texture token vocabulary
+
+`textureSet` holds a **token**, not just a built-in id:
+
+| Form | Example | Meaning |
+|---|---|---|
+| built-in set id | `enhanced` | One of `original`, `enhanced`, `ai_simplified`, `ai` |
+| pack token | `pack:mossy_stones` | A user-supplied texture pack, by id |
+
+A pack id is 1-48 characters of `a-z`, `0-9` or `_`. Tokens are matched case-insensitively and stored lowercase. `.`, `/` and `\` are excluded so a pack id can never become a path when it is resolved against the filesystem.
+
+Normalization is **deliberately asymmetric**, and this is the rule that matters:
+
+```txt
+unknown BUILT-IN id   -> coerced to the default set
+malformed pack token  -> coerced to the default set
+well-formed pack token -> PRESERVED VERBATIM, even if no such pack is installed
+```
+
+An unrecognised built-in id can only be corruption — there are exactly four — so there is nothing to preserve. A pack that is not installed is an ordinary, recoverable situation: the player moved it, renamed it, or has not reinstalled it yet. Coercing that token on load would render the default *and* write the default back on the next autosave, permanently destroying a selection the player never changed. `Blockiverse.Core.BlockiverseTextureSelection.NormalizeToken` is the single implementation of this rule.
+
+Whether a named pack actually exists is a **separate** question, resolved against the installed packs at load time and surfaced to the player when it fails. The token itself never depends on the filesystem.
+
+**The token is local to each peer and is never transmitted.** It is not in the connection-approval payload, the world-snapshot header, or any RPC. In multiplayer each peer renders with its own token, so a host and a client may legitimately disagree about textures; no pack file is ever sent between players.
 
 ## 6. Rules file schema
 
