@@ -103,7 +103,7 @@ namespace Blockiverse.Networking
         public const float EnvironmentResyncIntervalSeconds = 5.0f;
         const int SnapshotHeaderBytes = WorldSnapshotHeaderBytes;
         // The wire format is 3 ints of position plus 1 int of block id.
-        // 12 (position) + 4 (block id) + 4 (block state, schema v5).
+        // 12 (position) + 4 (block id) + 4 (block state, schema v1).
         //
         // The state is carried per block rather than as a separate sparse list because the batches
         // are ordered against the header by ReliableFragmentedSequenced, and a second message type

@@ -21,7 +21,7 @@ namespace Blockiverse.Persistence
         public int Z;
         public string CanonicalId;  // canonical string block ID
 
-        // Per-block state bits (schema v5). 0 = BlockState.Default, which is what all but a
+        // Per-block state bits (schema v1). 0 = BlockState.Default, which is what all but a
         // handful of blocks carry. The region writer sends null instead of a run of zeros when a
         // whole section is default; JsonUtility still emits that as [], a fixed ~17 bytes per
         // section, NOT nothing. What the null buys is avoiding one zero PER DELTA, which is the
@@ -245,7 +245,23 @@ namespace Blockiverse.Persistence
     {
         readonly ItemRegistry itemRegistry;
 
-        public const int CurrentSchemaVersion = 5;
+        // FROZEN AT 1 FOR THE WHOLE OF ALPHA. Do not bump this when the save format changes.
+        //
+        // The reflex on a format change is to bump, and pre-beta that reflex is wrong: there is
+        // nobody whose worlds need preserving, no migration path exists, and Load refuses any
+        // mismatch outright (see LoadDirectory). Bumping therefore buys nothing and only makes the
+        // number a record of churn — this constant reached 5 that way, across a project that has
+        // never shipped and has never migrated a save.
+        //
+        // So during alpha, format changes land INSIDE v1: dev saves that no longer parse are
+        // recreated, not migrated. Versioning starts moving at beta, when real players have worlds
+        // worth keeping and the first migration becomes a requirement rather than a hypothetical.
+        //
+        // Note this value also travels in the multiplayer approval payload
+        // (BlockiverseNetworkSession.BuildApprovalPayloadFields), so changing it refuses joins
+        // across the change. That is the field working as intended, not a side effect to route
+        // around.
+        public const int CurrentSchemaVersion = 1;
         public const string SaveFormatVersion = "1.0.0";
         public const float DefaultAutoSaveIntervalSeconds = 300f;
 
@@ -594,8 +610,8 @@ namespace Blockiverse.Persistence
                 if (Directory.Exists(path))
                     return LoadDirectory(path);
 
-                // Legacy flat-JSON saves (schema v1–v3) are unsupported: the app is unreleased,
-                // so old formats fail fast instead of migrating.
+                // Legacy flat-JSON saves are unsupported: the app is unreleased, so old
+                // formats fail fast instead of migrating.
                 if (File.Exists(path))
                     return FailedLoad(path, "World save format is unsupported: expected a save directory.");
 
@@ -610,7 +626,7 @@ namespace Blockiverse.Persistence
             }
         }
 
-        // ── Directory format (schema v4) ──────────────────────────────────────
+        // ── Directory format (schema v1) ──────────────────────────────────────
 
         WorldLoadResult LoadDirectory(string path)
         {

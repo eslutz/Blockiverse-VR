@@ -32,11 +32,31 @@ The save uses a single canonical integer schema version plus informational metad
 
 | Version Field | Example | Meaning |
 |---|---|---|
-| `schemaVersion` | `5` | The single canonical on-disk save schema version. Must match the engine's `CurrentSchemaVersion` exactly. |
+| `schemaVersion` | `1` | The single canonical on-disk save schema version. Must match the engine's `CurrentSchemaVersion` exactly. |
 | `engineVersion` | `0.1.0` | Game executable or engine build version (informational only). |
 | `contentPackVersion` | `pack-id@1.0.0` | Optional external content pack version (informational only). |
 
-The engine defines one supported schema version, `CurrentSchemaVersion` (currently `5`). The manifest stores a single integer `schemaVersion`.
+The engine defines one supported schema version, `CurrentSchemaVersion` (currently `1`). The manifest stores a single integer `schemaVersion`.
+
+### 2.0 Alpha version freeze
+
+**`CurrentSchemaVersion` is frozen at `1` for the whole of alpha. Do not bump it when the save format changes.**
+
+The reflex on a format change is to bump the schema version. Pre-beta that reflex is wrong, and it is worth being explicit about why:
+
+- There is nobody whose worlds need preserving. The app is unreleased.
+- No migration path exists, and none is planned before beta (Section 12).
+- Load already refuses any mismatch outright, so a bump changes nothing about what loads — it only changes the number in the error message.
+
+Bumping therefore buys no safety and only makes the version a record of churn. This constant reached `5` that way, across a project that has never shipped and has never migrated a save; it was reset to `1` on 2026-08-26 because the intervening numbers recorded nothing.
+
+So during alpha:
+
+- **Format changes land inside `v1`.** Add, remove, or reshape fields without touching the version.
+- **Dev saves that no longer parse are recreated, not migrated.** That is the accepted cost of the freeze, and it is cheaper than the bookkeeping it replaces.
+- **Versioning starts moving at beta**, when real players have worlds worth keeping — which is also when the first migration path becomes a requirement rather than a hypothetical.
+
+One consequence to expect rather than route around: `CurrentSchemaVersion` also travels in the multiplayer approval payload, so any future change to it refuses joins between builds on either side of the change. That is the field working as designed.
 
 ### 2.1 Single-schema load policy
 
@@ -149,7 +169,7 @@ ore#1               // punctuation-heavy unstable ID
 
 ```ts
 type SaveManifest = {
-  schemaVersion: number;            // single canonical integer; must equal CurrentSchemaVersion (5)
+  schemaVersion: number;            // single canonical integer; must equal CurrentSchemaVersion (1)
   engineVersion: string;            // informational only
 
   blockRegistryHash: string;        // content hash of the block registry at save time
@@ -469,7 +489,7 @@ Nibble arrays for light
 Binary region file with chunk index
 ```
 
-**Implemented shape (schema v5).** The engine does not store whole sections. Regions store only
+**Implemented shape (schema v1).** The engine does not store whole sections. Regions store only
 blocks that differ from terrain regenerated from the seed, so a section carries a delta list rather
 than a full `blockData` array:
 
@@ -479,7 +499,7 @@ type VxlwSectionData = {
   BlockPalette: string[];        // canonical block IDs
   ChangePositions: number[];     // local index within the 16³ section
   PaletteIndices: number[];      // index-aligned with ChangePositions
-  BlockStates: number[];         // v5. index-aligned; EMPTY when the section is all-default
+  BlockStates: number[];         // index-aligned; EMPTY when the section is all-default
 };
 ```
 

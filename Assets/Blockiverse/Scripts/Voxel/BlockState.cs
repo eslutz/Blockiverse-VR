@@ -1,7 +1,7 @@
 namespace Blockiverse.Voxel
 {
     /// <summary>
-    /// Per-block state bits (save schema v5, vegetation ruleset §5).
+    /// Per-block state bits (save schema v1, vegetation ruleset §5).
     ///
     /// Stored as an int so the format has room to grow without another schema bump, but ONLY bits
     /// with a live consumer are declared here. Reserving named bits for features that do not exist

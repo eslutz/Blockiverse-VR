@@ -460,7 +460,7 @@ Boot scene carries the XR rig (with all world-space menus and both controllers' 
 
 ### Save format
 
-`<name>.vxlworld/` directory (schema v5): `manifest.json` (pretty-printed, registry hashes), `dimensions/main/` (dimension, environment, containers, `regions/r.<rx>.<rz>.vxlr`), `players/local_player.json`. Regions store **only changed blocks** (delta vs. terrain regenerated from seed) as 16-block sections with string palettes. All writes are atomic (`.tmp` → move/replace; regions dir swap keeps a `.bak` recovery window). Regions also carry an optional per-block `BlockStates` array (v5). Legacy v1–v4 saves fail fast — no migrations pre-release. Single-player saves live under `Application.persistentDataPath/Saves`; the multiplayer host world is `multiplayer-world.vxlworld`.
+`<name>.vxlworld/` directory (schema v1): `manifest.json` (pretty-printed, registry hashes), `dimensions/main/` (dimension, environment, containers, `regions/r.<rx>.<rz>.vxlr`), `players/local_player.json`. Regions store **only changed blocks** (delta vs. terrain regenerated from seed) as 16-block sections with string palettes. All writes are atomic (`.tmp` → move/replace; regions dir swap keeps a `.bak` recovery window). Regions also carry an optional per-block `BlockStates` array. Any save whose `schemaVersion` is not the current one fails fast — no migrations pre-release. **`CurrentSchemaVersion` is frozen at 1 for all of alpha: format changes land inside v1 and stale dev saves are recreated, never migrated.** See [docs/rulesets/voxel_save_versioning_schema.md](docs/rulesets/voxel_save_versioning_schema.md) §2.0. Single-player saves live under `Application.persistentDataPath/Saves`; the multiplayer host world is `multiplayer-world.vxlworld`.
 
 ## Documentation currency
 

@@ -21,7 +21,7 @@ namespace Blockiverse.Voxel
         public ChunkCoordinate Chunk { get; }
         public BlockChange Change { get; }
 
-        /// <summary>Block state at the position AFTER the change (schema v5 / vegetation ruleset §5).
+        /// <summary>Block state at the position AFTER the change (schema v1 / vegetation ruleset §5).
         ///
         /// This rides on the delta because the world simulation runs on EVERY peer in lockstep from
         /// identical inputs — environment mutations are never broadcast — and leaf decay is the
