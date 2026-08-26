@@ -81,7 +81,9 @@ The palette should stay bright, readable, and varied:
 Block textures:
 
 - Source tiles are 16x16 RGBA PNG files.
-- The runtime atlas is a committed 12x10 padded RGBA PNG: 32x32 source pixels per tile, 8 duplicated border pixels per side, 576x480 total. Regenerate it with `scripts/art/generate-art-assets.py`; never hand-author it.
+- The runtime atlas is a committed 16x10 padded RGBA PNG: 32x32 source pixels per tile, 8 duplicated border pixels per side, 768x480 total (160 slots, 97 used). Regenerate it with `scripts/art/generate-art-assets.py`; never hand-author it. To pick up a change to the atlas *geometry* without rebuilding any source texture, `python3 scripts/art/prepare-block-texture-sets.py --atlas-only` recomposes all four sets from their committed `Source/` PNGs.
+- **Columns are fixed at 16 so a tile index is its own coordinate in hex**: `index = row << 4 | column`, so `0x63` is row 6, column 3. Write tile indices as hex in both `generate-art-assets.py` and `BlockVisualAtlas` — in decimal that same tile is `99`, which reads as nothing and hides a wrong row.
+- Grow the atlas by adding **rows**, never columns. Appending rows leaves every existing index and every existing pixel where it was; changing the column count reflows the whole atlas. `ATLAS_ROWS` and `BlockVisualAtlas.Rows` must change together, and the four atlas PNGs must be regenerated in the same commit — `ChunkRenderingEditModeTests.VisualAtlasTextureSetManifestIsCompleteAndValid` fails with an explicit height mismatch if they drift apart. Width is fixed at `16*48 = 768`, so height may grow to the importer's `maxTextureSize: 1024` at 21 rows (336 slots).
 - Tile order follows the runtime atlas mapping for the current canonical registry. Historical temporary atlas ordering may be retained only while migration tests still cover old saved worlds.
 - Use trilinear filtering, mipmaps, clamp wrapping, and the duplicated tile borders to avoid stereo shimmer without mip bleed across neighboring tiles.
 - Keep silhouettes and color families distinct enough to read in Quest headset validation.
