@@ -9,7 +9,7 @@
 **XR stack:** OpenXR, Unity OpenXR: Meta, Meta XR SDK, Unity Input System, XR Interaction Toolkit where it fits
 **Networking stack:** Netcode for GameObjects + Unity Transport
 **Primary game target:** Ruleset-defined voxel survival/creative game using the canonical Blockiverse world, registries, menus, save schema, environment, structures, vegetation, multiplayer, and audio/VFX rulesets
-**World model:** Bounded canonical worlds first; world presets are `survival_terrain`, `flat_builder`, and `void_builder`
+**World model:** Bounded canonical worlds first; world presets are `survival_terrain` and `flat_builder`
 **Player representation:** Meta Horizon avatars for local and remote players; original voxel characters for NPCs/mobs
 **Multiplayer:** LAN host-authoritative co-op first, then self-hosted dedicated servers (promoted 2026-08-21, EPIC-11); managed paid hosting remains future expansion
 **Voice:** Meta Quest party chat; no in-app voice chat in the initial multiplayer scope
@@ -76,9 +76,6 @@ flat_builder
   Creative-friendly flat world with canonical block/item catalog.
   Used for building, quick validation, and tutorials.
 
-void_builder
-  Empty creative construction space with safety bounds and explicit spawn platform.
-  Used for large creative builds and structure template testing.
 ```
 
 ### Initial playable target
@@ -365,7 +362,7 @@ earlier aspirational notes about a more granular assembly split.
 | M0 | Repo, Unity, CI, ruleset docs, and rollback policy | Project is buildable, documented, and checkpointable |
 | M1 | Quest VR foundation | Player movement, controller input, UI interaction, and block targeting are comfortable |
 | M2 | Canonical voxel core and registries | Block/item/tool/resource IDs match the ruleset-defined game |
-| M3 | Canonical world generation | `survival_terrain`, `flat_builder`, and `void_builder` replace temporary validation worlds |
+| M3 | Canonical world generation | `survival_terrain` and `flat_builder` replace temporary validation worlds |
 | M4 | Environment, vegetation, and structures | Day/night, weather, biome vegetation, and generated structures exist in the canonical world |
 | M5 | Creative mode | Ruleset-defined creative catalog, placement/removal, world tools, menus, and save support |
 | M6 | Survival systems | Mining, tools, inventory, crafting, stations, farming, containers, and player survival stats |
@@ -560,7 +557,7 @@ kg/20260606-canonical-registry-loaded
 
 ### Deliverable
 
-The game generates canonical `survival_terrain`, `flat_builder`, and `void_builder` worlds from the ruleset-defined worldgen model.
+The game generates canonical `survival_terrain` and `flat_builder` worlds from the ruleset-defined worldgen model.
 
 ### Scope
 
@@ -590,8 +587,6 @@ survival_terrain
 flat_builder
   Flat canonical creative world with full creative catalog.
 
-void_builder
-  Empty builder world with safety floor/spawn platform and explicit bounds.
 ```
 
 ### Tests
@@ -610,7 +605,7 @@ Performance: default survival_terrain generates within desktop budget.
 
 ```text
 New game creates a canonical survival_terrain world.
-Creative can start flat_builder or void_builder.
+Creative can start flat_builder.
 Old temporary generation presets are not used for new worlds.
 Seed can be replayed.
 ```
@@ -865,7 +860,7 @@ PlayMode: creative catalog menu selects canonical items.
 ### Validation
 
 ```text
-Player can build in flat_builder and void_builder.
+Player can build in flat_builder.
 Player can edit survival_terrain in creative mode when allowed.
 Menus match the menu spec.
 Creative saves use canonical schema.
@@ -1592,7 +1587,6 @@ Launch app
 Reach main menu
 Start survival_terrain
 Start flat_builder
-Start void_builder
 Move, turn, teleport
 Open menus
 Break block
@@ -1707,7 +1701,6 @@ FEATURE: Temporary ID migration
 FEATURE: World presets
   STORY: Implement survival_terrain
   STORY: Implement flat_builder
-  STORY: Implement void_builder
   STORY: Remove temporary validation presets from new-world creation
 
 FEATURE: Terrain/caves/resources
@@ -1970,7 +1963,7 @@ Future-feature epics are tracked in [14. Future features and later expansion](#1
 4. Replace temporary registries with canonical registries.
 5. Add migration aliases for old temporary IDs.
 6. Generate survival_terrain.
-7. Generate flat_builder and void_builder.
+7. Generate flat_builder.
 8. Render canonical blocks with authored atlas validation.
 9. Add environment state and day/night/weather.
 10. Add biome vegetation.
@@ -2028,7 +2021,6 @@ kg checkpoint exists.
 ```text
 survival_terrain generates.
 flat_builder generates.
-void_builder generates.
 Resources, caves, spawn safety, and biome selection are deterministic.
 Temporary validation world is not used for new worlds.
 kg checkpoint exists.

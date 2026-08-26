@@ -337,7 +337,7 @@ textureSet = "enhanced";
 | Game Mode selector | `new_world.cycle_game_mode` | Cycles `survival`, `creative` |
 | Difficulty selector | `new_world.cycle_difficulty` | Cycles `easy`, `normal`, `hard` |
 | World Size selector | `new_world.cycle_world_size` | Cycles `small`, `medium`, `large`, `infinite`; current bounded implementation displays `infinite` as an Infinite Preview (256x256) until region-streamed worlds ship. |
-| World Preset selector | `new_world.cycle_world_preset` | Cycles `survival_terrain`, `flat_builder`, `void_builder`; advanced presets may unlock later |
+| World Preset selector | `new_world.cycle_world_preset` | Cycles `survival_terrain`, `flat_builder`; advanced presets may unlock later |
 | Starting Biome selector | `new_world.cycle_starting_biome` | Changes spawn-biome preference |
 | Texture Set selector | `new_world.cycle_texture_set` | Cycles `enhanced`, `ai_simplified`, `ai`, `original`; the selected authored block atlas is saved with the world and restored on load |
 | Create World | `new_world.create` | Validates settings, creates save, starts generation |

@@ -164,7 +164,7 @@ type SaveManifest = {
 
   gameMode: "survival" | "creative";
   worldSeed: string;
-  worldPreset: "survival_terrain" | "flat_builder" | "void_builder";
+  worldPreset: "survival_terrain" | "flat_builder";
   environmentPreset: "normal" | "clear_builder" | "storm_test" | "winter_test";
 
   spawn: Vec3i;
@@ -230,7 +230,7 @@ Example:
 type WorldRules = {
   gameMode: "survival" | "creative";
   difficulty: "calm" | "normal" | "hard";
-  worldPreset: "survival_terrain" | "flat_builder" | "void_builder";
+  worldPreset: "survival_terrain" | "flat_builder";
   environmentPreset: "normal" | "clear_builder" | "storm_test" | "winter_test";
 
   survivalSimulation: boolean;

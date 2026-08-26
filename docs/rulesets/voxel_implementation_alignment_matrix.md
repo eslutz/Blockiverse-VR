@@ -25,14 +25,12 @@ runtime registries should reject unknown legacy IDs unless a migration step is a
 |---|---|---|
 | Flat creative validation world | `flat_builder` | Regenerate using canonical flat-builder rules or migrate blocks through the block mapping table. |
 | Generated survival-lite validation world | `survival_terrain` | Regenerate using canonical terrain/biome/resource/vegetation/structure rules. |
-| Empty test scene | `void_builder` | Create canonical starting platform and save preset metadata. |
 
 Canonical presets:
 
 ```txt
 survival_terrain
 flat_builder
-void_builder
 island_builder
 cave_builder
 sky_shelf

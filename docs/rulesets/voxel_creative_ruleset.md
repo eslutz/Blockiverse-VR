@@ -5,7 +5,7 @@ Companion documents: `voxel_survival_ruleset.md`, `voxel_survival_menus.md`, `vo
 
 This ruleset defines the rule modifications needed to switch the game from Survival mode to Creative mode. Creative mode should reuse the same canonical block, item, terrain, crafting, inventory, world-generation, environment, structure, vegetation, save, networking, and feedback registries used by Survival mode, then apply the overrides below.
 
-The Creative rules do not preserve temporary reduced worlds as a separate target. Builder worlds should use canonical presets such as `survival_terrain`, `flat_builder`, and `void_builder`. Existing working VR interaction behavior should be retained while the underlying world content migrates to the canonical rules.
+The Creative rules do not preserve temporary reduced worlds as a separate target. Builder worlds should use canonical presets such as `survival_terrain` and `flat_builder`. Existing working VR interaction behavior should be retained while the underlying world content migrates to the canonical rules.
 
 ---
 
@@ -591,7 +591,6 @@ Creative mode can use the same world generation as Survival mode. Resource scarc
 |---|---|---|
 | Survival Terrain | `survival_terrain` | Uses the normal terrain, biome, cave, fluid, and resource placement rules |
 | Flat Builder | `flat_builder` | Flat terrain at a selected height with no caves by default |
-| Void Builder | `void_builder` | Empty world with a starting platform |
 | Island Builder | `island_builder` | One large island surrounded by water or brine |
 | Cave Builder | `cave_builder` | Exposed cavern world for underground construction |
 | Sky Shelf | `sky_shelf` | Floating terrain shelves and empty space |
@@ -627,22 +626,6 @@ at y = 96:
 above y = 96:
     place air
 ```
-
-### 11.3 Void Builder preset
-
-```ts
-voidBuilder = {
-  // Centered on the spawn column; the platform's walking surface sits at groundHeight - 1,
-  // the same surface/spawn relationship as flat_builder (the default spawn stands on it).
-  platformCenter: [spawn.x, groundHeight - 1, spawn.z],
-  platformSize: [16, 1, 16],
-  platformBlock: "cutstone_block",
-  generateTerrain: false,
-  generateWeather: true
-}
-```
-
----
 
 ## 12. World editing actions
 
