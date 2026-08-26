@@ -49,14 +49,6 @@ namespace Blockiverse.Tests.EditMode
             {
             }
 
-            public void ToggleQuickBlockMenu()
-            {
-            }
-
-            public void HideQuickBlockMenu()
-            {
-            }
-
             public void CycleHotbarSlot(int delta)
             {
             }
@@ -167,7 +159,6 @@ namespace Blockiverse.Tests.EditMode
         [TestCase(typeof(GameplayDebugController), 520, 360, -0.02f)]
         [TestCase(typeof(MiningProgressController), 400, 90, -0.16f)]
         [TestCase(typeof(StatusToastController), 640, 120, 0.34f)]
-        [TestCase(typeof(CreativeHotbarController), 590, 500, -0.50f)]
         public void HudFamilyDeclaresTheSharedScreenIdAndHudProfile(Type controllerType, int width, int height, float hudLocalY)
         {
             var attribute = (UiToolkitScreenAttribute)Attribute.GetCustomAttribute(
@@ -184,12 +175,6 @@ namespace Blockiverse.Tests.EditMode
 
             var tree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(attribute.DocumentAssetPath);
             Assert.That(tree, Is.Not.Null, $"UXML document missing at {attribute.DocumentAssetPath}.");
-
-            // The quick menu — and only the quick menu — must carry the interface that makes
-            // the host exclude it from routed visibility.
-            Assert.That(
-                typeof(IUiToolkitQuickBlockMenu).IsAssignableFrom(controllerType),
-                Is.EqualTo(controllerType == typeof(CreativeHotbarController)));
         }
 
         // The action menu is NO LONGER part of the head-anchored family. It moved to the support
@@ -672,70 +657,5 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(controller.CurrentStatusText, Is.EqualTo("Inventory full"));
         }
 
-        // EditMode mirror of CreativeInteractionPlayModeTests.HotbarSelectionUpdatesSelectedBlockLabel.
-        [Test]
-        public void HotbarSelectionUpdatesSelectedBlockLabel()
-        {
-            CreativeHotbarController controller = CreateScreen<CreativeHotbarController>();
-            VisualElement root = AttachFreshTree(controller);
-            controller.Configure(
-                BlockRegistry.CreateDefault(),
-                new[] { BlockRegistry.LooseLoam, BlockRegistry.LumenQuartzCluster });
-
-            Assert.That(root.Q<ScrollView>("bv-hotbar-slots").Query<Button>().ToList(), Has.Count.EqualTo(2));
-            Assert.That(controller.SelectedBlockId, Is.EqualTo(BlockRegistry.LooseLoam));
-
-            controller.SelectNext();
-
-            Assert.That(controller.SelectedBlockId, Is.EqualTo(BlockRegistry.LumenQuartzCluster));
-            Assert.That(root.Q<Label>("bv-hotbar-selected").text, Does.Contain("Lumen Quartz Cluster"));
-
-            List<Button> slots = root.Q<ScrollView>("bv-hotbar-slots").Query<Button>().ToList();
-            Assert.That(slots[1].ClassListContains("hs-button--selected"), Is.True);
-            Assert.That(slots[0].ClassListContains("hs-button--selected"), Is.False);
-
-            controller.SelectIndex(0);
-
-            Assert.That(controller.SelectedBlockId, Is.EqualTo(BlockRegistry.LooseLoam));
-            Assert.That(slots[0].ClassListContains("hs-button--selected"), Is.True);
-            Assert.That(slots[1].ClassListContains("hs-button--selected"), Is.False);
-        }
-
-        [Test]
-        public void HotbarConfigureFiltersAirBlocks()
-        {
-            CreativeHotbarController controller = CreateScreen<CreativeHotbarController>();
-            VisualElement root = AttachFreshTree(controller);
-
-            controller.Configure(
-                BlockRegistry.CreateDefault(),
-                new[] { BlockRegistry.Air, BlockRegistry.LooseLoam });
-
-            Assert.That(controller.BlockIds, Has.Count.EqualTo(1));
-            Assert.That(controller.SelectedBlockId, Is.EqualTo(BlockRegistry.LooseLoam));
-            Assert.That(root.Q<ScrollView>("bv-hotbar-slots").Query<Button>().ToList(), Has.Count.EqualTo(1));
-        }
-
-        [Test]
-        public void QuickMenuVisibilityCollapsesTheScreenRoot()
-        {
-            CreativeHotbarController controller = CreateScreen<CreativeHotbarController>();
-            VisualElement root = AttachFreshTree(controller);
-            VisualElement screenRoot = root.Q<VisualElement>("bv-screen-root");
-
-            Assert.That(controller.IsQuickMenuVisible, Is.False, "must start hidden");
-
-            controller.SetQuickMenuVisible(true);
-            Assert.That(controller.IsQuickMenuVisible, Is.True);
-            Assert.That(DisplayOf(screenRoot), Is.EqualTo(DisplayStyle.Flex));
-
-            controller.SetQuickMenuVisible(false);
-            Assert.That(controller.IsQuickMenuVisible, Is.False);
-            Assert.That(DisplayOf(screenRoot), Is.EqualTo(DisplayStyle.None));
-
-            // Redundant host pushes (every router change pushes false) must stay no-ops.
-            Assert.DoesNotThrow(() => controller.SetQuickMenuVisible(false));
-            Assert.That(DisplayOf(screenRoot), Is.EqualTo(DisplayStyle.None));
-        }
     }
 }

@@ -2382,6 +2382,7 @@ GameObject:
   - component: {fileID: 1204590298}
   - component: {fileID: 1204590297}
   - component: {fileID: 1204590296}
+  - component: {fileID: 1204590299}
   m_Layer: 10
   m_Name: HotbarStrip Panel
   m_TagString: Untagged
@@ -2420,7 +2421,7 @@ MonoBehaviour:
   - {fileID: 7433441132597879392, guid: 05e997701b3f24862ada139efdf827e0, type: 3}
   - {fileID: 7433441132597879392, guid: 857a11421cf3c413591f35cbadb264e3, type: 3}
   - {fileID: 7433441132597879392, guid: 90d355bf8b4fe4fae80e4b2208b7c8ab, type: 3}
-  panelCollider: {fileID: 0}
+  panelCollider: {fileID: 1204590299}
 --- !u!114 &1204590297
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2464,6 +2465,27 @@ MonoBehaviour:
   m_PivotReferenceSize: 0
   m_Pivot: 0
   m_WorldSpaceCollider: {fileID: 0}
+--- !u!65 &1204590299
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1204590294}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 0
+  serializedVersion: 3
+  m_Size: {x: 7.6, y: 0.92, z: 0.01}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1222127825
 GameObject:
   m_ObjectHideFlags: 0

@@ -182,13 +182,13 @@ namespace Blockiverse.Tests.PlayMode
             base.TearDown();
         }
 
-        // The subject is BlockiverseInputRig, not either menu: support-grip (QuickMenuPressed) and
+        // The subject is BlockiverseInputRig, not either menu: support-grip (ScreensPressed) and
         // the menu button (MenuPressed) must reach two INDEPENDENT targets — the bug this guards
         // was one press toggling both. The fixture used to be the uGUI comfort menu and the
         // quick-menu presenter; plain toggles assert the same routing without pinning a VR input
         // regression test to whichever menu backend happens to be current.
         [UnityTest]
-        public IEnumerator LeftActivateTogglesBlockMenuWithoutTogglingComfortMenu()
+        public IEnumerator LeftActivateTogglesScreensHubWithoutTogglingComfortMenu()
         {
             GameObject rigObject = new("Test Input Rig");
             InputActionAsset actions = CreateTestActions();
@@ -201,14 +201,14 @@ namespace Blockiverse.Tests.PlayMode
                 rigObject.AddComponent<BlockiverseComfortSettings>();
 
                 bool comfortMenuVisible = false;
-                bool blockMenuVisible = false;
+                bool screensHubVisible = false;
                 inputRig.MenuPressed.AddListener(() => comfortMenuVisible = !comfortMenuVisible);
-                inputRig.QuickMenuPressed.AddListener(() => blockMenuVisible = !blockMenuVisible);
+                inputRig.ScreensPressed.AddListener(() => screensHubVisible = !screensHubVisible);
 
                 Press(gamepad.leftShoulder);
                 yield return null;
 
-                Assert.That(blockMenuVisible, Is.True);
+                Assert.That(screensHubVisible, Is.True);
                 Assert.That(comfortMenuVisible, Is.False);
 
                 Release(gamepad.leftShoulder);
@@ -216,7 +216,7 @@ namespace Blockiverse.Tests.PlayMode
                 Press(gamepad.startButton);
                 yield return null;
 
-                Assert.That(blockMenuVisible, Is.True);
+                Assert.That(screensHubVisible, Is.True);
                 Assert.That(comfortMenuVisible, Is.True);
             }
             finally

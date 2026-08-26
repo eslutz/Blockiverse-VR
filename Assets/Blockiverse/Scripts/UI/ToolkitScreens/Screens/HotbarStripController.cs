@@ -18,12 +18,16 @@ namespace Blockiverse.UI
     // game should not cost a screen open, so this strip shows all ten slots all the time and the
     // support hand's face buttons cycle them.
     //
-    // ── Read-only by construction ────────────────────────────────────────────
+    // ── Ray-interactive, safely (2026-08-26) ──────────────────────────────────
     //
-    // NonInteractive, so the generator produces no collider. A permanently live trigger volume
-    // across 0.94 m of the player's lower view would compete with break and place for every ray —
-    // the single worst thing a persistent HUD panel can do, and the report says so more strongly
-    // than it asks for ray selection. Arbitrary-slot picking still exists on the inventory screen.
+    // This was NonInteractive at first: the worry was a permanently live trigger volume competing
+    // with break and place for every ray. That worry turned out to be a non-issue rather than a
+    // hard constraint. `BlockiverseCreativeInputBridge` already suppresses break/place whenever
+    // `interactionRay.IsOverUIGameObject()` is true — the exact mechanism that already stops
+    // clicking an Inventory button from breaking the block behind it. Giving this strip a collider
+    // costs it nothing new: it gets the same trade every other on-screen button already makes,
+    // just on a panel that stays visible during active gameplay instead of one you explicitly
+    // open. Point at a slot and pull the trigger, exactly like any other menu button.
     //
     // ── Authority ────────────────────────────────────────────────────────────
     //
@@ -53,7 +57,7 @@ namespace Blockiverse.UI
     // persistent panel the report explicitly wants, so it stays centred and low rather than moving
     // to a side.
     [UiToolkitScreen(MenuActions.GameplayHudScreen, "Assets/Blockiverse/UI/Documents/HotbarStrip.uxml",
-        760, 92, UiToolkitPlacementProfile.Hud, HudLocalY = -0.340f, NonInteractive = true)]
+        760, 92, UiToolkitPlacementProfile.Hud, HudLocalY = -0.340f)]
     public sealed class HotbarStripController : UiToolkitScreenController
     {
         // Inventory.DefaultHotbarSlotCount. The save format, the wire protocol and
@@ -62,12 +66,6 @@ namespace Blockiverse.UI
 
         // Collapses the strip when there is no survival inventory — i.e. in Creative, which keeps
         // its own block-label cycler and must not also carry ten empty survival slots.
-        //
-        // This is also what keeps the strip clear of the creative quick block menu: that panel is
-        // 590 x 500 at Y -0.50, so its top edge reaches -0.25 and overlaps this strip's -0.320..
-        // -0.210 band by 590 x 70 mm. HudPanelOverlapEditModeTests excludes the quick block menu as
-        // "opened on demand", which is true but would not have saved a strip that was visible in
-        // the same mode.
         //
         // Applied to bv-hotbar-strip, NOT bv-screen-root: the base class writes an inline
         // style.display onto the root, and inline outranks USS.
@@ -92,9 +90,22 @@ namespace Blockiverse.UI
         ItemRegistry itemRegistry;
         Inventory inventory;
 
+        BlockiverseAudioCuePlayer audioCuePlayer;
+        IBlockiverseInteractionHaptics interactionHaptics;
+
         int lastSelectedRendered = int.MinValue;
 
+        // Set once per Refresh(); true whenever the strip is actually drawing ten slots rather
+        // than sitting collapsed (no survival inventory / Creative). Gates the collider through
+        // AcceptsInputNow below, the same seam GameplayHudController's wrist gesture uses — a
+        // collapsed strip must not leave an invisible, unpickable ray target behind.
+        bool hasHotbar;
+
+        readonly EventCallback<ClickEvent>[] slotClickCallbacks = new EventCallback<ClickEvent>[SlotCount];
+
         public override string ScreenId => MenuActions.GameplayHudScreen;
+
+        protected override bool AcceptsInputNow => hasHotbar;
 
         // The sync is the authority whenever there IS one — it clamps to its own hotbar size, and
         // rendering what was asked for rather than what was accepted is how a HUD ends up showing a
@@ -189,17 +200,41 @@ namespace Blockiverse.UI
             return allFound;
         }
 
-        // Nothing here is clickable — the panel is NonInteractive and every element is
-        // picking-mode Ignore, so there is no element callback to balance. Selection arrives from
-        // Input Actions through SelectNext/SelectPrevious, and the inventory subscription is keyed
-        // on the sync instance in BindFromScene rather than on attach, because it must survive the
-        // tree being rebuilt.
+        // One ClickEvent per slot, the same array-of-callbacks/Unregister-before-clear pattern
+        // InventoryScreenController uses for its own slots — old callbacks are unregistered before
+        // a rebuild so the registration balance cannot drift across re-attaches. Cycling still
+        // arrives from Input Actions through SelectNext/SelectPrevious; this is the second, faster
+        // path the report calls out ("Most selection should happen through controller Input
+        // Actions", picking an arbitrary slot by ray is the on-demand case). The inventory
+        // subscription is keyed on the sync instance in BindFromScene rather than on attach,
+        // because it must survive the tree being rebuilt.
         protected override void OnRegisterCallbacks()
         {
+            for (int i = 0; i < SlotCount; i++)
+            {
+                if (slots[i] == null)
+                    continue;
+
+                int slotIndex = i;
+                slotClickCallbacks[i] = _ =>
+                {
+                    PlayFeedback(BlockiverseAudioCue.UiSelect);
+                    SelectSlot(slotIndex);
+                };
+                slots[i].RegisterCallback(slotClickCallbacks[i]);
+            }
         }
 
         protected override void OnUnregisterCallbacks()
         {
+            for (int i = 0; i < SlotCount; i++)
+            {
+                if (slots[i] == null || slotClickCallbacks[i] == null)
+                    continue;
+
+                slots[i].UnregisterCallback(slotClickCallbacks[i]);
+                slotClickCallbacks[i] = null;
+            }
         }
 
         protected override void OnDetach()
@@ -280,12 +315,16 @@ namespace Blockiverse.UI
             // `inventory != null` alone does not detect Creative: SurvivalCreativeModeSwitch.
             // SwitchToCreative clears the existing inventory's SLOTS but keeps the same instance
             // bound with its HotbarSlotCount unchanged, so the strip would keep drawing ten empty
-            // recesses in Creative — and overlap the Creative quick block menu, which is exactly
-            // the collision this collapse exists to prevent. Gated on CurrentMode too when a sync
-            // is bound; BindForTest's direct-bind seam has no sync to ask and is trusted.
-            bool hasHotbar = inventory != null && inventory.HotbarSlotCount > 0 &&
+            // recesses in Creative if this were the only check. Gated on CurrentMode too when a
+            // sync is bound; BindForTest's direct-bind seam has no sync to ask and is trusted.
+            hasHotbar = inventory != null && inventory.HotbarSlotCount > 0 &&
                 (survivalSync == null || survivalSync.CurrentMode == PlayerModeState.Survival);
             strip?.EnableInClassList(StripHiddenClass, !hasHotbar);
+
+            // The collider must collapse in lockstep with the display: a collapsed strip is
+            // invisible, so a live collider behind it would be an unpickable ray trap sitting in
+            // the player's lower view for no reason.
+            RefreshInputCollider();
 
             if (!hasHotbar)
                 return;
@@ -366,6 +405,11 @@ namespace Blockiverse.UI
                 lastValid[i] = false;
 
             lastSelectedRendered = int.MinValue;
+        }
+
+        void PlayFeedback(BlockiverseAudioCue cue)
+        {
+            BlockiverseUiFeedback.Play(ref audioCuePlayer, ref interactionHaptics, cue);
         }
 
         static class HotbarKeys

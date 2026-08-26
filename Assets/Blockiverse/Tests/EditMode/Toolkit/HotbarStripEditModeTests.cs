@@ -300,5 +300,59 @@ namespace Blockiverse.Tests.EditMode.Toolkit
                 "cycling must be inert in Creative, not silently move a selection the collapsed " +
                 "strip gives no feedback about");
         }
+
+        // ── Ray-mode picking ─────────────────────────────────────────────────
+        //
+        // ClickEvent dispatch needs a live panel, which EditMode does not build (the codebase
+        // convention — see InventoryScreenEditModeTests — is to drive the public seam the click
+        // callback calls, not the event itself). The click callbacks here discard their ClickEvent
+        // argument entirely, so invoking one directly with null exercises the exact wiring a real
+        // click produces without needing real dispatch.
+
+        [Test]
+        public void ClickingASlotSelectsIt()
+        {
+            (HotbarStripController controller, _) = CreateStrip();
+            controller.BindForTest(new Inventory());
+
+            var callbacks = (EventCallback<ClickEvent>[])typeof(HotbarStripController)
+                .GetField("slotClickCallbacks", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(controller);
+
+            Assert.That(callbacks[3], Is.Not.Null,
+                "positive control: slot 3's callback must actually be registered");
+
+            callbacks[3].Invoke(null);
+            Assert.That(controller.SelectedSlotIndex, Is.EqualTo(3),
+                "clicking slot 3 must select slot 3 — a closure bug here would select whichever " +
+                "index the loop variable last held, not the slot that was actually clicked");
+
+            callbacks[7].Invoke(null);
+            Assert.That(controller.SelectedSlotIndex, Is.EqualTo(7),
+                "a second slot's callback must select ITS OWN index, not stay pinned to the first");
+        }
+
+        // The collider is what actually stops a ray reaching a collapsed strip; nothing about the
+        // click wiring itself changes when collapsed (SelectSlot already no-ops with no inventory,
+        // independent of this). This asserts the input side of that: AcceptsInputNow must track
+        // the same collapse condition Refresh() draws hb-strip--hidden from — a drifted copy of
+        // that condition would leave an invisible strip either accepting or refusing input.
+        [Test]
+        public void AcceptsInputTracksTheSameCollapseConditionAsTheDisplay()
+        {
+            (HotbarStripController controller, _) = CreateStrip();
+
+            PropertyInfo acceptsInputNow = typeof(HotbarStripController)
+                .GetProperty("AcceptsInputNow", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(acceptsInputNow, Is.Not.Null);
+
+            controller.Refresh();
+            Assert.That((bool)acceptsInputNow.GetValue(controller), Is.False,
+                "with no inventory bound the collider must be disabled, matching the collapsed strip");
+
+            controller.BindForTest(new Inventory());
+            Assert.That((bool)acceptsInputNow.GetValue(controller), Is.True,
+                "positive control: a bound survival inventory must re-enable the collider");
+        }
     }
 }

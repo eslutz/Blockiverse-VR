@@ -1202,17 +1202,18 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(blockMenu, Is.Not.Null);
             Assert.That(hotbar, Is.Not.Null);
             Assert.That(blockMenuCanvas, Is.Not.Null);
-            // The scene hotbar starts hidden and is shown by CreativeHotbarController mirroring
-            // the Toolkit quick menu; a canvas that generates enabled shows blocks over the
-            // title menu on first frame. Its open/close cues live on CreativeHotbar itself now
-            // (BlockiverseAudioCuePlayerEditModeTests), not on the deleted uGUI presenter.
+            // The scene hotbar's uGUI canvas is generated disabled and stays that way: it carries
+            // gameplay state (CreativeHotbar.SelectedBlockId), not a rendered presenter — the
+            // Toolkit catalog screen and wrist menu are what a player actually sees and clicks. A
+            // canvas that generated enabled would show blocks over the title menu on first frame.
+            // Its open/close cues live on CreativeHotbar itself (BlockiverseAudioCuePlayerEditModeTests).
             Assert.That(blockMenuCanvas.enabled, Is.False);
 
             BlockiverseInputRig inputRig = prefab.GetComponent<BlockiverseInputRig>();
-            UnityEngine.Events.UnityEvent quickMenuEvent = inputRig.QuickMenuPressed;
-            Assert.That(quickMenuEvent, Is.Not.Null);
-            Assert.That(quickMenuEvent.GetPersistentEventCount(), Is.EqualTo(0),
-                "Support-grip quick menu input must be routed by BlockiverseMenuController at runtime so modal/routed UI can own raycasts.");
+            UnityEngine.Events.UnityEvent screensEvent = inputRig.ScreensPressed;
+            Assert.That(screensEvent, Is.Not.Null);
+            Assert.That(screensEvent.GetPersistentEventCount(), Is.EqualTo(0),
+                "Support-grip screens-hub input must be routed by BlockiverseMenuController at runtime so modal/routed UI can own raycasts.");
         }
 
         [Test]

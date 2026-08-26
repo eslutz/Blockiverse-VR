@@ -52,14 +52,6 @@ namespace Blockiverse.Tests.EditMode
             {
             }
 
-            public void ToggleQuickBlockMenu()
-            {
-            }
-
-            public void HideQuickBlockMenu()
-            {
-            }
-
             public void CycleHotbarSlot(int delta)
             {
             }
@@ -84,7 +76,7 @@ namespace Blockiverse.Tests.EditMode
         {
             public bool LocomotionSuppressed { get; set; }
             public UnityEngine.Events.UnityEvent MenuPressed { get; } = new();
-            public UnityEngine.Events.UnityEvent QuickMenuPressed { get; } = new();
+            public UnityEngine.Events.UnityEvent ScreensPressed { get; } = new();
             public UnityEngine.Events.UnityEvent BreakPressed { get; } = new();
             public UnityEngine.Events.UnityEvent HotbarNextPressed { get; } = new();
             public UnityEngine.Events.UnityEvent HotbarPreviousPressed { get; } = new();

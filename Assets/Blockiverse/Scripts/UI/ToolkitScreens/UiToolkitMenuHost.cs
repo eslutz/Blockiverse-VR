@@ -23,8 +23,6 @@ namespace Blockiverse.UI
         readonly Dictionary<UiToolkitScreenController, UiToolkitScreenAttribute> screenAttributes = new();
         bool hudPanelsAttached;
 
-        IUiToolkitQuickBlockMenu quickBlockMenu;
-        UiToolkitScreenController quickBlockMenuController;
         BlockiverseComfortSettings comfortSettings;
         // No audio fields here any more: the host plays nothing. Route changes are silent by
         // design, and every remaining cue lives with the screen that knows the outcome.
@@ -91,11 +89,6 @@ namespace Blockiverse.UI
                 AttachHudPanel(controller, head);
                 AttachWristPanel(controller, supportHand);
             }
-
-            // The quick block menu is excluded from the routed screens list but is still a
-            // HUD-family panel and must ride the head at its declared local pose.
-            if (quickBlockMenuController != null)
-                AttachHudPanel(quickBlockMenuController, head);
 
             hudPanelsAttached = true;
         }
@@ -196,16 +189,13 @@ namespace Blockiverse.UI
         // The teardown has to be complete, not just a deregistration. Merely unregistering
         // left the router subscription live and the panels on screen: the "disabled" host
         // went on driving Toolkit screens through every later navigation, and a LAN screen
-        // left visible kept its discovery socket listening. Unsubscribe, then hide
-        // everything including the quick menu.
+        // left visible kept its discovery socket listening. Unsubscribe, then hide everything.
         void OnDisable()
         {
             DetachFromController();
 
             foreach (var (_, controller) in screens)
                 controller.SetVisible(false, false);
-
-            quickBlockMenu?.SetQuickMenuVisible(false);
         }
 
         void DetachFromController()
@@ -224,7 +214,6 @@ namespace Blockiverse.UI
         {
             screens.Clear();
             screensById.Clear();
-            quickBlockMenu = null;
 
             screenAttributes.Clear();
 
@@ -236,15 +225,6 @@ namespace Blockiverse.UI
                     controller.GetType(), typeof(UiToolkitScreenAttribute));
                 if (attribute != null)
                     screenAttributes[controller] = attribute;
-
-                if (controller is IUiToolkitQuickBlockMenu quickMenu)
-                {
-                    // Excluded from routed visibility, but still rig-attached and comfort-scaled
-                    // like its HUD siblings — AttachHudPanels walks it separately.
-                    quickBlockMenu = quickMenu;
-                    quickBlockMenuController = controller;
-                    continue;
-                }
 
                 screens.Add((controller.ScreenId, controller));
                 // Several HUD-family panels legitimately share the gameplay_hud id; the
@@ -258,13 +238,6 @@ namespace Blockiverse.UI
 
             foreach (var (_, controller) in screens)
                 ConfigureComfortFor(controller);
-
-            // The quick menu is excluded from `screens`, so a loop over that list silently
-            // skips it — the same omission that left it un-parented until AttachHudPanels
-            // was given its own case. Without this it is the one panel that ignores the
-            // comfort UI scale, which is an accessibility setting, not a preference.
-            if (quickBlockMenuController != null)
-                ConfigureComfortFor(quickBlockMenuController);
         }
 
         void ConfigureComfortFor(UiToolkitScreenController controller)
@@ -342,9 +315,6 @@ namespace Blockiverse.UI
             // screen plays UiConfirm when a session actually starts and UiCancel when it fails, and
             // the crate screen plays UiCancel on a rejected transfer. Those mean something. A
             // screen appearing does not.
-
-            if (quickBlockMenu != null && !CanUseQuickBlockMenu())
-                quickBlockMenu.SetQuickMenuVisible(false);
         }
 
         void ApplyPlacementFor(string screenId, UiToolkitScreenController controller, UiToolkitScreenController anchor)
@@ -416,14 +386,6 @@ namespace Blockiverse.UI
             return session != null && session.HasActiveSession;
         }
 
-        bool CanUseQuickBlockMenu()
-        {
-            UiScreenRouter router = menuController != null ? menuController.Router : null;
-            return router != null &&
-                !router.HasModal &&
-                string.Equals(router.ActiveScreen.ScreenId, MenuActions.GameplayHudScreen, StringComparison.Ordinal);
-        }
-
         T FindScreen<T>() where T : class
         {
             foreach (var (_, controller) in screens)
@@ -479,16 +441,6 @@ namespace Blockiverse.UI
 
         public void RefreshCreativeEnvironmentControls() =>
             FindScreen<IUiToolkitCreativeToolsScreen>()?.RefreshEnvironmentControls();
-
-        public void ToggleQuickBlockMenu()
-        {
-            if (quickBlockMenu == null || !CanUseQuickBlockMenu())
-                return;
-
-            quickBlockMenu.SetQuickMenuVisible(!quickBlockMenu.IsQuickMenuVisible);
-        }
-
-        public void HideQuickBlockMenu() => quickBlockMenu?.SetQuickMenuVisible(false);
 
         // Cycles the held hotbar slot from the support hand's face buttons. Resolved through
         // FindScreen rather than a cached field for the same reason every other screen verb is:

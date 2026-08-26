@@ -201,27 +201,25 @@ namespace Blockiverse.Tests.EditMode.Toolkit
 
         // ── The guaranteed fallback ──────────────────────────────────────────
 
-        // The wrist menu depends on the support controller being tracked. Pause is bound to a
-        // dedicated button and always answers, so it carries the last-resort route.
+        // The wrist menu depends on the support controller being tracked. It used to fall back to
+        // a dedicated pause row; the fallback is now the support GRIP itself (formerly the Creative
+        // quick block menu's toggle, retired once the catalog screen covered the same job) —
+        // reachable without pausing at all, so a pause row for it would be a second, weaker copy
+        // of a route the player can already always reach. See
+        // BlockiverseMenuController.OnScreensPressed for the dispatch this replaced it with.
         [Test]
-        public void PauseMenuCarriesOneRowIntoTheGameplayScreensHub()
+        public void PauseMenuDoesNotDuplicateTheGripsScreensRoute()
         {
             IReadOnlyList<MenuAction> pause = MenuActions.PauseMenu(
                 canToggleMode: true, canOpenCreativeTools: true);
 
-            Assert.That(pause.Any(a => a.ActionId == MenuActions.PauseOpenScreens), Is.True,
-                "Pause must offer the screens hub: the wrist menu needs a tracked support " +
-                "controller, and without a fallback a dropped controller locks the player out of " +
-                "their own inventory.");
+            Assert.That(pause.Any(a => a.ActionId.StartsWith("gameplay_screens", StringComparison.Ordinal) ||
+                                        a.ActionId.StartsWith("pause.open_screens", StringComparison.Ordinal)),
+                Is.False,
+                "The screens hub is reachable from the support grip now; a pause row for the same " +
+                "destination would be a redundant second path to press.");
 
-            // ONE row, not one per destination — that is the whole point of the hub. If a future
-            // change starts adding destinations straight to the pause menu, this fails.
-            Assert.That(
-                pause.Count(a => a.ActionId.StartsWith("gameplay_screens.", StringComparison.Ordinal)),
-                Is.Zero,
-                "Gameplay screens belong behind the hub row, not in the pause menu itself.");
-
-            // Resume stays first — a fallback row must not displace the way out of the menu.
+            // Resume still stays first regardless of what else the row list holds.
             Assert.That(pause[0].ActionId, Is.EqualTo(MenuActions.PauseResume));
         }
 

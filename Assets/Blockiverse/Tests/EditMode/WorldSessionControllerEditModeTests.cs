@@ -427,14 +427,6 @@ namespace Blockiverse.Tests.EditMode
             {
             }
 
-            public void ToggleQuickBlockMenu()
-            {
-            }
-
-            public void HideQuickBlockMenu()
-            {
-            }
-
             public void CycleHotbarSlot(int delta)
             {
             }

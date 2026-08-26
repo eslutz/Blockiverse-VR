@@ -41,14 +41,10 @@ namespace Blockiverse.UI
         // (see the call site in BlockiverseMenuController.HandleAction).
         void RefreshCreativeEnvironmentControls();
 
-        // Quick block menu (creative hotbar); usable only over the gameplay HUD.
-        void ToggleQuickBlockMenu();
-        void HideQuickBlockMenu();
-
         // Cycle the held hotbar slot by one, from the support hand's face buttons. Routed through
         // the frontend rather than letting the input rig reach the strip directly, because
         // Blockiverse.VR does not reference Blockiverse.UI — this is the same seam MenuPressed and
-        // QuickMenuPressed already travel along.
+        // ScreensPressed already travel along.
         void CycleHotbarSlot(int delta);
 
         // Rides the title "New World" action, so stale input from a previous visit never leaks

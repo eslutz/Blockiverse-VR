@@ -7,74 +7,74 @@
         index this range — not a layout choice, and a strip of any other size would draw slots no
         command can address.
 
-        ── Why this panel is NonInteractive ─────────────────────────────────────
+        ── Ray-interactive, safely (2026-08-26) ──────────────────────────────────
 
-        The report asks for a hotbar that is ray-interactive on demand. What it warns about far
-        more strongly is a HUD carrying a permanently live trigger volume in front of the player,
-        competing with break and place for every ray. Upstream's NonInteractive flag gives the safe
-        half outright: no collider is generated at all, so this strip can never intercept anything.
+        The report asks for cycling through Input Actions as the normal path AND ray-picking an
+        arbitrary slot on demand. This was NonInteractive at first over a worry that a permanently
+        live trigger volume would compete with break and place for every ray — a worry that turned
+        out to be a non-issue: the same "pointing at a UI element suppresses world interaction"
+        mechanism that already stops clicking an Inventory button from breaking the block behind it
+        applies here for free the moment the strip has a collider. Each bv-hotbar-slot-N element is
+        picking-mode Position for exactly that reason — it is the ray's hit target, and
+        HotbarStripController wires a ClickEvent on each one straight to SelectSlot(N). The support
+        hand's face buttons still cycle, unchanged; this is the second, faster path alongside it.
 
-        Selection therefore runs entirely through Input Actions — the support hand's face buttons
-        cycle the slot — which the report calls the normal path anyway ("Most selection should
-        happen through controller Input Actions"). Picking an arbitrary slot by ray still works
-        through the inventory screen. The on-demand ray mode is deferred rather than approximated,
-        because doing it properly means teaching the shared screen base to toggle a collider from a
-        held input, and that is a change to every screen.
-
-        Every element is picking-mode Ignore, which is what makes NonInteractive honest: the flag
-        suppresses the collider, and the markup has to agree or the panel would want one.
+        The collider itself is generated from the [UiToolkitScreen] attribute no longer declaring
+        NonInteractive, and HotbarStripController disables it in lockstep with the strip's own
+        display collapse (Creative / no inventory) via AcceptsInputNow — a collapsed strip must not
+        leave an invisible, unpickable ray target sitting in the player's lower view.
 
         The index label is 1-based and wraps to 0 on the tenth slot, matching how the ruleset writes
         the number-key row (1-0) even though nothing on a controller presses those keys.
     -->
     <engine:VisualElement name="bv-screen-root" class="hs-screen hb-root">
         <engine:VisualElement name="bv-hotbar-strip" class="hb-strip" picking-mode="Ignore">
-            <engine:VisualElement name="bv-hotbar-slot-0" class="hb-slot" picking-mode="Ignore">
+            <engine:VisualElement name="bv-hotbar-slot-0" class="hb-slot" picking-mode="Position">
                 <engine:VisualElement name="bv-hotbar-slot-0-icon" class="hb-slot__icon" picking-mode="Ignore" />
                 <engine:Label name="bv-hotbar-slot-0-index" class="hb-slot__index" picking-mode="Ignore" text="1" />
                 <engine:Label name="bv-hotbar-slot-0-count" class="hb-slot__count" picking-mode="Ignore" />
             </engine:VisualElement>
-            <engine:VisualElement name="bv-hotbar-slot-1" class="hb-slot" picking-mode="Ignore">
+            <engine:VisualElement name="bv-hotbar-slot-1" class="hb-slot" picking-mode="Position">
                 <engine:VisualElement name="bv-hotbar-slot-1-icon" class="hb-slot__icon" picking-mode="Ignore" />
                 <engine:Label name="bv-hotbar-slot-1-index" class="hb-slot__index" picking-mode="Ignore" text="2" />
                 <engine:Label name="bv-hotbar-slot-1-count" class="hb-slot__count" picking-mode="Ignore" />
             </engine:VisualElement>
-            <engine:VisualElement name="bv-hotbar-slot-2" class="hb-slot" picking-mode="Ignore">
+            <engine:VisualElement name="bv-hotbar-slot-2" class="hb-slot" picking-mode="Position">
                 <engine:VisualElement name="bv-hotbar-slot-2-icon" class="hb-slot__icon" picking-mode="Ignore" />
                 <engine:Label name="bv-hotbar-slot-2-index" class="hb-slot__index" picking-mode="Ignore" text="3" />
                 <engine:Label name="bv-hotbar-slot-2-count" class="hb-slot__count" picking-mode="Ignore" />
             </engine:VisualElement>
-            <engine:VisualElement name="bv-hotbar-slot-3" class="hb-slot" picking-mode="Ignore">
+            <engine:VisualElement name="bv-hotbar-slot-3" class="hb-slot" picking-mode="Position">
                 <engine:VisualElement name="bv-hotbar-slot-3-icon" class="hb-slot__icon" picking-mode="Ignore" />
                 <engine:Label name="bv-hotbar-slot-3-index" class="hb-slot__index" picking-mode="Ignore" text="4" />
                 <engine:Label name="bv-hotbar-slot-3-count" class="hb-slot__count" picking-mode="Ignore" />
             </engine:VisualElement>
-            <engine:VisualElement name="bv-hotbar-slot-4" class="hb-slot" picking-mode="Ignore">
+            <engine:VisualElement name="bv-hotbar-slot-4" class="hb-slot" picking-mode="Position">
                 <engine:VisualElement name="bv-hotbar-slot-4-icon" class="hb-slot__icon" picking-mode="Ignore" />
                 <engine:Label name="bv-hotbar-slot-4-index" class="hb-slot__index" picking-mode="Ignore" text="5" />
                 <engine:Label name="bv-hotbar-slot-4-count" class="hb-slot__count" picking-mode="Ignore" />
             </engine:VisualElement>
-            <engine:VisualElement name="bv-hotbar-slot-5" class="hb-slot" picking-mode="Ignore">
+            <engine:VisualElement name="bv-hotbar-slot-5" class="hb-slot" picking-mode="Position">
                 <engine:VisualElement name="bv-hotbar-slot-5-icon" class="hb-slot__icon" picking-mode="Ignore" />
                 <engine:Label name="bv-hotbar-slot-5-index" class="hb-slot__index" picking-mode="Ignore" text="6" />
                 <engine:Label name="bv-hotbar-slot-5-count" class="hb-slot__count" picking-mode="Ignore" />
             </engine:VisualElement>
-            <engine:VisualElement name="bv-hotbar-slot-6" class="hb-slot" picking-mode="Ignore">
+            <engine:VisualElement name="bv-hotbar-slot-6" class="hb-slot" picking-mode="Position">
                 <engine:VisualElement name="bv-hotbar-slot-6-icon" class="hb-slot__icon" picking-mode="Ignore" />
                 <engine:Label name="bv-hotbar-slot-6-index" class="hb-slot__index" picking-mode="Ignore" text="7" />
                 <engine:Label name="bv-hotbar-slot-6-count" class="hb-slot__count" picking-mode="Ignore" />
             </engine:VisualElement>
-            <engine:VisualElement name="bv-hotbar-slot-7" class="hb-slot" picking-mode="Ignore">
+            <engine:VisualElement name="bv-hotbar-slot-7" class="hb-slot" picking-mode="Position">
                 <engine:VisualElement name="bv-hotbar-slot-7-icon" class="hb-slot__icon" picking-mode="Ignore" />
                 <engine:Label name="bv-hotbar-slot-7-index" class="hb-slot__index" picking-mode="Ignore" text="8" />
                 <engine:Label name="bv-hotbar-slot-7-count" class="hb-slot__count" picking-mode="Ignore" />
             </engine:VisualElement>
-            <engine:VisualElement name="bv-hotbar-slot-8" class="hb-slot" picking-mode="Ignore">
+            <engine:VisualElement name="bv-hotbar-slot-8" class="hb-slot" picking-mode="Position">
                 <engine:VisualElement name="bv-hotbar-slot-8-icon" class="hb-slot__icon" picking-mode="Ignore" />
                 <engine:Label name="bv-hotbar-slot-8-index" class="hb-slot__index" picking-mode="Ignore" text="9" />
                 <engine:Label name="bv-hotbar-slot-8-count" class="hb-slot__count" picking-mode="Ignore" />
             </engine:VisualElement>
-            <engine:VisualElement name="bv-hotbar-slot-9" class="hb-slot" picking-mode="Ignore">
+            <engine:VisualElement name="bv-hotbar-slot-9" class="hb-slot" picking-mode="Position">
                 <engine:VisualElement name="bv-hotbar-slot-9-icon" class="hb-slot__icon" picking-mode="Ignore" />
                 <engine:Label name="bv-hotbar-slot-9-index" class="hb-slot__index" picking-mode="Ignore" text="0" />
                 <engine:Label name="bv-hotbar-slot-9-count" class="hb-slot__count" picking-mode="Ignore" />
