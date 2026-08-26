@@ -24,6 +24,9 @@ namespace Blockiverse.WorldGen
 
         public VoxelWorld Generate()
         {
+            if (settings.Bounds.Width != Size || settings.Bounds.Depth != Size || settings.Bounds.Height != Size)
+                throw new ArgumentException("The title mini-world requires exact 128x128x128 bounds.", nameof(settings));
+
             var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
             for (int x = 0; x < Size; x++)
             for (int z = 0; z < Size; z++)
@@ -36,6 +39,10 @@ namespace Blockiverse.WorldGen
             PlaceShowcaseVegetation(world);
             PlaceShowcaseResources(world);
             PlaceShowcaseStructures(world);
+            // Re-assert this reserved marker after structure placement; it is intentionally outside
+            // every structure footprint and guarantees the complete plant catalog remains visible.
+            PlaceSurface(world, 64, 50, BlockRegistry.MeadowTuft);
+            PlaceSurface(world, 66, 50, BlockRegistry.WildflowerCluster);
             return world;
         }
 
@@ -95,8 +102,11 @@ namespace Blockiverse.WorldGen
         {
             for (int x = 0; x < Size; x++)
             for (int z = 108; z < Size; z++)
-            for (int y = SurfaceY - 3; y <= SurfaceY; y++)
-                world.SetBlock(new BlockPosition(x, y, z), y == SurfaceY ? BlockRegistry.Brine : BlockRegistry.Brine, trackChange: false);
+            {
+                int surface = FindSurfaceY(world, x, z);
+                for (int y = SurfaceY - 3; y <= surface; y++)
+                    world.SetBlock(new BlockPosition(x, y, z), y <= SurfaceY ? BlockRegistry.Brine : BlockRegistry.Air, trackChange: false);
+            }
         }
 
         static void CarveFreshwaterRiver(VoxelWorld world)
@@ -105,8 +115,11 @@ namespace Blockiverse.WorldGen
             {
                 int center = 64 + ((z / 12) % 2 == 0 ? -3 : 3);
                 for (int x = center - 2; x <= center + 2; x++)
-                    for (int y = SurfaceY - 2; y <= SurfaceY; y++)
-                        world.SetBlock(new BlockPosition(x, y, z), BlockRegistry.Freshwater, trackChange: false);
+                {
+                    int surface = FindSurfaceY(world, x, z);
+                    for (int y = SurfaceY - 2; y <= surface; y++)
+                        world.SetBlock(new BlockPosition(x, y, z), y <= SurfaceY ? BlockRegistry.Freshwater : BlockRegistry.Air, trackChange: false);
+                }
             }
         }
 
@@ -140,29 +153,50 @@ namespace Blockiverse.WorldGen
 
         void PlaceShowcaseVegetation(VoxelWorld world)
         {
-            Place(world, 56, 65, 55, BlockRegistry.Berrybush);
-            Place(world, 93, 65, 94, BlockRegistry.Reedgrass);
-            Place(world, 35, 65, 78, BlockRegistry.Thornbrush);
-            Place(world, 35, 75, 22, BlockRegistry.GrainStalk);
-            Place(world, 60, 65, 52, BlockRegistry.MeadowTuft);
-            Place(world, 70, 65, 55, BlockRegistry.WildflowerCluster);
-            Place(world, 105, 65, 80, BlockRegistry.MossCarpet);
-            Place(world, 75, 65, 105, BlockRegistry.SaltReed);
-            Place(world, 42, 65, 82, BlockRegistry.DrygrassTuft);
-            Place(world, 42, 65, 101, BlockRegistry.DuneSage);
-            Place(world, 106, 70, 42, BlockRegistry.SnowLichen);
-            Place(world, 111, 70, 47, BlockRegistry.FrostFern);
-            Place(world, 60, 75, 20, BlockRegistry.WindrootShrub);
+            PlaceSurface(world, 56, 55, BlockRegistry.Berrybush);
+            PlaceSurface(world, 93, 94, BlockRegistry.Reedgrass);
+            PlaceSurface(world, 35, 78, BlockRegistry.Thornbrush);
+            PlaceSurface(world, 35, 22, BlockRegistry.GrainStalk);
+            PlaceSurface(world, 60, 52, BlockRegistry.MeadowTuft);
+            PlaceSurface(world, 105, 80, BlockRegistry.MossCarpet);
+            PlaceSurface(world, 75, 105, BlockRegistry.SaltReed);
+            PlaceSurface(world, 42, 82, BlockRegistry.DrygrassTuft);
+            PlaceSurface(world, 42, 101, BlockRegistry.DuneSage);
+            PlaceSurface(world, 106, 42, BlockRegistry.SnowLichen);
+            PlaceSurface(world, 111, 47, BlockRegistry.FrostFern);
+            PlaceSurface(world, 60, 20, BlockRegistry.WindrootShrub);
 
             var vegetation = new VegetationService();
             vegetation.Configure((x, z) => (int)BiomeAt(x, z), settings.Seed);
-            vegetation.PlaceBiomeTree(world, new BlockPosition(52, 65, 45), TerrainBiome.Meadow);
-            vegetation.PlaceBiomeTree(world, new BlockPosition(106, 65, 75), TerrainBiome.Pinewild);
-            vegetation.PlaceBiomeTree(world, new BlockPosition(95, 65, 90), TerrainBiome.Wetland);
-            vegetation.PlaceBiomeTree(world, new BlockPosition(38, 65, 80), TerrainBiome.Drybrush);
-            vegetation.PlaceBiomeTree(world, new BlockPosition(40, 65, 98), TerrainBiome.Dunes);
-            vegetation.PlaceBiomeTree(world, new BlockPosition(105, 70, 45), TerrainBiome.Tundra);
-            vegetation.PlaceBiomeTree(world, new BlockPosition(58, 75, 24), TerrainBiome.Highlands);
+            PlaceTree(world, vegetation, 52, 45, TerrainBiome.Meadow);
+            PlaceTree(world, vegetation, 106, 75, TerrainBiome.Pinewild);
+            PlaceTree(world, vegetation, 95, 90, TerrainBiome.Wetland);
+            PlaceTree(world, vegetation, 38, 80, TerrainBiome.Drybrush);
+            PlaceTree(world, vegetation, 40, 98, TerrainBiome.Dunes);
+            PlaceTree(world, vegetation, 105, 45, TerrainBiome.Tundra);
+            PlaceTree(world, vegetation, 58, 24, TerrainBiome.Highlands);
+        }
+
+        static void PlaceSurface(VoxelWorld world, int x, int z, BlockId block)
+        {
+            int surface = FindSurfaceY(world, x, z);
+            if (surface >= 0 && !FluidBlocks.IsFluid(world.GetBlock(new BlockPosition(x, surface, z))))
+                Place(world, x, surface + 1, z, block);
+        }
+
+        static void PlaceTree(VoxelWorld world, VegetationService vegetation, int x, int z, TerrainBiome biome)
+        {
+            int surface = FindSurfaceY(world, x, z);
+            if (surface >= 0 && !FluidBlocks.IsFluid(world.GetBlock(new BlockPosition(x, surface, z))))
+                vegetation.PlaceBiomeTree(world, new BlockPosition(x, surface + 1, z), biome);
+        }
+
+        static int FindSurfaceY(VoxelWorld world, int x, int z)
+        {
+            for (int y = world.Bounds.Height - 1; y >= 0; y--)
+                if (world.GetBlock(new BlockPosition(x, y, z)) != BlockRegistry.Air)
+                    return y;
+            return -1;
         }
 
         static void PlaceShowcaseResources(VoxelWorld world)
