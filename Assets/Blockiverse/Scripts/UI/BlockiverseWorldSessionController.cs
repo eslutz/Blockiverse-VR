@@ -520,8 +520,7 @@ namespace Blockiverse.UI
                 GeneratedCreativeWorld generated = WorldSaveGeneration.GenerateNewWorld(
                     config.WorldPreset,
                     config.Seed,
-                    config.WorldSize,
-                    config.StartingBiome);
+                    config.WorldSize);
 
                 EnterGeneratedNewWorld(config, generated, deferRendererRebuild);
             }
@@ -549,11 +548,10 @@ namespace Blockiverse.UI
             string difficulty = config.Difficulty;
             string worldPreset = config.WorldPreset;
             string textureSet = config.TextureSet;
-            string startingBiome = config.StartingBiome;
             string worldSize = config.WorldSize;
             ulong seed = config.Seed;
             Task<GeneratedCreativeWorld> generationTask = Task.Run(
-                () => WorldSaveGeneration.GenerateNewWorld(worldPreset, seed, worldSize, startingBiome));
+                () => WorldSaveGeneration.GenerateNewWorld(worldPreset, seed, worldSize));
 
             while (!generationTask.IsCompleted)
                 yield return null;

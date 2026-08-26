@@ -2,7 +2,7 @@
     <!--
         New World config screen (voxel_survival_menus §6.3), UI Toolkit port of
         BlockiverseNewWorldPanel. Selector rows mirror the uGUI panel's fixed row order:
-        Game Mode, Difficulty, World Size, World Preset, Starting Biome, Texture Set —
+        Game Mode, Difficulty, World Size, World Preset, Texture Set —
         NewWorldScreenController indexes its cycle actions by that order, so the rows here
         must not be reordered without changing the controller's selector tables with them.
 
@@ -76,17 +76,6 @@
                 <engine:Button name="bv-world-preset-back" text="&lt;" class="hs-button nw-row__cycle" />
                 <engine:Label name="bv-world-preset-value" picking-mode="Ignore" class="hs-body nw-row__value" />
                 <engine:Button name="bv-world-preset-next" text="&gt;" class="hs-button nw-row__cycle" />
-            </engine:VisualElement>
-
-            <engine:VisualElement name="bv-row-starting-biome" class="nw-row" picking-mode="Ignore">
-                <engine:Label name="bv-starting-biome-label" text="Starting Biome" picking-mode="Ignore" class="hs-body nw-row__name">
-                    <Bindings>
-                        <UnityEngine.Localization.LocalizedString property="text" table="UI" entry="ui.generated.new_world.starting_biome" />
-                    </Bindings>
-                </engine:Label>
-                <engine:Button name="bv-starting-biome-back" text="&lt;" class="hs-button nw-row__cycle" />
-                <engine:Label name="bv-starting-biome-value" picking-mode="Ignore" class="hs-body nw-row__value" />
-                <engine:Button name="bv-starting-biome-next" text="&gt;" class="hs-button nw-row__cycle" />
             </engine:VisualElement>
 
             <engine:VisualElement name="bv-row-texture-set" class="nw-row" picking-mode="Ignore">

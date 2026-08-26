@@ -373,9 +373,6 @@ namespace Blockiverse.Tests.EditMode
                 WorldSaveGeneration.GenerationPresetForId(WorldPresetIds.FlatBuilder),
                 Is.EqualTo(CreativeWorldGenerationPreset.FlatCreative));
             Assert.That(
-                WorldSaveGeneration.GenerationPresetForId(WorldPresetIds.VoidBuilder),
-                Is.EqualTo(CreativeWorldGenerationPreset.VoidBuilder));
-            Assert.That(
                 WorldSaveGeneration.GenerationPresetForId("unknown"),
                 Is.EqualTo(CreativeWorldGenerationPreset.SurvivalLite));
 
@@ -392,15 +389,8 @@ namespace Blockiverse.Tests.EditMode
                 CreativeWorldGenerationPreset.FlatCreative,
                 registry,
                 settings);
-            GeneratedCreativeWorld empty = WorldSaveGeneration.GenerateWorld(
-                CreativeWorldGenerationPreset.VoidBuilder,
-                registry,
-                settings);
-
             Assert.That(flat.GenerationPreset, Is.EqualTo(CreativeWorldGenerationPreset.FlatCreative));
             Assert.That(flat.World.GetBlock(new BlockPosition(1, 3, 1)), Is.Not.EqualTo(BlockRegistry.Air));
-            Assert.That(empty.GenerationPreset, Is.EqualTo(CreativeWorldGenerationPreset.VoidBuilder));
-            Assert.That(empty.World.GetBlock(new BlockPosition(1, 3, 1)), Is.EqualTo(BlockRegistry.Air));
         }
 
         [Test]

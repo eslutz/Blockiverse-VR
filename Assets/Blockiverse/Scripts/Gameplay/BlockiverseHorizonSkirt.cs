@@ -96,8 +96,7 @@ namespace Blockiverse.Gameplay
         /// surface is. A world shorter than sea level has no ocean for it to continue: builder
         /// canvases are 64 blocks tall against a sea level of 64
         /// (`WorldSaveGeneration.BuilderWorldHeight`), so a plane at 64 would hang above the whole
-        /// world instead of meeting anything, and a Void Builder — whose entire premise is the
-        /// void — would quietly acquire a floor stretching to the horizon.
+        /// world instead of meeting anything.
         /// </remarks>
         public static bool SuitsWorld(WorldBounds bounds) => bounds.Height > WorldConstants.SeaLevel;
 

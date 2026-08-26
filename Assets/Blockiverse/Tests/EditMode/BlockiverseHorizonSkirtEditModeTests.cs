@@ -85,8 +85,7 @@ namespace Blockiverse.Tests.EditMode
         {
             // The plane sits at sea level because that is where the ocean's surface is. A builder
             // canvas is 64 blocks tall against a sea level of 64, so a plane there would hang
-            // above the entire world — and a Void Builder, whose whole premise is the void, would
-            // silently acquire a floor to the horizon.
+            // above the entire world.
             Assert.That(BlockiverseHorizonSkirt.SuitsWorld(DefaultWorld), Is.True);
             Assert.That(BlockiverseHorizonSkirt.SuitsWorld(MediumWorld), Is.True);
 

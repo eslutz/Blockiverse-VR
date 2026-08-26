@@ -165,14 +165,15 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void PlaceScrubbranchTreeHasShortTrunk()
+        public void PlaceScrubbranchTreeKeepsItsCanopyAbovePlayerHeight()
         {
             vegetation.PlaceScrubbranchTree(world, BasePos);
 
             Assert.That(world.GetBlock(BasePos), Is.EqualTo(BlockRegistry.BranchwoodLog));
-            Assert.That(world.GetBlock(new BlockPosition(BasePos.X, BasePos.Y + 1, BasePos.Z)), Is.EqualTo(BlockRegistry.BranchwoodLog));
-            // Trunk should not extend to 5 blocks
-            Assert.That(world.GetBlock(new BlockPosition(BasePos.X, BasePos.Y + 5, BasePos.Z)), Is.Not.EqualTo(BlockRegistry.BranchwoodLog));
+            Assert.That(world.GetBlock(new BlockPosition(BasePos.X, BasePos.Y + 3, BasePos.Z)), Is.EqualTo(BlockRegistry.BranchwoodLog),
+                "A scrub tree needs four trunk blocks so its lowest canopy is not at head height.");
+            Assert.That(world.GetBlock(new BlockPosition(BasePos.X, BasePos.Y + 4, BasePos.Z)), Is.EqualTo(BlockRegistry.Leafmoss),
+                "The first canopy layer must start above a standing player's head.");
         }
 
         [Test]

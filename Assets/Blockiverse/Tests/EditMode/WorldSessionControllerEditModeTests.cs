@@ -333,11 +333,22 @@ namespace Blockiverse.Tests.EditMode
         public void WorldSaveGenerationOwnsMenuSeedAndSizeMapping()
         {
             Assert.That(WorldSaveGeneration.FoldSeed(0x0000000100000002UL), Is.EqualTo(3));
-            Assert.That(WorldSaveGeneration.SizeFor("medium"), Is.EqualTo((192, 192)));
-            // R4b: the large/infinite presets were dropped; any non-medium value falls back to the
-            // bounded default footprint.
-            Assert.That(WorldSaveGeneration.SizeFor("large"), Is.EqualTo((128, 128)));
-            Assert.That(WorldSaveGeneration.SizeFor("unknown"), Is.EqualTo((128, 128)));
+            Assert.That(WorldSaveGeneration.SizeFor("small"), Is.EqualTo((192, 192)));
+            Assert.That(WorldSaveGeneration.SizeFor("medium"), Is.EqualTo((256, 256)));
+            Assert.That(WorldSaveGeneration.SizeFor("large"), Is.EqualTo((384, 384)));
+            Assert.That(WorldSaveGeneration.SizeFor("x_large"), Is.EqualTo((512, 512)));
+            Assert.That(WorldSaveGeneration.SizeFor("unknown"), Is.EqualTo((192, 192)));
+        }
+
+        [Test]
+        public void NewSurvivalWorldUsesTheTerrainAwareCenterSpawn()
+        {
+            GeneratedCreativeWorld generated = WorldSaveGeneration.GenerateNewWorld(
+                WorldPresetIds.SurvivalTerrain, seed: 6401, width: 32, depth: 48);
+
+            BlockPosition expected = SurvivalSpawnResolver.Resolve(seed: 6401, width: 32, height: 96, depth: 48);
+            Assert.That(generated.Settings.SpawnPosition, Is.EqualTo(expected),
+                "New worlds must keep the centered spawn aligned to the surrounding generated terrain.");
         }
 
         CreativeWorldManager CreateWorldManager()
