@@ -408,7 +408,7 @@ The host snapshot header must include:
 
 ```json
 {
-  "worldPreset": "survival_terrain | flat_builder | void_builder",
+  "worldPreset": "survival_terrain | flat_builder",
   "width": 128,
   "height": 64,
   "depth": 128,
@@ -426,7 +426,6 @@ Canonical world presets:
 |---|---:|---:|---:|---:|---:|---:|---|
 | `survival_terrain` | 128–256 | 256 | 128–256 | 16 | 6401 | 96 (sea level) | Ruleset-defined survival world with terrain, caves, fluids, resources, vegetation, environment hooks, and structures. Width/depth follow the world-size selector (small 128 / medium 192 / large 256). |
 | `flat_builder` | 128–256 | 64 | 128–256 | 16 | 1001 | 8 | Flat canonical creative world with the full creative catalog. |
-| `void_builder` | 128–256 | 64 | 128–256 | 16 | 1001 | 32 | Empty builder world with a 16×16 cutstone spawn platform (surface at ground height − 1) and explicit bounds. |
 
 ### Host world metadata (wire header)
 

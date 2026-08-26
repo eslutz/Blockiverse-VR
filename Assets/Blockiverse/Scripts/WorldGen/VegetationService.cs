@@ -86,9 +86,9 @@ namespace Blockiverse.WorldGen
         /// <summary>§9.4 Scrubbranch — the low, wide shrub-tree of Drybrush.</summary>
         public void PlaceScrubbranchTree(VoxelWorld world, BlockPosition basePos, bool trackChange = false)
         {
-            if (!TrunkClear(world, basePos, trunkHeight: 2)) return;
-            PlaceTrunk(world, basePos, trunkHeight: 2, trackChange: trackChange);
-            PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 2, basePos.Z), radius: 3, layers: 1, trackChange: trackChange);
+            if (!TrunkClear(world, basePos, trunkHeight: 4)) return;
+            PlaceTrunk(world, basePos, trunkHeight: 4, trackChange: trackChange);
+            PlaceCanopyRound(world, new BlockPosition(basePos.X, basePos.Y + 4, basePos.Z), radius: 3, layers: 1, trackChange: trackChange);
         }
 
         /// <summary>§9.3 Leanbranch — Wetland. Leans toward water; see the overload that takes a

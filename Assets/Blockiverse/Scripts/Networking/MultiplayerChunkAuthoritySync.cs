@@ -2062,7 +2062,7 @@ namespace Blockiverse.Networking
             reader.ReadValueSafe(out int batchCount);
 
             if (generationPreset < 0 ||
-                generationPreset > (int)CreativeWorldGenerationPreset.VoidBuilder ||
+                generationPreset > (int)CreativeWorldGenerationPreset.FlatCreative ||
                 width <= 0 ||
                 height <= 0 ||
                 depth <= 0 ||

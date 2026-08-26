@@ -211,12 +211,14 @@ namespace Blockiverse.WorldGen
             BlockPosition spawn = settings.SpawnPosition;
             int floorY = spawn.Y - 1;
             int flattenRadius = SpawnClearanceRadius + 1;
+            const int blendRadius = 8;
 
-            for (int dx = -flattenRadius; dx <= flattenRadius; dx++)
+            for (int dx = -blendRadius; dx <= blendRadius; dx++)
             {
-                for (int dz = -flattenRadius; dz <= flattenRadius; dz++)
+                for (int dz = -blendRadius; dz <= blendRadius; dz++)
                 {
-                    if (dx * dx + dz * dz > flattenRadius * flattenRadius)
+                    int distanceSquared = dx * dx + dz * dz;
+                    if (distanceSquared > blendRadius * blendRadius)
                         continue;
 
                     int x = spawn.X + dx;
@@ -224,7 +226,18 @@ namespace Blockiverse.WorldGen
                     if (!IsColumnInBounds(x, z))
                         continue;
 
-                    surfaceHeights[SurfaceIndex(x, z)] = floorY;
+                    int index = SurfaceIndex(x, z);
+                    if (distanceSquared <= flattenRadius * flattenRadius)
+                    {
+                        surfaceHeights[index] = floorY;
+                        continue;
+                    }
+
+                    double distance = Math.Sqrt(distanceSquared);
+                    double progress = (distance - flattenRadius) / (blendRadius - flattenRadius);
+                    double smoothProgress = progress * progress * (3d - 2d * progress);
+                    int naturalHeight = surfaceHeights[index];
+                    surfaceHeights[index] = (int)Math.Round(floorY + (naturalHeight - floorY) * smoothProgress);
                 }
             }
         }

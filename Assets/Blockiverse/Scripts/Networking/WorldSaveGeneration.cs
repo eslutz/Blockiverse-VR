@@ -10,7 +10,6 @@ namespace Blockiverse.Networking
     {
         public const int BuilderWorldHeight = 64;
         public const int FlatBuilderGroundHeight = 8;
-        public const int VoidBuilderGroundHeight = 32;
         // Survival worlds always generate at the canonical full height; derived from
         // WorldConstants.WorldMaxY because WorldConstants has no height constant of its own.
         public const int SurvivalWorldHeight = WorldConstants.WorldMaxY + 1;
@@ -25,20 +24,18 @@ namespace Blockiverse.Networking
         public static GeneratedCreativeWorld GenerateNewWorld(
             string worldPreset,
             ulong menuSeed,
-            string worldSize,
-            string startingBiome)
+            string worldSize)
         {
             int seed = FoldSeed(menuSeed);
             (int width, int depth) = SizeFor(worldSize);
-            return GenerateNewWorld(worldPreset, seed, width, depth, startingBiome);
+            return GenerateNewWorld(worldPreset, seed, width, depth);
         }
 
         public static GeneratedCreativeWorld GenerateNewWorld(
             string worldPreset,
             int seed,
             int width,
-            int depth,
-            string startingBiome)
+            int depth)
         {
             BlockRegistry registry = BlockRegistry.Default;
 
@@ -48,21 +45,10 @@ namespace Blockiverse.Networking
                     var flatSettings = new WorldGenerationSettings(
                         width, BuilderWorldHeight, depth, WorldConstants.ChunkSize, seed, FlatBuilderGroundHeight);
                     return GenerateWorld(CreativeWorldGenerationPreset.FlatCreative, registry, flatSettings);
-                case CreativeWorldGenerationPreset.VoidBuilder:
-                    var voidSettings = new WorldGenerationSettings(
-                        width, BuilderWorldHeight, depth, WorldConstants.ChunkSize, seed, VoidBuilderGroundHeight);
-                    return GenerateWorld(CreativeWorldGenerationPreset.VoidBuilder, registry, voidSettings);
             }
 
-            BlockPosition? spawn = FindSpawnForBiome(
-                seed,
-                width,
-                SurvivalWorldHeight,
-                depth,
-                WorldConstants.SeaLevel,
-                startingBiome);
-            var settings = new WorldGenerationSettings(
-                width, SurvivalWorldHeight, depth, WorldConstants.ChunkSize, seed, WorldConstants.SeaLevel, spawn);
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateSurvivalTerrain(
+                width, SurvivalWorldHeight, depth, WorldConstants.ChunkSize, seed);
             return GenerateWorld(CreativeWorldGenerationPreset.SurvivalLite, registry, settings);
         }
 
@@ -71,8 +57,6 @@ namespace Blockiverse.Networking
             string normalized = WorldPresetIds.Normalize(presetId);
             if (string.Equals(normalized, WorldPresetIds.FlatBuilder, StringComparison.OrdinalIgnoreCase))
                 return CreativeWorldGenerationPreset.FlatCreative;
-            if (string.Equals(normalized, WorldPresetIds.VoidBuilder, StringComparison.OrdinalIgnoreCase))
-                return CreativeWorldGenerationPreset.VoidBuilder;
             return CreativeWorldGenerationPreset.SurvivalLite;
         }
 
@@ -94,12 +78,6 @@ namespace Blockiverse.Networking
                         settings,
                         new FlatBuilderPreset(registry, settings).Generate(),
                         CreativeWorldGenerationPreset.FlatCreative);
-                case CreativeWorldGenerationPreset.VoidBuilder:
-                    return new GeneratedCreativeWorld(
-                        registry,
-                        settings,
-                        new VoidBuilderPreset(registry, settings).Generate(),
-                        CreativeWorldGenerationPreset.VoidBuilder);
                 default:
                     var survivalPreset = new SurvivalTerrainPreset(registry, settings);
                     VoxelWorld world = survivalPreset.Generate();
@@ -112,14 +90,17 @@ namespace Blockiverse.Networking
             }
         }
 
-        // Maps the menu's world-size selector to bounded dimensions.
+        // The renderer only keeps nearby chunks live; generation and persistence remain full-world.
         public static (int width, int depth) SizeFor(string worldSize)
         {
+            if (string.Equals(worldSize, "x_large", StringComparison.OrdinalIgnoreCase))
+                return (512, 512);
+            if (string.Equals(worldSize, "large", StringComparison.OrdinalIgnoreCase))
+                return (384, 384);
             if (string.Equals(worldSize, "medium", StringComparison.OrdinalIgnoreCase))
-                return (192, 192);
+                return (256, 256);
 
-            // Any other size (small, or legacy large/infinite) is capped to Small (128).
-            return (128, 128);
+            return (192, 192);
         }
 
         // Folds the 64-bit menu seed into the generator's int seed deterministically.
@@ -147,17 +128,10 @@ namespace Blockiverse.Networking
                         groundHeight: Math.Min(FlatBuilderGroundHeight, data.Height - 2),
                         spawnPosition: spawnPosition);
                     return GenerateWorld(CreativeWorldGenerationPreset.FlatCreative, registry, flatSettings);
-                case CreativeWorldGenerationPreset.VoidBuilder:
-                    var voidSettings = new WorldGenerationSettings(
-                        data.Width, data.Height, data.Depth, data.ChunkSize, data.Seed,
-                        groundHeight: Math.Min(VoidBuilderGroundHeight, data.Height - 2),
-                        spawnPosition: spawnPosition);
-                    return GenerateWorld(CreativeWorldGenerationPreset.VoidBuilder, registry, voidSettings);
             }
 
-            int survivalGroundHeight = Math.Min(WorldConstants.SeaLevel, data.Height - 2);
-            var settings = new WorldGenerationSettings(
-                data.Width, data.Height, data.Depth, data.ChunkSize, data.Seed, survivalGroundHeight, spawnPosition);
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateSurvivalTerrain(
+                data.Width, data.Height, data.Depth, data.ChunkSize, data.Seed, spawnPosition);
             return GenerateWorld(CreativeWorldGenerationPreset.SurvivalLite, registry, settings);
         }
 
@@ -168,7 +142,7 @@ namespace Blockiverse.Networking
                 : null;
         }
 
-        // Searches outward from the world center for a dry-land column of the requested starting
+        /* Searches outward from the world center for a dry-land column of the requested starting
         // biome ("balanced" accepts any biome). Columns below sea level flood with fluid (§5.4),
         // so the spawn prefers terrain at or above it rather than terraforming an island into a
         // lake. Pure seed math via SurvivalBiomeResolver, so the search agrees with what the
@@ -219,6 +193,6 @@ namespace Blockiverse.Networking
             }
 
             return null; // no dry match in this seed — fall back to the center spawn
-        }
+        }*/
     }
 }

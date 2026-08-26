@@ -9,7 +9,7 @@ using UnityEngine.UIElements;
 namespace Blockiverse.UI
 {
     // UI Toolkit port of BlockiverseNewWorldPanel (voxel_survival_menus §6.3). Wraps the same
-    // pure NewWorldConfig model; the six selector rows cycle its canonical option lists in the
+    // pure NewWorldConfig model; the five selector rows cycle its canonical option lists in the
     // uGUI panel's fixed row order. Create validates through the model and dispatches
     // new_world.create; Cancel dispatches new_world.cancel. Like the uGUI panel, this screen
     // plays no feedback cues of its own — show/hide cues come from the host, and the config
@@ -18,7 +18,7 @@ namespace Blockiverse.UI
         900, 1234, UiToolkitPlacementProfile.Menu)]
     public sealed class NewWorldScreenController : UiToolkitScreenController, IUiToolkitNewWorldScreen
     {
-        // Row order is the uGUI panel's CycleRowNames order; the three tables below and the
+        // Row order is the New World screen's selector order; the three tables below and the
         // UXML rows are indexed together and must never be reordered independently.
         static readonly string[] SelectorElementPrefixes =
         {
@@ -26,7 +26,6 @@ namespace Blockiverse.UI
             "bv-difficulty",
             "bv-world-size",
             "bv-world-preset",
-            "bv-starting-biome",
             "bv-texture-set",
         };
 
@@ -36,7 +35,6 @@ namespace Blockiverse.UI
             (config, forward) => config.CycleDifficulty(forward),
             (config, forward) => config.CycleWorldSize(forward),
             (config, forward) => config.CycleWorldPreset(forward),
-            (config, forward) => config.CycleStartingBiome(forward),
             (config, forward) => config.CycleTextureSet(forward),
         };
 
@@ -46,7 +44,6 @@ namespace Blockiverse.UI
             config => config.Difficulty,
             config => config.WorldSize,
             config => config.WorldPreset,
-            config => config.StartingBiome,
             config => config.TextureSet,
         };
 
@@ -159,7 +156,7 @@ namespace Blockiverse.UI
             createButton?.RegisterCallback(createClickCallback);
             cancelButton?.RegisterCallback(cancelClickCallback);
 
-            // The six value labels are dynamic text (UiText); static labels update through
+            // The five value labels are dynamic text (UiText); static labels update through
             // their own bindings (matrix §4: locale change).
             if (LocalizationSettings.HasSettings)
                 LocalizationSettings.SelectedLocaleChanged += OnSelectedLocaleChanged;

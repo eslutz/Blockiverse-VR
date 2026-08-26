@@ -15,7 +15,7 @@ namespace Blockiverse.Tests.PlayMode
         [UnityTest]
         public IEnumerator RenderingPresetsHaveValidSurfaces()
         {
-            string[] presets = { WorldPresetIds.SurvivalTerrain, WorldPresetIds.FlatBuilder, WorldPresetIds.VoidBuilder };
+            string[] presets = { WorldPresetIds.SurvivalTerrain, WorldPresetIds.FlatBuilder };
             
             foreach (string presetId in presets)
             {
@@ -30,8 +30,7 @@ namespace Blockiverse.Tests.PlayMode
                 presetId,
                 seed: 6401,
                 width: 32,
-                depth: 32,
-                startingBiome: null);
+                depth: 32);
             
             VoxelWorld world = generated.World;
             BlockRegistry registry = generated.Registry;

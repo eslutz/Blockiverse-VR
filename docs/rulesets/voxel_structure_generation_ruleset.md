@@ -783,7 +783,6 @@ Creative mode can reuse natural structure generation or disable it by world pres
 |---|---|
 | `survival_terrain` | Enabled |
 | `flat_builder` | Disabled |
-| `void_builder` | Disabled |
 | `island_builder` | Enabled unless player disables it |
 | `cave_builder` | Underground/cave structures enabled; surface structures disabled |
 | `sky_shelf` | Disabled unless floating structures are added |

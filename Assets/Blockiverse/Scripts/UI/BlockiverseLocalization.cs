@@ -71,7 +71,6 @@ public const string SettingsAudio = "ui.action.settings.audio";
             public const string NewWorldDifficulty = "ui.generated.new_world.difficulty";
             public const string NewWorldSize = "ui.generated.new_world.size";
             public const string NewWorldPreset = "ui.generated.new_world.preset";
-            public const string NewWorldStartingBiome = "ui.generated.new_world.starting_biome";
             public const string NewWorldTextureSet = "ui.generated.new_world.texture_set";
             public const string NewWorldCreate = "ui.generated.new_world.create";
             public const string LoadWorldTitle = "ui.generated.load_world.title";

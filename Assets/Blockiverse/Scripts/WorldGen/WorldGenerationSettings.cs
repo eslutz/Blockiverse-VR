@@ -20,13 +20,31 @@ namespace Blockiverse.WorldGen
 
         public static WorldGenerationSettings CreateDefaultSurvivalTerrain(int seed = 6401)
         {
-            return new WorldGenerationSettings(
+            return CreateSurvivalTerrain(
                 width: 128,
                 height: WorldConstants.WorldMaxY + 1,
                 depth: 128,
                 chunkSize: WorldConstants.ChunkSize,
-                seed: seed,
-                groundHeight: WorldConstants.SeaLevel);
+                seed: seed);
+        }
+
+        public static WorldGenerationSettings CreateSurvivalTerrain(
+            int width,
+            int height,
+            int depth,
+            int chunkSize,
+            int seed,
+            BlockPosition? spawnPosition = null)
+        {
+            BlockPosition resolvedSpawn = spawnPosition ?? SurvivalSpawnResolver.Resolve(seed, width, height, depth);
+            return new WorldGenerationSettings(
+                width,
+                height,
+                depth,
+                chunkSize,
+                seed,
+                WorldConstants.SeaLevel,
+                resolvedSpawn);
         }
 
         public static WorldGenerationSettings CreateDefaultSurvivalLite(int seed = 6401)
@@ -45,8 +63,8 @@ namespace Blockiverse.WorldGen
             ChunkSize = chunkSize;
             Seed = seed;
             GroundHeight = groundHeight;
-            // The default spawn is the world center; callers may override it (e.g. the new-world
-            // flow's starting-biome search) as long as the position stays inside the bounds.
+            // The default spawn is the world center; callers may override it as long as the
+            // position stays inside the bounds.
             SpawnPosition = spawnPosition ?? new BlockPosition(width / 2, groundHeight + 1, depth / 2);
 
             if (!Bounds.Contains(SpawnPosition))
@@ -99,45 +117,4 @@ namespace Blockiverse.WorldGen
         }
     }
 
-    // §11.3 Void Builder: an empty world holding only a 16×16 cutstone starting platform whose
-    // walking surface sits at groundHeight-1 — the same surface/spawn relationship as the flat
-    // preset, so the default spawn (groundHeight+1 over the spawn column) lands on it. Nothing
-    // else generates; weather still runs at the world runtime level.
-    public sealed class VoidBuilderPreset
-    {
-        public const int PlatformSize = 16;
-
-        readonly BlockRegistry registry;
-        readonly WorldGenerationSettings settings;
-
-        public VoidBuilderPreset(BlockRegistry registry, WorldGenerationSettings settings)
-        {
-            this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        }
-
-        public VoxelWorld Generate()
-        {
-            registry.Get(BlockRegistry.Air);
-            registry.Get(BlockRegistry.CutstoneBlock);
-
-            var world = new VoxelWorld(settings.Bounds, settings.ChunkSize, settings.Seed);
-
-            int platformY = settings.GroundHeight - 1;
-            int startX = settings.SpawnPosition.X - PlatformSize / 2;
-            int startZ = settings.SpawnPosition.Z - PlatformSize / 2;
-
-            for (int dx = 0; dx < PlatformSize; dx++)
-            {
-                for (int dz = 0; dz < PlatformSize; dz++)
-                {
-                    var position = new BlockPosition(startX + dx, platformY, startZ + dz);
-                    if (world.Bounds.Contains(position))
-                        world.SetBlock(position, BlockRegistry.CutstoneBlock, trackChange: false);
-                }
-            }
-
-            return world;
-        }
-    }
 }

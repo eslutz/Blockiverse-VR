@@ -27,6 +27,7 @@ namespace Blockiverse.WorldGen
 
         readonly int seed;
         readonly int worldHeight;
+        readonly int terrainProfile;
 
         public SurvivalBiomeResolver(int seed, int worldHeight)
         {
@@ -35,21 +36,39 @@ namespace Blockiverse.WorldGen
 
             this.seed = seed;
             this.worldHeight = worldHeight;
+            terrainProfile = (int)(DeterministicHash.Hash(seed, 0, 0, 0, salt: 991) % 4u);
         }
 
         // Raw terrain surface height at the given column (pre spawn-flatten), matching
         // SurvivalTerrainPreset.CalculateSurfaceHeight exactly.
         public int SurfaceHeight(int x, int z)
         {
-            double continent = (ValueNoise2D(x, z, scale: 500, seed, salt: 101) - 0.5) * 2.0;
-            double hills      = (ValueNoise2D(x, z, scale: 67,  seed, salt: 211) - 0.5) * 2.0;
-            double detail     = (ValueNoise2D(x, z, scale: 17,  seed, salt: 323) - 0.5) * 2.0;
+            (int continentScale, int hillScale, int continentalRelief, int hillRelief) = terrainProfile switch
+            {
+                0 => (420, 53, 24, 11), // broken highlands
+                1 => (540, 79, 18, 16), // rolling continental interior
+                2 => (360, 61, 28, 9),  // broad basins and steep rims
+                _ => (620, 91, 21, 13), // long, gentle ranges
+            };
+
+            // Warping the large-scale coordinates stops climate and terrain boundaries from
+            // following the same broad square-grid pattern in every world.
+            double warpX = (ValueNoise2D(x, z, scale: 211, seed, salt: 419) - 0.5) * 96d;
+            double warpZ = (ValueNoise2D(x, z, scale: 211, seed, salt: 431) - 0.5) * 96d;
+            int warpedX = (int)Math.Round(x + warpX);
+            int warpedZ = (int)Math.Round(z + warpZ);
+
+            double continent = (ValueNoise2D(warpedX, warpedZ, continentScale, seed, salt: 101) - 0.5) * 2.0;
+            double hills      = (ValueNoise2D(warpedX, warpedZ, hillScale,      seed, salt: 211) - 0.5) * 2.0;
+            double ridges     = 1d - Math.Abs((ValueNoise2D(warpedX, warpedZ, 137, seed, salt: 277) - 0.5) * 2d);
+            double detail     = (ValueNoise2D(x, z, scale: 17, seed, salt: 323) - 0.5) * 2.0;
 
             // R4b: amplitude scaled down for the 128-tall world (was 42/18/5 for the old 256-tall
             // world). Peak relief is SeaLevel + 48, so with SeaLevel = 64 the tallest natural column
             // is ~112 — leaving headroom under WorldMaxY (127) for trees and surface structures
             // without clamping peaks into flat plateaus.
-            int height = (int)Math.Round(WorldConstants.SeaLevel + continent * 30 + hills * 14 + detail * 4);
+            int height = (int)Math.Round(
+                WorldConstants.SeaLevel + continent * continentalRelief + hills * hillRelief + (ridges - 0.5) * 10 + detail * 4);
             return Clamp(height, 40, worldHeight - 1);
         }
 
@@ -125,8 +144,13 @@ namespace Blockiverse.WorldGen
             if (surfaceY >= WorldConstants.SeaLevel + 34)
                 return TerrainBiome.Highlands;
 
-            double temperature = ValueNoise2D(x, z, scale: 250, seed + 11, salt: 511);
-            double moisture    = ValueNoise2D(x, z, scale: 250, seed + 23, salt: 737);
+            double warpX = (ValueNoise2D(x, z, scale: 223, seed, salt: 613) - 0.5) * 112d;
+            double warpZ = (ValueNoise2D(x, z, scale: 223, seed, salt: 647) - 0.5) * 112d;
+            int climateX = (int)Math.Round(x + warpX);
+            int climateZ = (int)Math.Round(z + warpZ);
+            int climateScale = terrainProfile switch { 0 => 190, 1 => 275, 2 => 165, _ => 320 };
+            double temperature = ValueNoise2D(climateX, climateZ, climateScale, seed + 11, salt: 511);
+            double moisture    = ValueNoise2D(climateX, climateZ, climateScale, seed + 23, salt: 737);
             temperature -= Math.Max(0, surfaceY - (WorldConstants.SeaLevel + 24)) * 0.006;
 
             if (temperature < 0.25)

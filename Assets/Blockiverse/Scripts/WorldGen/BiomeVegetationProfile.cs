@@ -109,7 +109,7 @@ namespace Blockiverse.WorldGen
 
         static readonly BiomeVegetationProfile[] Profiles =
         {
-            new(TerrainBiome.Meadow, treeDensityPercent: 25, wildPlantDensityPermille: 28,
+            new(TerrainBiome.Meadow, treeDensityPercent: 15, wildPlantDensityPermille: 28,
                 groundCoverChancePermille: 300,
                 wildPlants: new[] { new VegetationPlant(BlockRegistry.Berrybush, 1) },
                 groundCover: new[]
@@ -121,7 +121,7 @@ namespace Blockiverse.WorldGen
                     new VegetationPlant(BlockRegistry.FallenLeaves, 10, Forest),
                 }),
 
-            new(TerrainBiome.Pinewild, treeDensityPercent: 55, wildPlantDensityPermille: 18,
+            new(TerrainBiome.Pinewild, treeDensityPercent: 25, wildPlantDensityPermille: 18,
                 groundCoverChancePermille: 550,
                 wildPlants: new[] { new VegetationPlant(BlockRegistry.Berrybush, 1) },
                 groundCover: new[]
@@ -131,7 +131,7 @@ namespace Blockiverse.WorldGen
                     new VegetationPlant(BlockRegistry.MeadowTuft, 20, Temperate),
                 }),
 
-            new(TerrainBiome.Wetland, treeDensityPercent: 20, wildPlantDensityPermille: 45,
+            new(TerrainBiome.Wetland, treeDensityPercent: 10, wildPlantDensityPermille: 45,
                 groundCoverChancePermille: 420,
                 wildPlants: new[] { new VegetationPlant(BlockRegistry.Reedgrass, 1) },
                 groundCover: new[]

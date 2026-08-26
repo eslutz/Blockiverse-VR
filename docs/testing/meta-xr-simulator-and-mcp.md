@@ -2,7 +2,7 @@
 
 This document records local validation tooling for Blockiverse VR. The setup is global on Eric's machine so any Codex workspace can use the same Horizon Debug Bridge, Unity MCP relay, and Meta XR Simulator validation flow.
 
-The smoke script below is historical evidence from the earlier temporary validation world. New simulator checks should use the canonical rulesets in `../rulesets/`, especially `survival_terrain`, `flat_builder`, `void_builder`, canonical registry IDs, and the unified save schema.
+The smoke script below is historical evidence from the earlier temporary validation world. New simulator checks should use the canonical rulesets in `../rulesets/`, especially `survival_terrain`, `flat_builder`, canonical registry IDs, and the unified save schema.
 
 ## Installed Tooling
 

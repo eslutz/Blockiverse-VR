@@ -974,7 +974,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 4612677658
-    m_Localized: Medium (192x192)
+    m_Localized: Medium (256x256)
     m_Metadata:
       m_Items: []
   - m_Id: 4612677659
@@ -982,7 +982,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 4612677660
-    m_Localized: Small (128x128)
+    m_Localized: Small (192x192)
     m_Metadata:
       m_Items: []
   - m_Id: 4612677661
@@ -1261,10 +1261,6 @@ MonoBehaviour:
     m_Localized: Tundra
     m_Metadata:
       m_Items: []
-  - m_Id: 204277128617990
-    m_Localized: Void Builder
-    m_Metadata:
-      m_Items: []
   - m_Id: 204277128617991
     m_Localized: Wetland
     m_Metadata:
@@ -1311,6 +1307,12 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 937072348094464
     m_Localized: View Anchor
+  - m_Id: 1021389971644416
+    m_Localized: Large (384x384)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1021390005198848
+    m_Localized: X-Large (512x512)
     m_Metadata:
       m_Items: []
   references:
