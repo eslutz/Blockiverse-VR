@@ -933,16 +933,19 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void FlatJsonFilePathReturnsControlledFailure()
         {
-            // The legacy flat-JSON format (schema v1-v3) is unsupported: the app is unreleased,
-            // so loading a flat file fails fast instead of migrating.
+            // The legacy flat-JSON format is unsupported: the app is unreleased, so loading a flat
+            // file fails fast instead of migrating. What is rejected here is the SHAPE (a file
+            // where a save directory is expected), not the schema number — so the version below is
+            // deliberately the current one, proving the flat path is refused even when its schema
+            // would otherwise be acceptable.
             string flatPath = Path.Combine(Path.GetTempPath(), $"blockiverse-legacy-{System.Guid.NewGuid():N}.json");
 
             try
             {
                 var flatData = new WorldSaveData
                 {
-                    SchemaVersion = 1,
-                    WorldName = "v1",
+                    SchemaVersion = WorldSaveService.CurrentSchemaVersion,
+                    WorldName = "flat-json",
                     Width = 4,
                     Height = 4,
                     Depth = 4,
@@ -977,7 +980,10 @@ namespace Blockiverse.Tests.EditMode
 
                 string manifestPath = Path.Combine(path, "manifest.json");
                 VxlwManifest manifest = JsonUtility.FromJson<VxlwManifest>(File.ReadAllText(manifestPath));
-                manifest.SchemaVersion = WorldSaveService.CurrentSchemaVersion - 1;
+                // Deliberately +1, not -1: the schema is frozen at 1 for alpha, so -1 would be 0 —
+                // which is also JsonUtility's default for a missing int, making a pass here
+                // ambiguous between "rejected the wrong version" and "rejected a blank manifest".
+                manifest.SchemaVersion = WorldSaveService.CurrentSchemaVersion + 1;
                 File.WriteAllText(manifestPath, JsonUtility.ToJson(manifest, prettyPrint: true));
 
                 WorldLoadResult result = new WorldSaveService().Load(path);

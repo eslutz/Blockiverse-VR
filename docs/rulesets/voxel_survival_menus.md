@@ -739,7 +739,7 @@ toggle against; to clear from a station, pin something else or unpin from the Cr
 | Property | Value | Reason |
 |---|---|---|
 | Authority | **Client-local** | A pin changes no world state, so host authority buys nothing. This is the same carve-out player vitals already have, and it keeps pinning off the survival command channel entirely. |
-| Persistence | **Session-only** | Not written to the save. Avoids touching the v5 player save for a HUD convenience. |
+| Persistence | **Session-only** | Not written to the save. Avoids touching the player save for a HUD convenience. |
 | On successful craft | **Auto-unpin** | Crafting the pinned recipe is the goal completing; leaving it pinned means the player must dismiss it manually every time. |
 | On world unload | Cleared | Session state does not survive leaving the world. |
 

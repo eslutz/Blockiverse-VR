@@ -348,7 +348,7 @@ normalizeHarvestedTreeMetadata = true;
 
 The schema above is the target. The engine stores block state as a single `int` per block
 (`Blockiverse.Voxel.BlockState`), sparse: only blocks that differ from `BlockState.Default` cost
-anything, and everything else answers `Default` without an entry. Save schema **v5** carries it as
+anything, and everything else answers `Default` without an entry. Save schema **v1** carries it as
 an optional `BlockStates` array per 16-block section, index-aligned with `ChangePositions` and left
 empty when a section has nothing to record. (Unity's `JsonUtility` writes a null array as `[]`, so
 the field is always present; what the empty form avoids is one zero per delta, which is the cost

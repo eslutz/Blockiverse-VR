@@ -22,7 +22,7 @@ namespace Blockiverse.Voxel
         readonly BlockId[] blocks;
         readonly Dictionary<BlockPosition, BlockChange> changedBlocks = new();
 
-        // Per-block state (save schema v5). SPARSE on purpose: the overwhelming majority of blocks
+        // Per-block state (save schema v1). SPARSE on purpose: the overwhelming majority of blocks
         // carry BlockState.Default, and a parallel array over the whole world would cost one int
         // per cell to record almost nothing. Entries are removed when a block changes, so state can
         // never outlive the block that owned it and re-attach to whatever is placed next.
@@ -51,7 +51,7 @@ namespace Blockiverse.Voxel
             return blocks[ToIndex(position)];
         }
 
-        /// <summary>Per-block state bits (save schema v5), or BlockState.Default.</summary>
+        /// <summary>Per-block state bits (save schema v1), or BlockState.Default.</summary>
         public int GetBlockState(BlockPosition position)
         {
             return blockStates.TryGetValue(position, out int state) ? state : BlockState.Default;

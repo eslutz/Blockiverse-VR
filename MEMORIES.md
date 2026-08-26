@@ -55,7 +55,7 @@ This file is the concise handoff for future agent work in the Blockiverse VR pro
 
   **Compat:** saves unaffected (that hash covers canonical ids only), but the **LAN join hash changed**, so older peers are refused at the handshake — intended, pre-release.
 
-  **Landed since (2026-08-24):** PR 1 (13 vegetation blocks + `meadow_tuft`), PR 2 (7 canonical tree species with lean/wind/oasis mechanics, and **save schema v5** for per-block state), and PR 3 (groundcover pass at the §8 spec densities). Block state ships **replicated** across all three client apply paths — a host-only bit desynced leaf decay permanently, because the world sim runs on every peer (see [[lockstep-world-sim-not-host-authoritative]]). §12's structure-mask layer is still build-or-descope.
+  **Landed since (2026-08-24):** PR 1 (13 vegetation blocks + `meadow_tuft`), PR 2 (7 canonical tree species with lean/wind/oasis mechanics, and **per-block state in the save schema**), and PR 3 (groundcover pass at the §8 spec densities). Block state ships **replicated** across all three client apply paths — a host-only bit desynced leaf decay permanently, because the world sim runs on every peer (see [[lockstep-world-sim-not-host-authoritative]]). §12's structure-mask layer is still build-or-descope.
 
   **Open:** no device capture exists, and this adds real GPU cost exactly where nobody has measured (alpha test disables early-Z; canopy faces still grow ~2× after dedup). Groundcover density is at spec with `MaxGroundCoverPerChunk` as the only backstop, unmeasured on device. `Blockiverse.Survival/RecipePinState.cs` also landed for the single-slot recipe pin (§6.10a), deliberately engine-free so the UI Toolkit migration could not delete it.
 
