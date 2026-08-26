@@ -263,8 +263,7 @@ namespace Blockiverse.Networking
                 string.IsNullOrEmpty(spec.Preset) ? "survival_terrain" : spec.Preset,
                 seed,
                 width,
-                depth,
-                startingBiome: null);
+                depth);
         }
 
         bool InitializeFreshMultiplayerWorldBeforeHostStart(string path, out string failureReason)

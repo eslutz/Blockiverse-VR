@@ -33,7 +33,7 @@ namespace Blockiverse.Gameplay
         FluidFlowService fluidFlowService;
         // Biome lookups for this world, built from the same seed and world height the terrain was
         // generated with (so it reproduces the generated biomes exactly). Null for presets that
-        // have no biomes (flat creative, void builder) and before the world is configured; every
+        // have no biomes (flat creative) and before the world is configured; every
         // read goes through BiomeIndexAt, which degrades to AnyBiomeIndex.
         SurvivalBiomeResolver biomeResolver;
         WorldTimeClock worldTimeClock;
@@ -149,7 +149,7 @@ namespace Blockiverse.Gameplay
         }
 
         // Biome index for a world column, or SurvivalBiomeResolver.AnyBiomeIndex when this world
-        // has no biomes (flat creative / void builder presets) or is not configured yet. Pure seed
+        // has no biomes (flat creative) or is not configured yet. Pure seed
         // math, so host and clients resolve identical biomes without any extra sync traffic.
         int BiomeIndexAt(int worldX, int worldZ) =>
             biomeResolver != null

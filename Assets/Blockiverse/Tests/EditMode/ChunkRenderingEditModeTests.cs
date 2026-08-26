@@ -649,45 +649,6 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void VoidBuilderWorldCreatesObjectsOnlyForThePlatformRegion()
-        {
-            BlockRegistry registry = BlockRegistry.CreateDefault();
-            var settings = new WorldGenerationSettings(
-                width: 48,
-                height: 48,
-                depth: 48,
-                chunkSize: 16,
-                seed: 2201,
-                groundHeight: 24);
-            VoxelWorld world = new VoidBuilderPreset(registry, settings).Generate();
-            var worldObject = new GameObject("Chunk Renderer");
-            Texture2D atlasTexture = null;
-            Material blockMaterial = null;
-
-            try
-            {
-                blockMaterial = CreateBlockAtlasMaterial(out atlasTexture);
-                VoxelWorldRenderer renderer = worldObject.AddComponent<VoxelWorldRenderer>();
-                renderer.Configure(world, registry, blockMaterial, -1);
-
-                // The void world is almost entirely air apart from a single small cutstone
-                // platform, so only the chunk(s) holding the platform create render objects — far
-                // fewer than the 3x3x3 = 27 total chunks.
-                int created = renderer.Stats.ChunkCount;
-                Assert.That(created, Is.GreaterThan(0), "The platform region must render.");
-                Assert.That(created, Is.LessThanOrEqualTo(2),
-                    "A mostly-air void world should create objects only for the platform region.");
-                Assert.That(worldObject.GetComponentsInChildren<MeshFilter>().Length, Is.EqualTo(created));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(worldObject);
-                UnityEngine.Object.DestroyImmediate(blockMaterial);
-                UnityEngine.Object.DestroyImmediate(atlasTexture);
-            }
-        }
-
-        [Test]
         public void ColliderRebuildsAreThrottledAndDrainViaPump()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();

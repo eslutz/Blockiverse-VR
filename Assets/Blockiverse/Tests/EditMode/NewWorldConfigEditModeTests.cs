@@ -16,7 +16,6 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(config.Difficulty, Is.EqualTo("normal"));
             Assert.That(config.WorldSize, Is.EqualTo("small"));
             Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.SurvivalTerrain));
-            Assert.That(config.StartingBiome, Is.EqualTo("balanced"));
             Assert.That(GetStringProperty(config, "TextureSet"), Is.EqualTo("enhanced"));
             Assert.That(config.Seed, Is.EqualTo(918273645UL));
         }
@@ -39,18 +38,16 @@ namespace Blockiverse.Tests.EditMode
 
             config.CycleWorldSize();
             Assert.That(config.WorldSize, Is.EqualTo("medium"));
-            Assert.That(config.WorldSize, Is.Not.EqualTo("large"), "The large/infinite world sizes were dropped (R4b).");
-            Assert.That(BlockiverseLocalization.DisplayNameForCanonicalId("medium"), Is.EqualTo("Medium (192x192)"));
             config.CycleWorldSize();
-            Assert.That(config.WorldSize, Is.EqualTo("small"), "World size should wrap small→medium→small (no large option).");
+            Assert.That(config.WorldSize, Is.EqualTo("large"));
+            config.CycleWorldSize();
+            Assert.That(config.WorldSize, Is.EqualTo("x_large"));
+            config.CycleWorldSize();
+            Assert.That(config.WorldSize, Is.EqualTo("small"), "World size should wrap small→medium→large→x_large→small.");
             config.CycleWorldPreset();
             Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.FlatBuilder));
             config.CycleWorldPreset();
-            Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.VoidBuilder));
-            config.CycleWorldPreset();
-            Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.SurvivalTerrain), "World preset should wrap after void_builder.");
-            config.CycleStartingBiome();
-            Assert.That(config.StartingBiome, Is.EqualTo("meadow"));
+            Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.SurvivalTerrain), "World preset should wrap after flat_builder.");
 
             config.CycleTextureSet();
             Assert.That(GetStringProperty(config, "TextureSet"), Is.EqualTo("ai_simplified"));
@@ -111,10 +108,6 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(config.GameMode, Is.EqualTo("survival"));
             Assert.That(config.IsValid(out string error), Is.False);
             Assert.That(error, Does.Contain("Survival Terrain"));
-
-            config.CycleWorldPreset();
-            Assert.That(config.WorldPreset, Is.EqualTo(WorldPresetIds.VoidBuilder));
-            Assert.That(config.IsValid(out _), Is.False);
 
             config.CycleGameMode();
             Assert.That(config.GameMode, Is.EqualTo("creative"));

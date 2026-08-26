@@ -614,7 +614,9 @@ namespace Blockiverse.VR
 
             bool worldInputAllowed = BlockiverseRuntimeState.AllowWorldInput;
             bool blockEditingVisible = interactionController == null || interactionController.BlockEditingEnabled;
-            bool shouldShow = !worldInputAllowed || blockEditingVisible;
+            // The title world is explorable but not editable. Keep the XR interactor active for
+            // UI hit-testing, while drawing its line only once it is actually aimed at the menu.
+            bool shouldShow = worldInputAllowed ? blockEditingVisible : IsInteractionRayOverUi();
 
             if (interactionLineRenderer != null)
                 interactionLineRenderer.enabled = shouldShow && (!capturedLineRendererDefault || lineRendererDefaultEnabled);

@@ -16,8 +16,7 @@ namespace Blockiverse.Networking
     public enum CreativeWorldGenerationPreset
     {
         SurvivalLite,
-        FlatCreative,
-        VoidBuilder
+        FlatCreative
     }
 
     public readonly struct WeatherSyncState

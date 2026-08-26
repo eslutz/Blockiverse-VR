@@ -28,6 +28,37 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(settings.Bounds.Contains(settings.SpawnPosition), Is.True);
         }
 
+        [TestCase(6401)]
+        [TestCase(112358)]
+        [TestCase(424242)]
+        [TestCase(97531)]
+        public void SurvivalTerrainSpawnFloorMatchesTheSurroundingTerrain(int seed)
+        {
+            // This catches a return to the old fixed sea-level spawn pad, which could carve a
+            // deep hole when the terrain around the world centre was elevated.
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalTerrain(seed);
+            var resolver = new SurvivalBiomeResolver(seed, settings.Bounds.Height);
+            var surroundingHeights = new List<int>();
+
+            for (int dx = -8; dx <= 8; dx++)
+            {
+                for (int dz = -8; dz <= 8; dz++)
+                {
+                    int distanceSquared = dx * dx + dz * dz;
+                    if (distanceSquared < 36 || distanceSquared > 64)
+                        continue;
+
+                    surroundingHeights.Add(resolver.SurfaceHeight(
+                        settings.Bounds.Width / 2 + dx,
+                        settings.Bounds.Depth / 2 + dz));
+                }
+            }
+
+            surroundingHeights.Sort();
+            int expectedFloor = surroundingHeights[surroundingHeights.Count / 2];
+            Assert.That(settings.SpawnPosition.Y - 1, Is.EqualTo(expectedFloor));
+        }
+
         [Test]
         public void GeneratedWorldsFitUnderCanonicalHeightWithAirHeadroom()
         {
@@ -45,7 +76,7 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
-        public void BuilderPresetsFitWellUnderCanonicalHeight()
+        public void FlatBuilderPresetFitsWellUnderCanonicalHeight()
         {
             BlockRegistry registry = BlockRegistry.CreateDefault();
             var settings = new WorldGenerationSettings(
@@ -57,12 +88,8 @@ namespace Blockiverse.Tests.EditMode
                 groundHeight: WorldConstants.SeaLevel);
 
             VoxelWorld flat = new FlatBuilderPreset(registry, settings).Generate();
-            VoxelWorld voidWorld = new VoidBuilderPreset(registry, settings).Generate();
-
             Assert.That(HighestNonAirY(flat), Is.LessThan(WorldConstants.WorldMaxY),
                 "Flat builder ground must sit well under the world ceiling.");
-            Assert.That(HighestNonAirY(voidWorld), Is.LessThan(WorldConstants.WorldMaxY),
-                "Void builder platform must sit well under the world ceiling.");
         }
 
         static int HighestNonAirY(VoxelWorld world)
@@ -144,50 +171,6 @@ namespace Blockiverse.Tests.EditMode
             }
 
             Assert.That(differentColumns, Is.GreaterThan(512));
-        }
-
-        [Test]
-        public void VoidBuilderPresetGeneratesOnlyTheCutstonePlatform()
-        {
-            BlockRegistry registry = BlockRegistry.CreateDefault();
-            var settings = new WorldGenerationSettings(width: 32, height: 64, depth: 32, chunkSize: 16, seed: 1001, groundHeight: 32);
-            VoxelWorld world = new VoidBuilderPreset(registry, settings).Generate();
-
-            int platformY = settings.GroundHeight - 1;
-            int startX = settings.SpawnPosition.X - VoidBuilderPreset.PlatformSize / 2;
-            int startZ = settings.SpawnPosition.Z - VoidBuilderPreset.PlatformSize / 2;
-
-            int cutstone = 0;
-            int strayBlocks = 0;
-            for (int y = 0; y < world.Bounds.Height; y++)
-            {
-                for (int x = 0; x < world.Bounds.Width; x++)
-                {
-                    for (int z = 0; z < world.Bounds.Depth; z++)
-                    {
-                        BlockId block = world.GetBlock(new BlockPosition(x, y, z));
-                        if (block == BlockRegistry.Air)
-                            continue;
-
-                        bool onPlatform = y == platformY &&
-                            x >= startX && x < startX + VoidBuilderPreset.PlatformSize &&
-                            z >= startZ && z < startZ + VoidBuilderPreset.PlatformSize;
-
-                        if (onPlatform && block == BlockRegistry.CutstoneBlock)
-                            cutstone++;
-                        else
-                            strayBlocks++;
-                    }
-                }
-            }
-
-            // §11.3: a 16×16×1 cutstone platform and nothing else; the default spawn column
-            // stands on it.
-            Assert.That(cutstone, Is.EqualTo(VoidBuilderPreset.PlatformSize * VoidBuilderPreset.PlatformSize));
-            Assert.That(strayBlocks, Is.Zero, "The void preset must generate nothing outside the platform.");
-            Assert.That(
-                world.GetBlock(new BlockPosition(settings.SpawnPosition.X, platformY, settings.SpawnPosition.Z)),
-                Is.EqualTo(BlockRegistry.CutstoneBlock));
         }
 
         [Test]

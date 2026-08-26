@@ -1515,16 +1515,21 @@ MonoBehaviour:
     m_Metadata:
       m_Items:
       - rid: 5195086324721254457
-  - m_Id: 204277128617990
-    m_Key: ui.value.canonical.void_builder
-    m_Metadata:
-      m_Items:
-      - rid: 5195086324721254458
   - m_Id: 204277128617991
     m_Key: ui.value.canonical.wetland
     m_Metadata:
       m_Items:
       - rid: 5195086324721254459
+  - m_Id: 1021389971644416
+    m_Key: ui.value.canonical.large
+    m_Metadata:
+      m_Items:
+      - rid: 5195086375790575616
+  - m_Id: 1021390005198848
+    m_Key: ui.value.canonical.x_large
+    m_Metadata:
+      m_Items:
+      - rid: 5195086375790575617
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
@@ -2806,13 +2811,16 @@ MonoBehaviour:
       data:
         m_CommentText: New World starting-biome value label; humanize-fallback parity
           for canonical id 'tundra'.
-    - rid: 5195086324721254458
-      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
-      data:
-        m_CommentText: New World world-preset value label; humanize-fallback parity
-          for canonical id 'void_builder'.
     - rid: 5195086324721254459
       type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
       data:
         m_CommentText: New World starting-biome value label; humanize-fallback parity
           for canonical id 'wetland'.
+    - rid: 5195086375790575616
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World world-size value label for the 384x384 bounded world.
+    - rid: 5195086375790575617
+      type: {class: Comment, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_CommentText: New World world-size value label for the 512x512 bounded world.

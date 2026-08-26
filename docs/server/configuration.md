@@ -66,7 +66,7 @@ issues for large player counts; they are expected.
 | `world.dir` | `./world` | Directory holding the save. In the container this is `/data`. Back this up. |
 | `world.name` | `Blockiverse World` | Display name recorded in the save manifest. |
 | `world.seed` | *(unset)* | Unset means random on first creation. Once a world exists, the seed is read from its manifest and this is ignored. |
-| `world.preset` | `survival_terrain` | One of `survival_terrain`, `flat_builder`, `void_builder`. Applies only when creating a new world. |
+| `world.preset` | `survival_terrain` | One of `survival_terrain`, `flat_builder`. Applies only when creating a new world. |
 | `world.gamemode` | `survival` | `survival` or `creative`. |
 
 Changing `world.preset` or `world.seed` does **not** regenerate an existing world. To start fresh,

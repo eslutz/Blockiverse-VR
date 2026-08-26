@@ -77,7 +77,7 @@ namespace Blockiverse.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator MenuModeKeepsInteractionRayVisualAtDefaultLengthWhenUiIsMissed()
+        public IEnumerator MenuModeHidesInteractionRayVisualWhenUiIsMissed()
         {
             var bridgeObject = new GameObject("Creative Input Bridge");
             var rayObject = new GameObject("Interaction Ray");
@@ -101,8 +101,9 @@ namespace Blockiverse.Tests.PlayMode
                 CreativeInputBridgeUpdateMethod.Invoke(bridge, null);
                 yield return null;
 
-                Assert.That(lineRenderer.enabled, Is.True);
-                Assert.That(lineVisual.enabled, Is.True);
+                Assert.That(lineRenderer.enabled, Is.False,
+                    "The title world is explorable but not editable; a terrain miss must not draw a ray.");
+                Assert.That(lineVisual.enabled, Is.False);
                 Assert.That(lineVisual.overrideInteractorLineLength, Is.False,
                     "A menu-mode ray with no UI hit should keep the normal XRI line length; shortening it hides ray/menu alignment defects.");
                 Assert.That(lineVisual.lineLength, Is.EqualTo(10.0f).Within(0.001f));

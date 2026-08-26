@@ -88,7 +88,7 @@ namespace Blockiverse.Server
                 ["admin.socket_path"] = (o, v, p) => o.AdminSocketPath = v,
             };
 
-        static readonly string[] WorldPresets = { "survival_terrain", "flat_builder", "void_builder" };
+        static readonly string[] WorldPresets = { "survival_terrain", "flat_builder" };
         static readonly string[] GameModes = { "survival", "creative" };
 
         public static IEnumerable<string> KnownKeys => Setters.Keys;

@@ -98,14 +98,6 @@ namespace Blockiverse.Tests.PlayMode
                 chunkSize: WorldConstants.ChunkSize,
                 seed: 1001,
                 groundHeight: 2);
-            var voidSettings = new WorldGenerationSettings(
-                width: 32,
-                height: 16,
-                depth: 32,
-                chunkSize: WorldConstants.ChunkSize,
-                seed: 2201,
-                groundHeight: 2);
-
             return new[]
             {
                 new GeneratedCreativeWorld(
@@ -118,11 +110,6 @@ namespace Blockiverse.Tests.PlayMode
                     flatSettings,
                     new FlatBuilderPreset(registry, flatSettings).Generate(),
                     CreativeWorldGenerationPreset.FlatCreative),
-                new GeneratedCreativeWorld(
-                    registry,
-                    voidSettings,
-                    new VoidBuilderPreset(registry, voidSettings).Generate(),
-                    CreativeWorldGenerationPreset.VoidBuilder)
             };
         }
 

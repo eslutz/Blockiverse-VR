@@ -11,7 +11,7 @@ Blockiverse VR is a VR voxel sandbox prototype for Meta Quest 3 and Quest 3S, bu
 ## Initial Gameplay Scope
 
 - Ruleset-defined survival and creative modes
-- Canonical bounded world presets: `survival_terrain`, `flat_builder`, and `void_builder`
+- Canonical bounded world presets: `survival_terrain` and `flat_builder`
 - Canonical voxel registries, terrain, caves, resources, structures, vegetation, and environment systems
 - Inventory, hotbar, tools, crafting, stations, farming, containers, and player survival stats
 - Save/load with explicit schema versioning and temporary-ID migrations

@@ -117,11 +117,8 @@ namespace Blockiverse.Tests.EditMode
             Assert.That(controller.Config.Difficulty, Is.EqualTo("normal"));
             Assert.That(controller.Config.WorldSize, Is.EqualTo("small"));
             Assert.That(controller.Config.WorldPreset, Is.EqualTo(WorldPresetIds.SurvivalTerrain));
-            Assert.That(controller.Config.StartingBiome, Is.EqualTo("balanced"));
 
-            // Rows whose canonical-value entries already exist assert the authored English;
-            // the rest assert the UiText resolution so the test tracks central key additions.
-            Assert.That(root.Q<Label>("bv-world-size-value").text, Is.EqualTo("Small (128x128)"));
+            Assert.That(root.Q<Label>("bv-world-size-value").text, Is.EqualTo("Small (192x192)"));
             Assert.That(root.Q<Label>("bv-texture-set-value").text, Is.EqualTo("Enhanced"));
             string gameModeText = root.Q<Label>("bv-game-mode-value").text;
             Assert.That(gameModeText, Is.EqualTo(UiText.Get("ui.value.canonical.survival")));
@@ -151,19 +148,19 @@ namespace Blockiverse.Tests.EditMode
 
             controller.CycleSelector(2, forward: true);
             Assert.That(controller.Config.WorldSize, Is.EqualTo("medium"));
-            Assert.That(root.Q<Label>("bv-world-size-value").text, Is.EqualTo("Medium (192x192)"));
+            controller.CycleSelector(2, forward: true);
+            Assert.That(controller.Config.WorldSize, Is.EqualTo("large"));
+            controller.CycleSelector(2, forward: true);
+            Assert.That(controller.Config.WorldSize, Is.EqualTo("x_large"));
+            Assert.That(root.Q<Label>("bv-world-size-value").text, Is.EqualTo("X-Large (512x512)"));
             controller.CycleSelector(2, forward: true);
             Assert.That(controller.Config.WorldSize, Is.EqualTo("small"),
-                "World size should wrap small→medium→small.");
-            Assert.That(root.Q<Label>("bv-world-size-value").text, Is.EqualTo("Small (128x128)"));
+                "World size should wrap small→medium→large→x_large→small.");
 
             controller.CycleSelector(3, forward: true);
             Assert.That(controller.Config.WorldPreset, Is.EqualTo(WorldPresetIds.FlatBuilder));
 
             controller.CycleSelector(4, forward: true);
-            Assert.That(controller.Config.StartingBiome, Is.EqualTo("meadow"));
-
-            controller.CycleSelector(5, forward: true);
             Assert.That(controller.Config.TextureSet, Is.EqualTo("ai_simplified"));
             Assert.That(root.Q<Label>("bv-texture-set-value").text, Is.EqualTo("AI Simplified"));
         }

@@ -60,7 +60,7 @@ Execution is grouped into **waves**. Steps within a wave marked *Parallelizable:
 - **Assigned role:** developer
 - **Dependencies:** None
 - **Parallelizable:** Yes (with Steps 2, 3, 7)
-- **Verify:** Update `NewWorldConfigEditModeTests` (no longer wraps through a `large` option), `SurvivalTerrainEditModeTests` / `WorldSaveEditModeTests` (height 128 not 256), `StructureServiceEditModeTests` (uses `SeaLevel`). Generate each preset (`survival_terrain`/`flat_builder`/`void_builder`) and assert peak terrain + tallest structure fit under the new height with air headroom. Run `CanonicalWorldRenderingPlayModeTests`.
+- **Verify:** Update `NewWorldConfigEditModeTests` (no longer wraps through a `large` option), `SurvivalTerrainEditModeTests` / `WorldSaveEditModeTests` (height 128 not 256), `StructureServiceEditModeTests` (uses `SeaLevel`). Generate each preset (`survival_terrain`/`flat_builder`) and assert peak terrain + tallest structure fit under the new height with air headroom. Run `CanonicalWorldRenderingPlayModeTests`.
 
 ### Step 2 — R3: Remove per-frame allocation in the VR interaction hot path
 - **Description:** Cache the left/right interaction rays once after rig wiring; guard with a "rays resolved" flag. Re-discover only on an explicit rig-change event, not every frame. Eliminate both per-frame `GetComponentsInChildren<BlockiverseLocomotionRayMediator>(true)` calls.
@@ -89,7 +89,7 @@ Execution is grouped into **waves**. Steps within a wave marked *Parallelizable:
 - **Assigned role:** developer
 - **Dependencies:** Step 1 (work against final world sizes)
 - **Parallelizable:** No (shares the renderer with Step 5; do Step 4 then Step 5)
-- **Verify:** Extend `ChunkRenderingEditModeTests`: assert all-air chunks create no GameObject/collider/teleport-area; assert an edited-to-empty chunk releases its object; assert a void_builder world (mostly air) creates objects only for the platform region. Keep `CanonicalWorldRenderingPlayModeTests` green (non-air chunks still have meshes/materials/atlas).
+- **Verify:** Extend `ChunkRenderingEditModeTests`: assert all-air chunks create no GameObject/collider/teleport-area; assert an edited-to-empty chunk releases its object. Keep `CanonicalWorldRenderingPlayModeTests` green (non-air chunks still have meshes/materials/atlas).
 
 ### Step 5 — R2: Make initial world render incremental (drain under budgets)
 - **Description:** Route new-world creation through the existing deferred `QueueFullRebuild` path instead of synchronous `RebuildAll`. Drain visual(8)/collider(4) budgets across frames. Bake spawn-region chunks/colliders **eagerly** (so the player lands on solid ground), then progressively fill the rest. Add a "world ready" gate (spawn-area baked) that the loading screen waits on; stop calling `ProcessPendingColliderRebuilds(int.MaxValue)` in the initial path.

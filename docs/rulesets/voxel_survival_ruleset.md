@@ -284,6 +284,19 @@ height = round(96 + continent * 42 + hills * 18 + detail * 5);
 height = clamp(height, 40, 190);
 ```
 
+Implementation note: the seed selects one deterministic macro-terrain profile (continental
+scale/relief and hill scale/relief), and the continental and climate coordinates are domain-warped
+before sampling. This produces distinct world-scale landforms and biome boundaries without storing
+extra world-generation state.
+
+### 5.1a Spawn terrain safety
+
+The initial spawn stays at the world centre in X/Z, but its floor elevation is the median natural
+surface height in the annulus from 6 to 8 blocks around that point. The protected inner 4-block
+spawn pad is level at that elevation and blends back into the natural surface through an 8-block
+radius. This guarantees a clear, solid start without excavating a deep sea-level hole in elevated
+terrain.
+
 ### 5.2 Biome Selection
 
 Generate two extra noise values:

@@ -303,9 +303,8 @@ worldName = "New World";
 seed = randomUInt64().toString();
 gameMode = "survival";
 difficulty = "normal";
-worldSize = "small";
+worldSize = "small"; // 192x192
 worldPreset = "survival_terrain";
-startingBiomePreference = "balanced";
 textureSet = "enhanced";
 ```
 
@@ -319,9 +318,8 @@ textureSet = "enhanced";
 | Seed                    | 918273645                       |
 | Game Mode               | < Survival >                    |
 | Difficulty              | < Normal >                      |
-| World Size              | < Small >                       |
+| World Size              | < Small (192x192) >             |
 | World Preset            | < Survival Terrain >            |
-| Starting Biome          | < Balanced >                    |
 | Texture Set             | < Enhanced >                    |
 +--------------------------+---------------------------------+
 | [ Create World ]                         [ Back ]          |
@@ -336,9 +334,8 @@ textureSet = "enhanced";
 | Seed field | `new_world.set_seed` | Accepts text or number; hashes text seeds into numeric seed |
 | Game Mode selector | `new_world.cycle_game_mode` | Cycles `survival`, `creative` |
 | Difficulty selector | `new_world.cycle_difficulty` | Cycles `easy`, `normal`, `hard` |
-| World Size selector | `new_world.cycle_world_size` | Cycles `small`, `medium`, `large`, `infinite`; current bounded implementation displays `infinite` as an Infinite Preview (256x256) until region-streamed worlds ship. |
-| World Preset selector | `new_world.cycle_world_preset` | Cycles `survival_terrain`, `flat_builder`, `void_builder`; advanced presets may unlock later |
-| Starting Biome selector | `new_world.cycle_starting_biome` | Changes spawn-biome preference |
+| World Size selector | `new_world.cycle_world_size` | Cycles bounded `small` (192x192), `medium` (256x256), `large` (384x384), and `x_large` (512x512). |
+| World Preset selector | `new_world.cycle_world_preset` | Cycles `survival_terrain` and `flat_builder`. |
 | Texture Set selector | `new_world.cycle_texture_set` | Cycles `enhanced`, `ai_simplified`, `ai`, `original`; the selected authored block atlas is saved with the world and restored on load |
 | Create World | `new_world.create` | Validates settings, creates save, starts generation |
 | Back | `new_world.back` | Returns to Title Menu |
@@ -1573,6 +1570,12 @@ Routed world-space menus place themselves by game state, not per panel:
   (re)initialized and **never derives from the headset**, so head pitch, seated/standing
   height, and where the player has walked cannot move it. Walk away and it stays put,
   like a sign at spawn.
+  The title world is a fixed 128×128 survival-terrain exhibit: Meadow occupies the central
+  menu hub, with Highlands, Tundra, Pinewild, Wetland, Dunes, and Drybrush around it. A
+  freshwater river reaches a brine coast, and an accessible cave exposes the Emberflow and
+  underground-content showcase. It is regenerated for the title scene and never becomes a save.
+  The interaction ray stays active for UI hit-testing but its line is visible only while aimed at
+  menu UI; looking at the immutable terrain shows no builder ray or placement preview.
 - **Session state (in-world play):** pause, inventory, settings and other routed menus
   use a **lazy follow**: they open in front of the player at head height with no pitch,
   hold that pose while the head stays within a `followYawThreshold` (30°) cone and the
