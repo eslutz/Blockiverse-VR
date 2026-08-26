@@ -213,7 +213,7 @@ Example:
 
 ```json
 {
-  "schemaVersion": 5,
+  "schemaVersion": 1,
   "engineVersion": "0.1.0",
   "blockRegistryHash": "sha256:9f1c0a3e7b2d4c6f8a1b5d7e9c0f2a4b6d8e0c1f3a5b7d9e1c3f5a7b9d0e2c4f",
   "itemRegistryHash": "sha256:1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
