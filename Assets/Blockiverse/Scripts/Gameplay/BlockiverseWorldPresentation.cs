@@ -110,7 +110,7 @@ namespace Blockiverse.Gameplay
                 registry,
                 chunkMaterial,
                 interactionLayer,
-                ResolveSelectedBlockAtlas(textureSetId),
+                ResolveAtlasForToken(textureSetId),
                 textureSetId,
                 deferInitialRebuild,
                 skyLight);
@@ -167,7 +167,7 @@ namespace Blockiverse.Gameplay
             // VoxelWorldRenderer already does this correctly for its four clones; this did not.
             DestroyGenerated(skyMaterial);
             skyMaterial = chunkMaterial != null
-                ? BlockVisualAtlas.CreateSkyMaterial(chunkMaterial, ResolveSelectedBlockAtlas(textureSetId), textureSetId)
+                ? BlockVisualAtlas.CreateSkyMaterial(chunkMaterial, ResolveAtlasForToken(textureSetId), textureSetId)
                 : null;
             Material deckMaterial = skyMaterial;
 
@@ -246,10 +246,25 @@ namespace Blockiverse.Gameplay
         BlockiverseHorizonSkirt horizonSkirt;
         Material skyMaterial;
 
+        // The composited pack atlas is OWNED by this component: it is created at runtime and has
+        // no asset behind it, so nothing else will ever free it. The file already learned this
+        // lesson with skyMaterial, where failing to destroy-and-remint leaked one material per
+        // world entered.
+        Texture2D composedPackAtlas;
+        string composedPackAtlasKey;
+        IBlockiverseAtlasPixelSource atlasPixelSource;
+
+        /// <summary>Test seam: substitutes the GPU/PNG boundary so compositing runs headlessly.</summary>
+        public void SetAtlasPixelSourceForTesting(IBlockiverseAtlasPixelSource source) =>
+            atlasPixelSource = source;
+
         void OnDestroy()
         {
             DestroyGenerated(skyMaterial);
             skyMaterial = null;
+            DestroyGenerated(composedPackAtlas);
+            composedPackAtlas = null;
+            composedPackAtlasKey = null;
         }
 
         static void DestroyGenerated(UnityEngine.Object target)
@@ -291,12 +306,93 @@ namespace Blockiverse.Gameplay
                 worldRenderer.RebuildSpawnRegion(spawn, radiusChunks);
         }
 
-        Texture2D ResolveSelectedBlockAtlas(string textureSetId)
+        /// <summary>
+        /// The atlas to bind for a token: a shipped one for a built-in, or a composited one for an
+        /// installed pack. Falls back to the built-in atlas whenever a pack cannot be honoured, so
+        /// this never returns null for a resolvable selection.
+        /// </summary>
+        Texture2D ResolveAtlasForToken(string token)
+        {
+            BlockiverseTextureResolution resolution = BlockiverseTexturePackLibrary.Resolve(token);
+            return ResolveAtlasForResolution(resolution);
+        }
+
+        Texture2D ResolveAtlasForResolution(BlockiverseTextureResolution resolution)
+        {
+            if (resolution.Status != BlockiverseTextureSelectionStatus.PackInstalled)
+                return ResolveBuiltInBlockAtlas(resolution.EffectiveToken);
+
+            BlockiverseTexturePackManifest manifest =
+                BlockiverseTexturePackLibrary.TryGetManifest(resolution.RequestedPackId);
+
+            // The pack composites OVER a built-in set, so a partial pack blends with a chosen base
+            // look rather than leaving holes.
+            Texture2D baseAtlas = ResolveBuiltInBlockAtlas(manifest?.baseTextureSet);
+            if (manifest == null || baseAtlas == null)
+                return baseAtlas;
+
+            if (composedPackAtlasKey == BuildPackCacheKey(resolution.RequestedPackId, manifest)
+                && composedPackAtlas != null)
+            {
+                return composedPackAtlas;   // Re-selecting the same pack is free.
+            }
+
+            Texture2D composed = BlockiverseTexturePackAtlasBuilder.Compose(
+                baseAtlas,
+                resolution.RequestedPackId,
+                BlockiverseTexturePackLibrary.ListTileNames(resolution.RequestedPackId),
+                manifest.tilePixels,
+                atlasPixelSource ??= new BlockiverseAtlasPixelSource());
+
+            if (composed == null)
+                return baseAtlas;
+
+            // Bind order matters at the call site, not here: the caller must rebind BEFORE the old
+            // texture is destroyed. See ApplyTextureSelection.
+            ReplaceComposedAtlas(composed, BuildPackCacheKey(resolution.RequestedPackId, manifest));
+            return composed;
+        }
+
+        static string BuildPackCacheKey(string packId, BlockiverseTexturePackManifest manifest) =>
+            $"{packId}|{manifest.baseTextureSet}|{manifest.tilePixels}|{manifest.packVersion}";
+
+        void ReplaceComposedAtlas(Texture2D composed, string key)
+        {
+            if (composedPackAtlas != null && composedPackAtlas != composed)
+                DestroyGenerated(composedPackAtlas);
+
+            composedPackAtlas = composed;
+            composedPackAtlasKey = key;
+        }
+
+        /// <summary>
+        /// Changes textures on a live world without reloading it.
+        ///
+        /// This is the whole reason the rebind path exists: the only pre-existing way to change
+        /// atlas was VoxelWorldRenderer.Configure, which destroys and re-meshes every chunk, so a
+        /// settings-screen texture change would have cost a full world rebuild.
+        /// </summary>
+        public void ApplyTextureSelection(string token)
+        {
+            if (worldRenderer == null)
+                return;   // Not configured yet; ConfigureForWorld will pick the selection up.
+
+            Texture2D atlas = ResolveAtlasForToken(token);
+            if (atlas == null)
+                return;   // Keep drawing whatever is bound rather than blanking the world.
+
+            // Rebind BEFORE anything is destroyed. Destroying a Texture2D that is still bound to a
+            // live material gives black or magenta chunks for a frame on some backends.
+            worldRenderer.RebindAtlas(atlas);
+            BlockVisualAtlas.TryRebindAtlas(skyMaterial, atlas);
+        }
+
+        Texture2D ResolveBuiltInBlockAtlas(string textureSetId)
         {
             // BlockTextureSetIds.Normalize, NOT NormalizeToken, and deliberately so: this method
             // answers "which of the four BUILT-IN atlases do I bind", and only built-ins ship in
             // the serialized array. A `pack:` token therefore lands on the default set here, which
-            // is the correct fallback until the compositor can build a pack atlas.
+            // is the correct fallback whenever a pack cannot be composited.
             string selected = BlockTextureSetIds.Normalize(textureSetId);
             int count = Math.Min(blockTextureSetIds?.Length ?? 0, blockTextureSetAtlases?.Length ?? 0);
             for (int i = 0; i < count; i++)

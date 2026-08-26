@@ -445,6 +445,26 @@ To re-derive this graph rather than trusting the prose, read the `references` ar
 
 EditMode tests live per-area under `Assets/Blockiverse/Tests/EditMode/`, PlayMode (incl. real Netcode host/client sessions) under `Tests/PlayMode/`.
 
+### Texture packs
+
+Players can supply their own block textures. `Blockiverse.Core` owns the vocabulary
+(`BlockiverseTextureSelection`: a token is a built-in set id or `pack:<id>`), the library that
+scans `persistentDataPath/TexturePacks`, and the per-device preference; `Blockiverse.Gameplay`
+owns the compositor that builds an atlas over a shipped one. Format spec:
+[docs/rulesets/voxel_texture_pack_format.md](docs/rulesets/voxel_texture_pack_format.md); rationale:
+[ADR 0012](docs/adr/0012-user-supplied-texture-packs.md).
+
+Two rules are load-bearing and easy to undo by accident:
+
+- **A texture selection is never networked, and pack files are never transmitted.** Each peer
+  resolves locally. A client cannot use a token for a pack it lacks, and the obvious "fix" —
+  sending the pack too — would make the app redistribute someone's art. `TexturePackIsNeverNetworkedEditModeTests`
+  guards this structurally, including a file-set check that fails if a new file under `Networking/`
+  starts mentioning texture selection.
+- **Persist the REQUESTED token, render the EFFECTIVE one.** A save naming an uninstalled pack must
+  round-trip that token verbatim. Collapsing the two makes the next autosave overwrite the player's
+  choice with the fallback, permanently.
+
 ### Cross-cutting invariants
 
 - **No `InternalsVisibleTo` anywhere.** `internal` members are invisible across assemblies — cross-assembly APIs must be `public`. This has shipped compile breaks before; the asmdef boundary, not the namespace, is what matters (Survival.Health shares the `Blockiverse.Survival` namespace but not the assembly).

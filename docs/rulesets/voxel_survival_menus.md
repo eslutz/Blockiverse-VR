@@ -339,11 +339,29 @@ textureSet = "enhanced";
 | World Size selector | `new_world.cycle_world_size` | Cycles `small`, `medium`, `large`, `infinite`; current bounded implementation displays `infinite` as an Infinite Preview (256x256) until region-streamed worlds ship. |
 | World Preset selector | `new_world.cycle_world_preset` | Cycles `survival_terrain`, `flat_builder`; advanced presets may unlock later |
 | Starting Biome selector | `new_world.cycle_starting_biome` | Changes spawn-biome preference |
-| Texture Set selector | `new_world.cycle_texture_set` | Cycles `enhanced`, `ai_simplified`, `ai`, `original`; the selected authored block atlas is saved with the world and restored on load |
+| Texture Set selector | `new_world.cycle_texture_set` | Cycles the four **built-in** sets `enhanced`, `ai_simplified`, `ai`, `original`; the selection is saved with the world and restored on load. User-supplied packs are chosen in Settings → Textures (§Textures Settings), not here |
 | Create World | `new_world.create` | Validates settings, creates save, starts generation |
 | Back | `new_world.back` | Returns to Title Menu |
 
 Experimental rules are deferred until optional rules systems exist; they are not part of the current New World menu or save schema.
+
+### Textures Settings (`settings_textures`)
+
+Reachable from the Settings hub (`settings.open_textures`), which is itself reachable from **both** the title menu and the pause menu — so a texture can be chosen before playing or changed mid-session.
+
+| Element | Action ID | Behaviour |
+|---|---|---|
+| Built-in list | `settings_textures.select` | The four built-in sets |
+| Installed packs list | `settings_textures.select` | One row per installed pack: display name, plus a byline of author · version · tile size · attribution |
+| Empty state | — | Shown when no packs are installed |
+| Refresh | — | Rescans the pack directory, so a pack sideloaded while the game is running appears without a restart |
+| Close | `settings_textures.close` | Returns to the Settings hub |
+
+Selecting a row does two things: it stores the choice as the player's **local preference** (used by new worlds and by multiplayer joins), and it applies it to the world currently loaded — live, with no reload and no chunk re-mesh. The applied token is what the next save writes.
+
+If a world names a pack that is not installed, the world loads normally with the default textures and a **status toast** (Refused severity) names the missing pack. It is a toast rather than an error dialog because nothing failed: the world is fully playable and the fallback is cosmetic. **The save keeps the original selection**, so reinstalling the pack restores it.
+
+Packs are never shared between players — see [voxel_texture_pack_format.md §8](voxel_texture_pack_format.md).
 
 **Create world logic:**
 

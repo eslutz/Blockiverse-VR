@@ -960,6 +960,16 @@ namespace Blockiverse.Networking
                 return;
             }
 
+            // Textures are NOT part of the snapshot and never travel over the wire, so a joining
+            // client has nothing from the host to apply. Setting its own preference here is what
+            // makes that deliberate: before this, a client rendered with whatever the world
+            // manager's field happened to hold -- its serialized default, or a leftover from a
+            // single-player session earlier in the same process.
+            //
+            // Each peer resolving locally is also what keeps pack FILES off the wire: there is no
+            // point at which a host would need to send one.
+            worldManager.SetTextureSet(BlockiverseTexturePackPreferences.Token);
+
             GeneratedSnapshotWorld generated = snapshot.GenerationTask.Result;
             worldManager.InitializeGeneratedWorld(
                 generated.Registry,

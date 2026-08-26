@@ -37,7 +37,22 @@ namespace Blockiverse.UI
         string currentWorldName;
         string currentDifficulty = string.Empty;
         string currentWorldPreset = WorldPresetIds.SurvivalTerrain;
-        string currentTextureSet = BlockTextureSetIds.Default;
+        // REQUESTED vs EFFECTIVE, and keeping them apart is the whole reason this is two fields.
+        //
+        // The requested token is what the player chose and is what round-trips to the save. The
+        // effective token is what can actually be drawn right now. They differ exactly when a
+        // world names a pack that is not installed.
+        //
+        // Collapsing them is a data-loss bug, not a tidiness issue: the fallback would be written
+        // back by the very next autosave, so a pack the player had merely moved or not yet
+        // reinstalled would be permanently forgotten -- and they would only find out after
+        // reinstalling it and seeing the world ignore it.
+        string requestedTextureToken = BlockTextureSetIds.Default;
+        string effectiveTextureToken = BlockTextureSetIds.Default;
+
+        // Set on load when a pack could not be honoured; consumed once gameplay is on screen,
+        // because a toast raised before EnterGameplay would be shown behind the loading screen.
+        BlockiverseTextureResolution? pendingTextureNotice;
         // Save list rows keyed back to their on-disk paths so Load resolves the exact slot even
         // when two saves share a display name (rebuilt by RefreshSaveList).
         readonly Dictionary<string, string> savePathsBySummaryKey = new();
@@ -220,6 +235,9 @@ namespace Blockiverse.UI
         {
             switch (actionId)
             {
+                case MenuActions.TexturesSettingsSelect:
+                    ApplySelectedTexturePreference();
+                    break;
                 case MenuActions.TitleContinue:
                     ContinueLatestSave();
                     break;
@@ -268,7 +286,8 @@ namespace Blockiverse.UI
             currentWorldName = null;
             currentDifficulty = string.Empty;
             currentWorldPreset = WorldPresetIds.SurvivalTerrain;
-            currentTextureSet = BlockTextureSetIds.Default;
+            requestedTextureToken = BlockTextureSetIds.Default;
+            effectiveTextureToken = BlockTextureSetIds.Default;
             lastSaveTime = 0.0f;
 
             if (worldManager != null)
@@ -314,7 +333,8 @@ namespace Blockiverse.UI
             currentWorldName = null;
             currentDifficulty = string.Empty;
             currentWorldPreset = WorldPresetIds.SurvivalTerrain;
-            currentTextureSet = BlockTextureSetIds.Default;
+            requestedTextureToken = BlockTextureSetIds.Default;
+            effectiveTextureToken = BlockTextureSetIds.Default;
             lastSaveTime = 0.0f;
             RefreshSaveList();
             return true;
@@ -463,7 +483,8 @@ namespace Blockiverse.UI
                 containers: WorldSaveContainerMapper.BuildSavedContainers(worldManager.ContainerStore),
                 difficulty: currentDifficulty,
                 worldPreset: currentWorldPreset,
-                textureSet: currentTextureSet,
+                // The requested token, never the effective one -- see the field comments.
+                textureSet: requestedTextureToken,
                 extras: BuildSaveExtras(respawnDeadPlayer));
         }
 
@@ -620,8 +641,7 @@ namespace Blockiverse.UI
         {
             using ProfilerMarker.AutoScope scope = EnterGeneratedWorldMarker.Auto();
 
-            currentTextureSet = BlockiverseTextureSelection.NormalizeToken(textureSet);
-            worldManager.SetTextureSet(currentTextureSet);
+            ApplyTextureToken(textureSet);
             worldManager.InitializeGeneratedWorld(
                 generated,
                 chunkAuthoritySync,
@@ -974,8 +994,7 @@ namespace Blockiverse.UI
             using ProfilerMarker.AutoScope scope = ApplyLoadedWorldMarker.Auto();
 
             WorldSaveData data = result.Data;
-            currentTextureSet = BlockiverseTextureSelection.NormalizeToken(data.TextureSet);
-            worldManager.SetTextureSet(currentTextureSet);
+            ApplyTextureToken(data.TextureSet);
             worldManager.InitializeGeneratedWorld(
                 generated,
                 chunkAuthoritySync,
@@ -1022,9 +1041,9 @@ namespace Blockiverse.UI
             currentDifficulty = data.Difficulty ?? string.Empty;
             vitalsRuntime?.ConfigureDifficulty(currentDifficulty);
             currentWorldPreset = data.WorldPreset;
-            currentTextureSet = BlockiverseTextureSelection.NormalizeToken(data.TextureSet);
             lastSaveTime = Time.unscaledTime;
             menuController?.EnterGameplay();
+            ShowPendingTextureNotice();
             return true;
         }
 
@@ -1099,6 +1118,77 @@ namespace Blockiverse.UI
             menuController?.ConfigurePauseMenuPermissions(
                 canToggleMode: false,
                 canOpenCreativeTools: creative);
+        }
+
+        /// <summary>
+        /// Resolves a token against the installed packs, sets both halves of the split, and
+        /// remembers anything the player needs to be told.
+        ///
+        /// Every path that chooses textures goes through here -- new world, load, and the settings
+        /// screen -- so the requested/effective distinction cannot be forgotten at one call site.
+        /// </summary>
+        void ApplyTextureToken(string token)
+        {
+            BlockiverseTextureResolution resolution = BlockiverseTexturePackLibrary.Resolve(token);
+
+            requestedTextureToken = resolution.RequestedToken;
+            effectiveTextureToken = resolution.EffectiveToken;
+            pendingTextureNotice = resolution.FellBack ? resolution : null;
+
+            worldManager.SetTextureSet(effectiveTextureToken);
+        }
+
+        /// <summary>
+        /// Tells the player their pack could not be used, once gameplay is actually on screen.
+        ///
+        /// A toast rather than an error dialog: the world loaded and is fully playable, and the
+        /// fallback is cosmetic. Every ShowError call site in this file follows an operation that
+        /// FAILED; this one did not, so a modal the player must dismiss before they can move would
+        /// be out of proportion. Refused severity holds it on screen for five seconds, which is
+        /// hard to miss without blocking anything.
+        /// </summary>
+        void ShowPendingTextureNotice()
+        {
+            if (pendingTextureNotice is not { } resolution)
+                return;
+
+            pendingTextureNotice = null;
+
+            var toast = BlockiverseSceneLookup.Find<StatusToastController>(FindObjectsInactive.Include);
+            if (toast == null)
+                return;
+
+            string key = resolution.Status == BlockiverseTextureSelectionStatus.PackInvalid
+                ? BlockiverseLocalization.Keys.StatusTexturePackInvalid
+                : BlockiverseLocalization.Keys.StatusTexturePackMissing;
+
+            // Pack ids are constrained to [a-z0-9_], so interpolating one is safe.
+            string message = string.Format(
+                BlockiverseLocalization.Text(key),
+                resolution.RequestedPackId,
+                resolution.EffectiveToken);
+
+            toast.ShowTimedStatus(message, StatusToastController.StatusSeverity.Refused);
+        }
+
+        /// <summary>
+        /// Applies the texture the player just picked in Settings to the world already loaded.
+        ///
+        /// Reads the token back from the preference rather than taking it as a payload, because the
+        /// preference is already what a new world and a multiplayer join consult -- routing the
+        /// choice through one place stops the screen and the session disagreeing about it.
+        ///
+        /// SetTextureSet pushes straight to the presentation, so this repaints the live world with
+        /// no reload and no chunk re-mesh. The new token is also the one that will be written on
+        /// the next save, which is what makes the choice stick to this world.
+        /// </summary>
+        void ApplySelectedTexturePreference()
+        {
+            if (worldManager == null)
+                return;
+
+            ApplyTextureToken(BlockiverseTexturePackPreferences.Token);
+            ShowPendingTextureNotice();
         }
 
         BlockPosition ResolveSpawnPosition()

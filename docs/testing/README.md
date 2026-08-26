@@ -131,6 +131,14 @@ inferring anything from the exit code. Deleting first converts a silent lie into
 The same caveat applies to anything gating on that exit code, CI included: it would read a build
 break as success.
 
+Texture-pack compositing splits deliberately for testability: the pixel arithmetic
+(`BlockiverseTexturePackAtlasBuilder`) is pure `Color32[]` and is covered by EditMode tests under
+`-nographics`, while the GPU readback and PNG decode sit behind `IBlockiverseAtlasPixelSource` so
+tests substitute a fake. The two failure modes that remain device-only — the sRGB round trip and
+mip coverage — both present as *looking slightly wrong at distance* rather than as a test failure,
+so a headset pass is still required when either is touched.
+
+
 ## Required GitHub Configuration
 
 Repository secrets:

@@ -58,6 +58,34 @@ namespace Blockiverse.Gameplay
         // Alpha-cutout clone of the same authored atlas material, shared by leaf canopies
         // (submesh 1 of the chunk mesh) and the foliage child's cross quads.
         Material cutoutMaterial;
+        /// <summary>
+        /// Repaints every chunk with a different atlas WITHOUT re-meshing.
+        ///
+        /// Nothing in a chunk mesh depends on which atlas is bound: UVs come from
+        /// BlockVisualAtlas.GetTileRect, whose only inputs are the block and the face, and every
+        /// atlas shares one grid. So swapping the texture on the four material clones repaints the
+        /// whole world for the cost of four SetTexture calls.
+        ///
+        /// The alternative -- the only path that existed before -- is Configure, which destroys
+        /// every material, every chunk GameObject and every mesh, then rebuilds the world. That is
+        /// seconds of hitching in VR for what should be a texture swap.
+        ///
+        /// Returns false if the atlas is not bindable, leaving the current one in place; a failed
+        /// swap must never leave chunks with no texture.
+        /// </summary>
+        public bool RebindAtlas(Texture2D atlas)
+        {
+            if (atlas == null)
+                return false;
+
+            bool bound = BlockVisualAtlas.TryRebindAtlas(chunkMaterial, atlas);
+            bound |= BlockVisualAtlas.TryRebindAtlas(fluidMaterial, atlas);
+            bound |= BlockVisualAtlas.TryRebindAtlas(fluidDepthPrimeMaterial, atlas);
+            bound |= BlockVisualAtlas.TryRebindAtlas(cutoutMaterial, atlas);
+
+            return bound;
+        }
+
         int interactionLayer = -1;
         // Fluid geometry sits on its own layer so gravity's ground sphere-cast never sees it.
         // Resolved by name at Configure time, falling back to the canonical index.
