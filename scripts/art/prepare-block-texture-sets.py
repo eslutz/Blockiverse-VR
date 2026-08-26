@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import shutil
@@ -399,7 +400,38 @@ def write_summary(summary: dict[str, object]) -> None:
     write_text_meta(summary_path)
 
 
+def recompose_atlases_only() -> None:
+    """Rebuild the four atlas PNGs from the per-set Source/ PNGs already on disk.
+
+    This is a pure recomposition: write_texture_set_atlas reads only
+    <TextureSets>/<set>/Source/*.png, all of which are committed. It needs neither the
+    git-LFS baseline tag nor ffmpeg, unlike the full build below, so it is the safe way
+    to pick up a change to the atlas GEOMETRY (ATLAS_ROWS, tile size, padding) without
+    touching a single source texture.
+    """
+    for set_id in SET_IDS:
+        source_dir = TEXTURE_SET_ROOT / set_id / "Source"
+        if not source_dir.is_dir():
+            raise RuntimeError(f"Missing source directory for set '{set_id}': {source_dir}")
+        ART.write_texture_set_atlas(set_id)
+        print(f"{set_id}: {ART.texture_set_atlas_path(set_id)} "
+              f"({ART.atlas_width()}x{ART.atlas_height()})")
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--atlas-only",
+        action="store_true",
+        help="Recompose the four atlas PNGs from existing per-set Source/ PNGs and exit. "
+             "Does not rebuild source textures, so it needs no git-LFS baseline and no ffmpeg.",
+    )
+    arguments = parser.parse_args()
+
+    if arguments.atlas_only:
+        recompose_atlases_only()
+        return
+
     names = all_block_source_names()
     lookup = block_lookup()
     if len(names) != 100:

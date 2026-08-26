@@ -384,7 +384,10 @@ scripts/unity/build-linux-server.sh
 scripts/unity/check-test-suites.py
 
 # Generated original assets (never hand-author; regenerate instead)
-python3 scripts/art/generate-art-assets.py        # block/item/UI/VFX textures + atlas
+python3 scripts/art/generate-art-assets.py        # block/item/UI/VFX textures + the ENHANCED atlas only
+# Recompose all four texture-set atlases from their committed per-set Source/ PNGs. Needed
+# after any atlas geometry change (ATLAS_ROWS / tile size / padding); no LFS baseline, no ffmpeg.
+python3 scripts/art/prepare-block-texture-sets.py --atlas-only
 python3 scripts/audio/generate-audio.py           # music bed + classic block cues ONLY
 
 # Sound effects are built from licensed third-party source recordings staged
