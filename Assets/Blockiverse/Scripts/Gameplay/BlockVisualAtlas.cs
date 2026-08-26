@@ -71,7 +71,26 @@ namespace Blockiverse.Gameplay
         // fringe pixels alive, which on a point-filtered atlas reads as a halo around every blade.
         public const float DefaultAlphaCutoff = 0.5f;
 
-        const float UvInsetPixels = 0.5f;
+        /// <summary>
+        /// Largest integer multiple of the authored grid a composited texture-pack atlas may use.
+        /// Declared at 4 even though packs are capped at 64px tiles (scale 2) so that raising the
+        /// cap later is a validation change rather than a UV change -- see UvInsetPixels.
+        /// </summary>
+        public const int MaxAtlasScale = 4;
+
+        // Half a texel, kept strictly inside the tile so filtering cannot sample a neighbour.
+        //
+        // EXPRESSED AT MaxAtlasScale ON PURPOSE, and this is subtle. Normalized UVs are scale-free,
+        // so a fixed 0.5 authored-pixel inset becomes 0.5 * S TARGET texels on an atlas composited
+        // at scale S -- at scale 2 the outermost texel of every edge of a pack's 64px tile would
+        // never be sampled, silently cropping the author's art. Dividing by MaxAtlasScale makes
+        // GetTileRect independent of which atlas is bound, which is in turn what lets a texture
+        // swap skip the chunk re-mesh entirely.
+        //
+        // Safe at scale 1 (1/8 of a texel) because the padding is edge-clamp REPLICATION: the
+        // texel immediately outside the tile is a byte-identical copy of the edge texel, so a UV
+        // that rounds outward samples the same colour either way.
+        const float UvInsetPixels = 0.5f / MaxAtlasScale;
 
         static readonly Dictionary<int, int> TileIndexByBlockId = new()
         {
@@ -502,7 +521,12 @@ namespace Blockiverse.Gameplay
         public static string AtlasPathForTextureSet(string textureSetId) =>
             $"Assets/Blockiverse/Art/Textures/Blocks/TextureSets/{BlockTextureSetIds.Normalize(textureSetId)}/blockiverse_block_atlas.png";
 
-        static int GetTileIndex(BlockId blockId)
+        /// <summary>
+        /// The atlas slot a block draws from, ignoring per-face overrides. Public because the
+        /// texture-pack compositor and the tile-name drift tests both need to compare this table
+        /// against the other two copies of the same mapping.
+        /// </summary>
+        public static int GetTileIndex(BlockId blockId)
         {
             if (TileIndexByBlockId.TryGetValue(blockId.Value, out int tileIndex))
                 return tileIndex;
@@ -560,12 +584,43 @@ namespace Blockiverse.Gameplay
             return false;
         }
 
+        /// <summary>
+        /// Whether a texture is an atlas this shader can address: the authored grid, or an integer
+        /// aspect-preserving multiple of it (a composited texture-pack atlas).
+        ///
+        /// Admitting multiples is what lets a 64px pack bind at all, while still catching the case
+        /// this check exists for -- somebody assigning an unrelated texture to the block material.
+        /// </summary>
         public static bool IsAuthoredAtlasTexture(Texture texture)
         {
-            return texture is Texture2D texture2D &&
-                   texture2D.name == AuthoredAtlasName &&
-                   texture2D.width == AtlasWidthPixels &&
-                   texture2D.height == AtlasHeightPixels;
+            if (texture is not Texture2D texture2D || texture2D.name != AuthoredAtlasName)
+                return false;
+
+            if (texture2D.width % AtlasWidthPixels != 0 || texture2D.height % AtlasHeightPixels != 0)
+                return false;
+
+            int scaleX = texture2D.width / AtlasWidthPixels;
+            int scaleY = texture2D.height / AtlasHeightPixels;
+
+            return scaleX == scaleY && scaleX >= 1 && scaleX <= MaxAtlasScale;
+        }
+
+        /// <summary>
+        /// Swaps the atlas on an already-built material.
+        ///
+        /// This is what makes changing textures mid-session cheap. Nothing in a chunk mesh depends
+        /// on which atlas is bound -- UVs come from GetTileRect, whose inputs are only the block
+        /// and the face -- so rebinding the texture repaints every chunk with no re-mesh, whereas
+        /// the only pre-existing path (VoxelWorldRenderer.Configure) destroys and rebuilds every
+        /// chunk GameObject in the world.
+        /// </summary>
+        public static bool TryRebindAtlas(Material material, Texture2D atlas)
+        {
+            if (material == null || atlas == null || !IsAuthoredAtlasTexture(atlas))
+                return false;
+
+            SetBaseTexture(material, atlas);
+            return true;
         }
 
         static Material CreateBaseMaterial(Material sourceMaterial)

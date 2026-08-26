@@ -141,6 +141,22 @@ public const string SettingsAudio = "ui.action.settings.audio";
             public const string WorldDetailsMetadata = "ui.status.world_details.metadata";
             public const string NewWorldSurvivalPresetUnsupported = "ui.status.new_world.survival_preset_unsupported";
 
+            // Texture packs. The two failures are separate keys because the player's next action
+            // differs: a missing pack needs reinstalling, an invalid one needs repairing.
+            public const string StatusTexturePackMissing = "ui.status.textures.pack_missing";
+            public const string StatusTexturePackInvalid = "ui.status.textures.pack_invalid";
+            public const string StatusTexturePackApplied = "ui.status.textures.applied";
+            public const string TexturesSettingsTitle = "ui.generated.textures.title";
+            public const string TexturesBuiltInHeading = "ui.generated.textures.built_in";
+            public const string TexturesInstalledHeading = "ui.generated.textures.installed_packs";
+            public const string TexturesNoPacksInstalled = "ui.generated.textures.no_packs";
+            public const string TexturesRefresh = "ui.generated.textures.refresh";
+            public const string TexturesSelect = "ui.generated.textures.select";
+            public const string TexturesSelected = "ui.generated.textures.selected";
+            public const string TexturesPackByline = "ui.generated.textures.pack_byline";
+            public const string TexturesClose = "ui.generated.textures.close";
+            public const string SettingsTextures = "ui.action.settings.textures";
+
             public const string InventoryHotbarEmpty = "ui.status.inventory.hotbar_empty";
             public const string InventoryHotbar = "ui.status.inventory.hotbar";
             public const string InventorySlotsCount = "ui.status.inventory.slots_count";

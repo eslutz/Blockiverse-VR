@@ -21,6 +21,7 @@ namespace Blockiverse.UI
         public const string SettingsScreen = "settings";
         public const string ComfortSettingsScreen = "settings_comfort";
         public const string AudioSettingsScreen = "settings_audio";
+        public const string TexturesSettingsScreen = "settings_textures";
         public const string ControlsScreen = "controls";
         public const string CreativeToolsScreen = "creative_tools";
         public const string DeathScreen = "death_screen";
@@ -91,6 +92,7 @@ namespace Blockiverse.UI
         public const string SettingsOpenComfort = "settings.open_comfort";
         public const string SettingsOpenAudio = "settings.open_audio";
         public const string SettingsOpenControls = "settings.open_controls";
+        public const string SettingsOpenTextures = "settings.open_textures";
 
         // Toggles the gameplay diagnostic readout (position, biome, weather, frame time, session).
         // A settings row rather than a controller binding: it is consulted rarely and every
@@ -99,6 +101,12 @@ namespace Blockiverse.UI
         public const string SettingsClose = "settings.close";
         public const string ComfortSettingsClose = "settings_comfort.close";
         public const string AudioSettingsClose = "settings_audio.close";
+        public const string TexturesSettingsClose = "settings_textures.close";
+
+        // Carries no payload: DispatchAction takes only an id, and the chosen token is read
+        // back from BlockiverseTexturePackPreferences, which is already where a new world and
+        // a multiplayer join look for it. One source of truth rather than two.
+        public const string TexturesSettingsSelect = "settings_textures.select";
         public const string ControlsClose = "controls.close";
 
         // ── World Details actions (§6.5) ─────────────────────────────────────
@@ -227,6 +235,7 @@ namespace Blockiverse.UI
             Localized(SettingsOpenComfort, BlockiverseLocalization.Keys.SettingsComfort, "Comfort"),
             Localized(SettingsOpenAudio, BlockiverseLocalization.Keys.SettingsAudio, "Audio"),
             Localized(SettingsOpenControls, BlockiverseLocalization.Keys.SettingsControls, "Controls"),
+            Localized(SettingsOpenTextures, BlockiverseLocalization.Keys.SettingsTextures, "Textures"),
             debugOverlayEnabled
                 ? Localized(SettingsToggleDebugOverlay, DebugOverlayOnKey, "Debug Overlay: On")
                 : Localized(SettingsToggleDebugOverlay, DebugOverlayOffKey, "Debug Overlay: Off"),

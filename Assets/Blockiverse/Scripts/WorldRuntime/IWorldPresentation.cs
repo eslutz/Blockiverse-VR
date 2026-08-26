@@ -33,6 +33,12 @@ namespace Blockiverse.Gameplay
             MultiplayerChunkAuthoritySync authoritySync,
             bool deferInitialRebuild);
 
+        // Changes textures on a LIVE world, with no reload and no chunk re-mesh.
+        //
+        // Takes a token (a built-in set id or `pack:<id>`) as a string so WorldRuntime never names
+        // a Gameplay type or a Texture2D. Local to this peer and never transmitted.
+        void ApplyTextureSelection(string token);
+
         // Re-wires the interaction path when the authority sync arrives after the world.
         void ConfigureAuthority(MultiplayerChunkAuthoritySync authoritySync);
 

@@ -97,6 +97,18 @@ namespace Blockiverse.Networking
         void RestoreContainerStore(IEnumerable<(BlockPosition position, IEnumerable<(string itemId, int count, int durability)> items)> savedContainers);
         void RestoreSimulationState(WorldSaveData data);
         void RestoreWorldTimeTicks(long totalElapsedTicks);
+        // Takes a texture TOKEN: a built-in set id, or `pack:<id>` for a user-supplied pack.
+        //
+        // LOCAL ONLY. This value must never be added to a connection-approval payload, a world
+        // snapshot header, an RPC, or a NetworkVariable, and pack files must never be transmitted.
+        // Every peer resolves textures against its own installed packs, so a host and a client
+        // legitimately render differently -- that is the design, not a desync.
+        //
+        // Two reasons, and both matter. Technically, a client cannot use a token for a pack it
+        // does not have, so sending one buys nothing and inviting the fix ("just send the pack
+        // too") turns a local render into a redistribution of somebody else's art. Practically,
+        // rendering is not simulation: nothing about which texture a peer draws can affect world
+        // state, so there is nothing here that needs to agree.
         void SetTextureSet(string textureSetId);
     }
 }

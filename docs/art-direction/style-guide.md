@@ -103,10 +103,14 @@ Quest import policy:
 
 ## Atlas Validation Policy
 
-Runtime rendering must use the committed authored block atlas for the world-selected texture set. `BlockVisualAtlas` validates that the material texture is the expected atlas name and dimensions before rendering chunks. Missing, unrelated, or incorrectly sized textures should fail fast in development and release-candidate validation.
+Runtime rendering must use either a committed authored block atlas or a **runtime-composited texture-pack atlas** validated by the same contract. `BlockVisualAtlas.IsAuthoredAtlasTexture` requires the expected atlas name and either the authored dimensions or an integer, aspect-preserving multiple of them up to `MaxAtlasScale`. Missing, unrelated, or incorrectly sized textures still fail fast.
+
+A composited atlas is built over a shipped one, so a pack that supplies only some textures blends with the built-in set it names rather than leaving holes. See [voxel_texture_pack_format.md](../rulesets/voxel_texture_pack_format.md) and [ADR 0012](../adr/0012-user-supplied-texture-packs.md).
 
 ## Prohibited References
 
 Do not use Minecraft textures, screenshots, sounds, music, logos, fonts, mob names, character names, or distinctive item names.
+
+This extends to the texture pack format: it is keyed on Blockiverse's own canonical texture names, reads no other game's pack layout, and names no other game anywhere in the shipped app or its store metadata. A player may install art they hold the rights to; the game never ships, hosts, or transmits it. See [ADR 0012 §1](../adr/0012-user-supplied-texture-packs.md).
 
 Do not prompt image or audio tools for protected Minecraft-specific assets.

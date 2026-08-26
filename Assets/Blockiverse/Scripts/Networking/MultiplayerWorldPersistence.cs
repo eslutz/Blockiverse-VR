@@ -52,6 +52,13 @@ namespace Blockiverse.Networking
         // multiplayer worlds save the same difficulty/preset metadata.
         string worldDifficulty = string.Empty;
         string worldPreset = DefaultWorldPreset;
+        // The token from the host's own save. REQUESTED, not effective: it is written straight
+        // back at save time, so if a fallback were stored here a host whose pack was temporarily
+        // missing would have that pack erased from their world on the next autosave.
+        //
+        // Never replicated. A joining client resolves its own textures from its local preference
+        // (see MultiplayerChunkAuthoritySync.FinalizeSnapshot), so host and client may legitimately
+        // render differently and no pack bytes are ever sent between players.
         string worldTextureSet = BlockTextureSetIds.Default;
 
         public bool LastHostLoadAttempted { get; private set; }
@@ -173,7 +180,10 @@ namespace Blockiverse.Networking
             {
                 GeneratedCreativeWorld generated = WorldSaveGeneration.Regenerate(result.Data);
                 worldTextureSet = BlockiverseTextureSelection.NormalizeToken(result.Data.TextureSet);
-                worldManager.SetTextureSet(worldTextureSet);
+                // Resolve separately: the world manager gets what can be drawn, worldTextureSet
+                // keeps what was asked for.
+                worldManager.SetTextureSet(
+                    BlockiverseTexturePackLibrary.Resolve(worldTextureSet).EffectiveToken);
                 worldManager.InitializeGeneratedWorld(
                     generated.Registry,
                     generated.Settings,

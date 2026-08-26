@@ -1,0 +1,45 @@
+<engine:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:engine="UnityEngine.UIElements" xmlns:editor="UnityEditor.UIElements" editor-extension-mode="False">
+    <!--
+        Textures settings screen (settings_textures). Lists the four built-in texture sets and any
+        user-supplied packs installed under persistentDataPath/TexturePacks, and applies a choice
+        to the live world with no reload.
+
+        The pack rows are built at RUNTIME by TexturesSettingsScreenController, not authored here:
+        how many packs exist is unknowable at design time. This document supplies the chrome and
+        the two containers the controller fills.
+
+        Pack display names, authors and attributions are USER DATA. The controller writes them
+        with plain text assignment and never through a localization lookup, so a pack named
+        "ui.status.crate.shared" renders as that literal string rather than resolving to something
+        else entirely.
+
+        Stylesheets are applied by the controller/bootstrapper, never by a &lt;Style src&gt; element
+        (asset GUIDs do not exist pre-import).
+    -->
+    <engine:VisualElement name="bv-screen-root" class="hs-screen">
+        <engine:VisualElement name="bv-textures-header" class="hs-screen__header" picking-mode="Ignore">
+            <engine:Label name="bv-textures-title" text="Textures" picking-mode="Ignore" class="hs-screen__title">
+            </engine:Label>
+        </engine:VisualElement>
+
+        <engine:ScrollView name="bv-textures-content" class="hs-screen__content" mode="Vertical">
+            <engine:Label name="bv-textures-built-in-heading" text="Built-in" picking-mode="Ignore" class="hs-secondary">
+            </engine:Label>
+            <engine:VisualElement name="bv-textures-built-in-list" class="hs-list" />
+
+            <engine:Label name="bv-textures-installed-heading" text="Installed packs" picking-mode="Ignore" class="hs-secondary">
+            </engine:Label>
+            <engine:VisualElement name="bv-textures-pack-list" class="hs-list" />
+
+            <engine:Label name="bv-textures-empty" text="No texture packs installed." picking-mode="Ignore" class="hs-secondary">
+            </engine:Label>
+        </engine:ScrollView>
+
+        <engine:VisualElement name="bv-textures-actions" class="hs-screen__footer">
+            <engine:Button name="bv-textures-refresh" text="Refresh" class="hs-button">
+            </engine:Button>
+            <engine:Button name="bv-textures-close" text="Close" class="hs-button">
+            </engine:Button>
+        </engine:VisualElement>
+    </engine:VisualElement>
+</engine:UXML>

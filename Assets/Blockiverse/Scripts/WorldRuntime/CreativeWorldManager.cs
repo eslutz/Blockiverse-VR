@@ -90,7 +90,20 @@ namespace Blockiverse.Gameplay
         public void SetGameMode(WorldGameMode mode) => GameMode = mode;
         // Takes a texture TOKEN: a built-in set id or `pack:<id>`. Local to this peer and never
         // transmitted -- see IMultiplayerWorldContext.SetTextureSet.
-        public void SetTextureSet(string textureSetId) => textureSet = BlockiverseTextureSelection.NormalizeToken(textureSetId);
+        //
+        // Pushing straight to the presentation is what turns every existing caller -- the load
+        // path, the host path, the new-world path, the settings screen -- into a live switch with
+        // no further plumbing. Before this, SetTextureSet was a bare field write whose value was
+        // only ever read by the next full world initialization, so changing textures meant
+        // reloading the world.
+        //
+        // Presentation already does the Unity lifetime check internally, so `?.` is safe, and it
+        // resolves to null on a dedicated server, where there is nothing to draw.
+        public void SetTextureSet(string textureSetId)
+        {
+            textureSet = BlockiverseTextureSelection.NormalizeToken(textureSetId);
+            Presentation?.ApplyTextureSelection(textureSet);
+        }
 
         public static WorldGameMode ParseGameMode(string gameMode) =>
             string.Equals(gameMode, "creative", StringComparison.OrdinalIgnoreCase)
