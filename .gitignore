@@ -459,6 +459,25 @@ crashlytics-build.properties
 # Packed Addressables.
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
 
+# Addressables per-platform build state. The rule above already covers the
+# addressables_content_state.bin payload, but NOT the platform folder or its .meta, so every
+# Unity run leaves those as untracked churn in every worktree -- one `git add -A` away from
+# committing build output.
+#
+# Platforms are enumerated rather than globbed as */ because the authored settings folders
+# (AssetGroups, AssetGroupTemplates, DataBuilders) sit at this same level. A wildcard that
+# happened to catch a future authored folder would drop it from the repo SILENTLY; a platform
+# missing from this list only ever shows up as visible churn. Loud-and-harmless beats
+# silent-and-harmful, so add a line when a new build target is added.
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/[Aa]ndroid/
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/[Aa]ndroid.meta
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/[Ss]tandalone[Ll]inux64/
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/[Ss]tandalone[Ll]inux64.meta
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/[Ss]tandalone[Oo][Ss][Xx]/
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/[Ss]tandalone[Oo][Ss][Xx].meta
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/[Ss]tandalone[Ww]indows64/
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/[Ss]tandalone[Ww]indows64.meta
+
 # Temporary auto-generated Android Assets.
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
