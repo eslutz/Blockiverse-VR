@@ -75,7 +75,7 @@ namespace Blockiverse.Gameplay
             }
         }
         IVoxelWorldRenderer IMultiplayerWorldContext.Renderer => Presentation;
-        public string TextureSet => BlockTextureSetIds.Normalize(textureSet);
+        public string TextureSet => BlockiverseTextureSelection.NormalizeToken(textureSet);
         public BlockPosition SpawnPosition => Settings != null ? Settings.SpawnPosition : new BlockPosition(0, 64, 0);
 
         // The world's rules mode. Explicitly initialized sandbox worlds default to Creative; saves
@@ -88,7 +88,9 @@ namespace Blockiverse.Gameplay
         }
 
         public void SetGameMode(WorldGameMode mode) => GameMode = mode;
-        public void SetTextureSet(string textureSetId) => textureSet = BlockTextureSetIds.Normalize(textureSetId);
+        // Takes a texture TOKEN: a built-in set id or `pack:<id>`. Local to this peer and never
+        // transmitted -- see IMultiplayerWorldContext.SetTextureSet.
+        public void SetTextureSet(string textureSetId) => textureSet = BlockiverseTextureSelection.NormalizeToken(textureSetId);
 
         public static WorldGameMode ParseGameMode(string gameMode) =>
             string.Equals(gameMode, "creative", StringComparison.OrdinalIgnoreCase)

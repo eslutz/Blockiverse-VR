@@ -293,6 +293,10 @@ namespace Blockiverse.Gameplay
 
         Texture2D ResolveSelectedBlockAtlas(string textureSetId)
         {
+            // BlockTextureSetIds.Normalize, NOT NormalizeToken, and deliberately so: this method
+            // answers "which of the four BUILT-IN atlases do I bind", and only built-ins ship in
+            // the serialized array. A `pack:` token therefore lands on the default set here, which
+            // is the correct fallback until the compositor can build a pack atlas.
             string selected = BlockTextureSetIds.Normalize(textureSetId);
             int count = Math.Min(blockTextureSetIds?.Length ?? 0, blockTextureSetAtlases?.Length ?? 0);
             for (int i = 0; i < count; i++)

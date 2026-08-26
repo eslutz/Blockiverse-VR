@@ -491,7 +491,7 @@ namespace Blockiverse.Persistence
                 worldTimeTicks,
                 difficulty ?? string.Empty,
                 WorldPresetIds.Normalize(worldPreset),
-                BlockTextureSetIds.Normalize(textureSet),
+                BlockiverseTextureSelection.NormalizeToken(textureSet),
                 hasSpawnPosition,
                 spawnPosition,
                 BuildChangedBlockDeltas(world, blockRegistry),
@@ -710,7 +710,11 @@ namespace Blockiverse.Persistence
                 WeatherRngState = environment?.WeatherRngState ?? 1u,
                 GameMode = !string.IsNullOrEmpty(manifest.GameMode) ? manifest.GameMode : "survival",
                 WorldPreset = WorldPresetIds.Normalize(manifest.WorldPreset),
-                TextureSet = BlockTextureSetIds.Normalize(manifest.TextureSet),
+                // NormalizeToken, not BlockTextureSetIds.Normalize: a `pack:` token must survive
+                // a load even when that pack is not installed. Coercing it here would render the
+                // default AND write the default back on the next autosave, permanently destroying
+                // the player's selection for a pack they had merely moved or not yet reinstalled.
+                TextureSet = BlockiverseTextureSelection.NormalizeToken(manifest.TextureSet),
                 Difficulty = manifest.Difficulty ?? string.Empty,
                 Containers = containers,
                 MultiplayerPlayerInventories = multiplayerPlayerInventories,

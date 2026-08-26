@@ -335,6 +335,77 @@ namespace Blockiverse.Tests.EditMode
         }
 
         [Test]
+        public void SaveThenLoadPreservesAPackTokenForAPackThatIsNotInstalled()
+        {
+            // The regression this guards: TextureSet used to be read back through
+            // BlockTextureSetIds.Normalize, which coerces anything unrecognised to "enhanced". A
+            // `pack:` token therefore came out of a load as the default, and the next autosave
+            // wrote that default back -- permanently destroying the player's choice for a pack
+            // they had merely moved, renamed, or not yet reinstalled.
+            //
+            // No pack named here exists anywhere. Preservation must not depend on installation.
+            const string PackToken = "pack:mossy_stones";
+
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            try
+            {
+                var service = new WorldSaveService();
+                service.Save(path, "pack-token-test", world, textureSet: PackToken);
+
+                WorldLoadResult result = service.Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(
+                    result.Data.TextureSet,
+                    Is.EqualTo(PackToken),
+                    "The pack token did not survive the round trip; the player's selection is lost.");
+
+                // And it must survive a re-save, which is the step that made the loss permanent.
+                string second = CreateTempSavePath();
+                try
+                {
+                    service.Save(second, "pack-token-test", world, textureSet: result.Data.TextureSet);
+                    WorldLoadResult again = service.Load(second);
+                    Assert.That(again.Success, Is.True, again.Error);
+                    Assert.That(again.Data.TextureSet, Is.EqualTo(PackToken), "The token decayed on re-save.");
+                }
+                finally
+                {
+                    DeleteIfExists(second);
+                }
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
+        public void SaveThenLoadCoercesAMalformedTextureTokenToTheDefault()
+        {
+            // The counterpart to the test above: a malformed token is not a selection anyone could
+            // have made, so it is coerced rather than preserved. This is what keeps a hand-edited
+            // manifest from handing a path fragment to the pack resolver.
+            string path = CreateTempSavePath();
+            VoxelWorld world = CreateDefaultWorld();
+
+            try
+            {
+                var service = new WorldSaveService();
+                service.Save(path, "bad-token-test", world, textureSet: "pack:../../etc");
+
+                WorldLoadResult result = service.Load(path);
+                Assert.That(result.Success, Is.True, result.Error);
+                Assert.That(result.Data.TextureSet, Is.EqualTo(BlockTextureSetIds.Default));
+            }
+            finally
+            {
+                DeleteIfExists(path);
+            }
+        }
+
+        [Test]
         public void SaveThenLoadPreservesDifficultyWorldPresetAndTextureSet()
         {
             string path = CreateTempSavePath();

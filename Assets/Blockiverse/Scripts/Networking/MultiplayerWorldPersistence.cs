@@ -172,7 +172,7 @@ namespace Blockiverse.Networking
             try
             {
                 GeneratedCreativeWorld generated = WorldSaveGeneration.Regenerate(result.Data);
-                worldTextureSet = BlockTextureSetIds.Normalize(result.Data.TextureSet);
+                worldTextureSet = BlockiverseTextureSelection.NormalizeToken(result.Data.TextureSet);
                 worldManager.SetTextureSet(worldTextureSet);
                 worldManager.InitializeGeneratedWorld(
                     generated.Registry,
@@ -230,7 +230,7 @@ namespace Blockiverse.Networking
             worldDifficulty = result.Data.Difficulty ?? string.Empty;
             vitalsRuntime?.ConfigureDifficulty(worldDifficulty);
             worldPreset = string.IsNullOrWhiteSpace(result.Data.WorldPreset) ? DefaultWorldPreset : result.Data.WorldPreset;
-            worldTextureSet = BlockTextureSetIds.Normalize(result.Data.TextureSet);
+            worldTextureSet = BlockiverseTextureSelection.NormalizeToken(result.Data.TextureSet);
             if (!Application.isPlaying)
                 worldManager.Renderer?.RebuildAll();
             LastHostLoadSucceeded = true;
