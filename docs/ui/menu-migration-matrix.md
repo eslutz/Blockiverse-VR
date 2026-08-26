@@ -4,7 +4,7 @@ Companion to [ADR 0010](../adr/0010-ui-toolkit-runtime-ui.md). This is the per-s
 checklist: what exists, where it goes, and what must not be lost on the way.
 
 **Status: cut over (2026-08-23). UI Toolkit is the only menu frontend; device validation still
-pending.** All 25 documents in §2 exist with dedicated controllers under
+pending.** 24 of the 25 documents in §2 exist with dedicated controllers under
 `Assets/Blockiverse/Scripts/UI/ToolkitScreens/`, and the Boot scene generates one world-space
 panel per `[UiToolkitScreen]` declaration. The LAN screen additionally gained the saved-servers
 bookmark rows (previously a dead API — see §2 note on row 14).
@@ -24,9 +24,16 @@ Two consequences that change how to read the rest of this document:
   test fixtures rely on. Only the *dual-backend mirroring* died with the panels.
 
 Some world-space uGUI deliberately survives and is not an oversight: the boot splash
-(`BlockiverseStartupOverlay`), and the Block Menu, which despite the name is not a menu — it
-carries the scene `CreativeHotbar` that decides which block gets placed. `Blockiverse.UI.asmdef`
-therefore still references `UnityEngine.UI` and `Unity.TextMeshPro`.
+(`BlockiverseStartupOverlay`), and the scene `CreativeHotbar` component, which despite the name
+is not a menu — it decides which block gets placed and is read/written by `CatalogScreenController`
+and `HotbarStripController`. `Blockiverse.UI.asmdef` therefore still references `UnityEngine.UI`
+and `Unity.TextMeshPro`.
+
+**Row 24 retired (2026-08-26).** The Creative-only quick block menu (`CreativeHotbarController`,
+`CreativeHotbar.uxml`) duplicated the block catalog already reachable from the wrist menu, so it
+was deleted rather than kept as a 25th screen. Arbitrary block/tool selection now happens either
+by ray + trigger directly on the hotbar strip (row 21's `GameplayHudController` family) or via the
+catalog screen (row 17).
 
 ### The HUD is migrated, not redesigned (2026-08-25)
 
@@ -147,7 +154,7 @@ Phase numbers are from the migration spec. "Owner" is the controller that will o
 | 21 | `SurvivalHealthPanel.cs` (147) | `GameplayHud.uxml` | 5 | `GameplayHudController` |
 | 22 | `SurvivalHudController.cs` (412) mining slider | `MiningProgress.uxml` | 5 | `GameplayHudController` |
 | 23 | `SurvivalHudController.cs` status label | `StatusToast.uxml` | 5 | `StatusToastController` |
-| 24 | `CreativeHotbar` | `CreativeHotbar.uxml` | 5 | `CreativeHotbarViewController` |
+| 24 | ~~`CreativeHotbar`~~ | ~~`CreativeHotbar.uxml`~~ | 5 | **retired 2026-08-26** — see note below |
 | 25 | `BlockiverseActionMenu` (death instance) | `DeathScreen.uxml` | 5 | `DeathScreenController` |
 
 Cross-cutting, not a screen:
