@@ -17,6 +17,13 @@ namespace Blockiverse.Networking
         public static GeneratedCreativeWorld GenerateDefaultWorld(int seed = 6401)
         {
             BlockRegistry registry = BlockRegistry.Default;
+            WorldGenerationSettings settings = WorldGenerationSettings.CreateDefaultSurvivalLite(seed);
+            return GenerateWorld(CreativeWorldGenerationPreset.SurvivalLite, registry, settings);
+        }
+
+        public static GeneratedCreativeWorld GenerateTitleWorld(int seed = 6401)
+        {
+            BlockRegistry registry = BlockRegistry.Default;
             var settings = new WorldGenerationSettings(
                 TitleMiniWorldPreset.Size,
                 SurvivalWorldHeight,

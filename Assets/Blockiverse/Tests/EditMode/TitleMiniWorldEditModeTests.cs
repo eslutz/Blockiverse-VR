@@ -10,7 +10,7 @@ namespace Blockiverse.Tests.EditMode
         [Test]
         public void DefaultWorldIsTheCompleteHandcraftedTitleShowcase()
         {
-            GeneratedCreativeWorld generated = WorldSaveGeneration.GenerateDefaultWorld();
+            GeneratedCreativeWorld generated = WorldSaveGeneration.GenerateTitleWorld();
             var blocks = new HashSet<BlockId>();
 
             for (int y = 0; y < generated.World.Bounds.Height; y++)

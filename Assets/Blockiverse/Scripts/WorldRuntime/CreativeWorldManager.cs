@@ -813,7 +813,7 @@ namespace Blockiverse.Gameplay
 
         public static GeneratedCreativeWorld CreateDefaultGeneratedWorld(int seed = 6401)
         {
-            return WorldSaveGeneration.GenerateDefaultWorld(seed);
+            return WorldSaveGeneration.GenerateTitleWorld(seed);
         }
 
         void Awake()
